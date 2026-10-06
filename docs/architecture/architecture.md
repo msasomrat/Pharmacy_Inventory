@@ -1619,8 +1619,8 @@ sequenceDiagram
 - The `create_sale` call carries offline metadata in `p_offline`: terminal ID, provisional receipt
   number, device timestamp, the Salesman reported by the device, and the device proof. The collected
   total is sent as the expected total, so any difference becomes an exception (section 15.4).
-- **Terminal authentication (device proof).** When a Branch Manager registers a terminal (online, at
-  `aal2`), the server generates a 256-bit device secret, keeps it server-side encrypted (Supabase Vault)
+- **Terminal authentication (device proof).** When a user with `branches.manage` registers a terminal
+  (online, at `aal2`), the server generates a 256-bit device secret, keeps it server-side encrypted (Supabase Vault)
   and returns it once; the browser imports it as a non-extractable HMAC-SHA-256 key and discards the raw
   bytes. Each queued sale carries `HMAC(device secret, terminal_id | client_request_id | request_hash |
 device_at | provisional_ref)`, where `request_hash` is the canonical request hash computed without
@@ -1988,7 +1988,7 @@ Targets marked with the SRS are authoritative there; the others are architecture
 | ID     | Quality         | Stimulus (source, environment)                                                                                                                 | Response                                                                                    | Response measure                                                                                                      | Tactics (sections)                                     |
 | ------ | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | QAS-01 | Performance     | Salesman types three characters or scans a barcode at 3 times the reference peak hour, 4 terminals per branch across 5 branches (NFR-PERF-010) | Ranked matches with sellable stock are shown                                                | Server p95 under 200 ms; end-to-end p95 under 400 ms (NFR-PERF-001)                                                   | Trigram index, limit 20, scan detection (9.8, 18)      |
-| QAS-02 | Performance     | Evening peak at 3 times the reference peak hour (60 invoices per branch per hour), 4 terminals per branch across 5 branches                    | Every sale commits in one transaction                                                       | Server p95 under 500 ms; no deadlocks (NFR-PERF-002)                                                                  | Single RPC, deterministic lock order (10.4)            |
+| QAS-02 | Performance     | Evening peak of 180 invoices per branch per hour (3 times the reference peak of 60), 4 terminals per branch across 5 branches                  | Every sale commits in one transaction                                                       | Server p95 under 500 ms; no deadlocks (NFR-PERF-002)                                                                  | Single RPC, deterministic lock order (10.4)            |
 | QAS-03 | Integrity       | 20 parallel sessions sell the last units of the same batch at the same moment                                                                  | Exactly the available quantity is sold; the others receive `insufficient_stock`             | Zero negative on-hand rows (NFR-REL-002)                                                                              | Row locks, `CHECK` constraint (10.4)                   |
 | QAS-04 | Integrity       | Network drops after the server commits a sale; the client retries                                                                              | The original sale is returned, not duplicated                                               | Exactly one sale per idempotency key; invoice numbers remain gapless                                                  | Idempotency keys, counter in transaction (10.4, 13)    |
 | QAS-05 | Security        | An authenticated user of organization A crafts PostgREST requests for organization B's rows                                                    | Requests return no rows or are rejected                                                     | Zero rows leaked; isolation suite passes on every PR                                                                  | RLS, composite keys, tests (10.5, 12.2)                |
@@ -2011,18 +2011,18 @@ Targets marked with the SRS are authoritative there; the others are architecture
 
 ### 22.1 Risks
 
-| ID   | Risk                                                  | Likelihood | Impact | Mitigation                                                                                                        |
-| ---- | ----------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------- |
-| R-01 | RLS or `SECURITY DEFINER` mistakes expose data        | Medium     | High   | Policy patterns, empty `search_path`, pgTAP matrix, security advisor in CI, review checklist                      |
-| R-02 | Supabase lock-in                                      | Medium     | Medium | Standard PostgreSQL and SQL migrations in the repository; `pg_dump` is portable; Auth is the hardest part to move |
-| R-03 | Free-tier limits or project pausing affect operations | Medium     | Medium | Usage review weekly; explicit upgrade triggers (20.3)                                                             |
-| R-04 | Regional provider outage                              | Low        | High   | Offline mode for sales (M4); off-site backups; status monitoring                                                  |
-| R-05 | Offline sync complexity causes reconciliation work    | Medium     | Medium | Narrow offline scope, idempotency, exception queue with audited resolutions                                       |
-| R-06 | AI cost overrun or unsafe output                      | Medium     | Medium | Guardrails, budgets, evaluation set, kill switch                                                                  |
-| R-07 | Unreliable shop internet                              | High       | Medium | Offline mode; recommend a mobile-data backup connection at each branch                                            |
-| R-08 | Small team, knowledge concentrated in one person      | High       | Medium | ADRs, this documentation set, managed services, automated tests                                                   |
-| R-09 | Shared counter PCs and sessions stored in the browser | Medium     | Medium | Individual accounts, inactivity lock, strict CSP, sign-out clears local data                                      |
-| R-10 | Data growth beyond estimates                          | Medium     | Low    | Measure in M4; summary tables; partition-ready design                                                             |
+| ID   | Risk                                                  | Likelihood | Impact | Mitigation                                                                                                                                                        |
+| ---- | ----------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R-01 | RLS or `SECURITY DEFINER` mistakes expose data        | Medium     | High   | Policy patterns, empty `search_path`, pgTAP matrix, Supabase Security Advisor before each production migration and weekly (security model 18.1), review checklist |
+| R-02 | Supabase lock-in                                      | Medium     | Medium | Standard PostgreSQL and SQL migrations in the repository; `pg_dump` is portable; Auth is the hardest part to move                                                 |
+| R-03 | Free-tier limits or project pausing affect operations | Medium     | Medium | Usage review weekly; explicit upgrade triggers (20.3)                                                                                                             |
+| R-04 | Regional provider outage                              | Low        | High   | Offline mode for sales (M4); off-site backups; status monitoring                                                                                                  |
+| R-05 | Offline sync complexity causes reconciliation work    | Medium     | Medium | Narrow offline scope, idempotency, exception queue with audited resolutions                                                                                       |
+| R-06 | AI cost overrun or unsafe output                      | Medium     | Medium | Guardrails, budgets, evaluation set, kill switch                                                                                                                  |
+| R-07 | Unreliable shop internet                              | High       | Medium | Offline mode; recommend a mobile-data backup connection at each branch                                                                                            |
+| R-08 | Small team, knowledge concentrated in one person      | High       | Medium | ADRs, this documentation set, managed services, automated tests                                                                                                   |
+| R-09 | Shared counter PCs and sessions stored in the browser | Medium     | Medium | Individual accounts, inactivity lock, strict CSP, sign-out clears local data                                                                                      |
+| R-10 | Data growth beyond estimates                          | Medium     | Low    | Measure in M4; summary tables; partition-ready design                                                                                                             |
 
 ### 22.2 Known technical debt (accepted)
 
@@ -2053,18 +2053,20 @@ Targets marked with the SRS are authoritative there; the others are architecture
 Decisions referenced in this document. Rationale, alternatives and consequences are in the ADRs; the
 full, current list is the [ADR index](../adr/README.md).
 
-| Decision                                                                                                              | Sections   | ADR                                                   |
-| --------------------------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------- |
-| Supabase as the backend platform (Singapore region)                                                                   | 5, 7, 10   | To be recorded; see the [ADR index](../adr/README.md) |
-| Business-critical writes only through PostgreSQL RPC functions                                                        | 10.3, 10.4 | To be recorded; see the [ADR index](../adr/README.md) |
-| Multi-tenancy with `organization_id` and RLS on every table                                                           | 10.5, 12   | To be recorded; see the [ADR index](../adr/README.md) |
-| Money as `BIGINT` paisa, no floating point                                                                            | 13         | To be recorded; see the [ADR index](../adr/README.md) |
-| Frontend stack: React, Vite, React Router, TanStack Query, React Hook Form with Zod, Tailwind with shadcn/ui, i18next | 7, 9       | To be recorded; see the [ADR index](../adr/README.md) |
-| Cloudflare Pages for hosting and PR previews                                                                          | 7, 14      | To be recorded; see the [ADR index](../adr/README.md) |
-| Testing stack: Vitest, pgTAP, Playwright                                                                              | 7, 14.3    | To be recorded; see the [ADR index](../adr/README.md) |
-| Trunk-based development, Conventional Commits, GitHub Actions CI                                                      | 14         | To be recorded; see the [ADR index](../adr/README.md) |
-| Offline mode with an IndexedDB outbox and idempotency keys (M4)                                                       | 15         | To be recorded; see the [ADR index](../adr/README.md) |
-| AI through a server-side gateway with read-only data access (M5)                                                      | 16         | To be recorded; see the [ADR index](../adr/README.md) |
+| Decision                                                                                                                   | Sections             | ADR                                                                                     |
+| -------------------------------------------------------------------------------------------------------------------------- | -------------------- | --------------------------------------------------------------------------------------- |
+| Record architecture decisions as MADR documents in the repository                                                          | 3 (P12), 23          | [ADR-0001](../adr/0001-record-architecture-decisions.md)                                |
+| Supabase (managed PostgreSQL) as the backend platform, Singapore region                                                    | 5, 7, 10             | [ADR-0002](../adr/0002-supabase-postgresql-over-firebase.md)                            |
+| Frontend application style and core framework: React, Vite, TypeScript single-page application (supporting libraries in 7) | 7, 9                 | [ADR-0003](../adr/0003-react-vite-typescript-spa.md)                                    |
+| Cloudflare Pages for hosting and PR previews                                                                               | 7, 14                | [ADR-0004](../adr/0004-cloudflare-pages-hosting.md)                                     |
+| Money as `BIGINT` paisa, no floating point                                                                                 | 7, 13                | [ADR-0005](../adr/0005-money-as-integer-paisa.md)                                       |
+| Multi-tenancy with organizations and branches, `organization_id` and RLS on every table                                    | 10.5, 12             | [ADR-0006](../adr/0006-multi-tenant-organization-branch-model-with-rls.md)              |
+| Business-critical writes only through transactional PostgreSQL RPC functions                                               | 10.3, 10.4           | [ADR-0007](../adr/0007-business-logic-in-transactional-postgres-functions.md)           |
+| Append-only inventory ledger with batch projections and FEFO allocation                                                    | 10.3, 10.4, 11.2, 13 | [ADR-0008](../adr/0008-append-only-inventory-ledger-with-fefo.md)                       |
+| Testing stack: Vitest, pgTAP, Playwright                                                                                   | 7, 14.3              | To be recorded (backlog, [ADR index](../adr/README.md))                                 |
+| Trunk-based development, Conventional Commits, GitHub Actions CI                                                           | 14                   | To be recorded (backlog, [ADR index](../adr/README.md))                                 |
+| Offline mode with an IndexedDB outbox, idempotency keys and device-key proof (M4)                                          | 15                   | To be recorded (backlog, [ADR index](../adr/README.md)); required before M4 work starts |
+| AI through a server-side gateway with read-only data access (M5)                                                           | 16                   | To be recorded (backlog, [ADR index](../adr/README.md)); required before M5 work starts |
 
 New decisions that change anything in sections 5 to 16 require a new ADR and an update to this
 document in the same pull request.
