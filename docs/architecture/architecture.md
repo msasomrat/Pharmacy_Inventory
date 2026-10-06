@@ -174,14 +174,17 @@ section 15.4).
 
 ### 2.5 Assumptions (to be validated with the owner)
 
-| ID   | Assumption                                                                                         | Used for                  |
-| ---- | -------------------------------------------------------------------------------------------------- | ------------------------- |
-| A-01 | Counter terminals are Windows PCs running current Chrome or Edge; managers also use Android phones | Browser support, PWA      |
-| A-02 | USB barcode scanners operate in keyboard-wedge (HID) mode with an Enter suffix                     | POS input design (9.8)    |
-| A-03 | Thermal printers (58 or 80 mm) are installed through the operating system driver                   | Printing (9.8)            |
-| A-04 | A branch averages about 300 invoices per day with peaks of about 60 per hour, 3 lines per invoice  | Sizing (18, 19, 20)       |
-| A-05 | Catalog size up to about 30,000 medicine items per organization                                    | Search design and budgets |
-| A-06 | At most 5 concurrent users per branch                                                              | Capacity planning         |
+| ID   | Assumption                                                                                                                                       | Used for                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| A-01 | Counter terminals are Windows PCs running current Chrome or Edge; managers also use Android phones                                               | Browser support, PWA            |
+| A-02 | USB barcode scanners operate in keyboard-wedge (HID) mode with an Enter suffix                                                                   | POS input design (9.8)          |
+| A-03 | Thermal printers (58 or 80 mm) are installed through the operating system driver                                                                 | Printing (9.8)                  |
+| A-04 | Load follows the SRS reference workload: 300 invoices per branch per day, 60 in the peak hour, 3 lines per invoice, up to 4 terminals per branch | Sizing (18, 19, 20)             |
+| A-05 | Catalog of 30,000 medicines and 60,000 barcodes per organization; capacity design of 20 branches per organization (SRS reference workload)       | Search design, budgets          |
+| A-06 | At least 6 years of history are retained; report targets apply to 1 year of data                                                                 | Capacity planning, partitioning |
+
+The reference workload is defined in section 3.4 of the [SRS](../requirements/SRS.md); if it changes, the
+sizing in sections 18 to 20 is revisited.
 
 ---
 
@@ -427,11 +430,11 @@ flowchart TB
   subgraph pg["PostgreSQL"]
     subgraph public["schema public (exposed)"]
       tables["Tenant tables and<br/>security_invoker views<br/>(RLS on every table)"]
-      rpc["RPC functions<br/>create_sale, process_return,<br/>receive_purchase, adjust_stock,<br/>transfer functions, enroll_loyalty,<br/>search_medicines, report_*"]
+      rpc["RPC functions<br/>create_sale, void_sale, returns,<br/>goods receipt, adjust_stock,<br/>transfers, enroll_loyalty,<br/>search_medicines, report_*"]
     end
     subgraph app["schema app (private)"]
-      helpers["Security helpers<br/>current_org_ids, has_branch_access,<br/>has_role (SECURITY DEFINER, STABLE)"]
-      internals["Internal business functions<br/>FEFO allocation, pricing and rounding,<br/>document numbering"]
+      helpers["Security helpers<br/>user_org_ids, user_branch_ids,<br/>has_permission, require_branch_permission<br/>(SECURITY DEFINER, STABLE)"]
+      internals["Internal business functions<br/>stock posting, rounding, business date,<br/>document numbering, error raising"]
     end
     subgraph audit["schema audit (private)"]
       auditlog["audit.log<br/>append-only"]
@@ -496,39 +499,41 @@ The internal components of the AI gateway are shown in section 16.3.
 ## 7. Technology stack
 
 Exact versions are pinned in `package.json` and `pnpm-lock.yaml` and updated by Dependabot; this
-table records the choice and the reason, not patch versions.
+table records the choice and the reason, not patch versions. The last column links the accepted ADR
+that records the choice; "Backlog" marks a decision listed in the ADR backlog but not yet recorded, and
+supporting libraries without their own ADR fall under the [ADR index](../adr/README.md) (section 23).
 
-| Layer                    | Choice                                                                                  | Rationale                                                                                                               | Alternatives considered                     | Decision record               |
-| ------------------------ | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ----------------------------- |
-| Language                 | TypeScript (strict) in the web app and Edge Functions; SQL and PL/pgSQL in the database | One language across client and server code; strict mode catches null and type errors at build time                      | JavaScript, Go for functions                | [ADR index](../adr/README.md) |
-| UI framework             | React 19                                                                                | Largest ecosystem, mature accessibility libraries, easy hiring in Bangladesh                                            | Vue, Svelte, Angular                        | [ADR index](../adr/README.md) |
-| Build tool               | Vite                                                                                    | Fast dev server and builds, first-class TypeScript, simple static output for Cloudflare Pages                           | Next.js (server features not needed)        | [ADR index](../adr/README.md) |
-| Routing                  | React Router (data router, lazy route modules)                                          | Code splitting per feature, route-level error boundaries, navigation blocking for unsaved carts                         | TanStack Router                             | [ADR index](../adr/README.md) |
-| Server state             | TanStack Query                                                                          | Caching, invalidation, retries and request de-duplication without a global store                                        | Redux Toolkit Query, SWR                    | [ADR index](../adr/README.md) |
-| Forms and validation     | React Hook Form with Zod (via `@hookform/resolvers`)                                    | Performant uncontrolled forms; one Zod schema types the form and the RPC payload                                        | Formik, Yup                                 | [ADR index](../adr/README.md) |
-| Styling and components   | Tailwind CSS with shadcn/ui on Radix primitives                                         | Accessible primitives (focus management, ARIA) owned as source code; consistent design tokens                           | MUI, Ant Design (heavier, harder to theme)  | [ADR index](../adr/README.md) |
-| Internationalization     | i18next with react-i18next                                                              | Mature pluralization and interpolation, lazy resources, Bangla support                                                  | FormatJS                                    | [ADR index](../adr/README.md) |
-| Charts                   | Recharts (lazy-loaded in reports only)                                                  | Declarative React charts, adequate for dashboards                                                                       | Chart.js, ECharts                           | [ADR index](../adr/README.md) |
-| PWA                      | vite-plugin-pwa (Workbox), planned                                                      | Installable app, app-shell caching, controlled update prompts                                                           | Hand-written service worker                 | [ADR index](../adr/README.md) |
-| Offline storage (M4)     | IndexedDB through the `idb` wrapper, planned                                            | Durable, transactional browser storage; tiny wrapper                                                                    | Dexie, localStorage (not durable enough)    | [ADR index](../adr/README.md) |
-| Backend platform         | Supabase (managed PostgreSQL, PostgREST, Auth, Edge Functions, Storage)                 | Postgres-native security (RLS), no servers to run, generous free tier, portable SQL                                     | Firebase (no SQL), custom Node API on a VPS | [ADR index](../adr/README.md) |
-| Database                 | PostgreSQL 17 (Supabase default; design requires 15 or later)                           | Transactions, constraints, RLS, `pg_trgm`, `pg_cron`, materialized views, partitioning                                  | MySQL                                       | [ADR index](../adr/README.md) |
-| API style                | PostgREST for reads; RPC (PostgreSQL functions) for business writes                     | Business invariants enforced in one transaction next to the data; no hand-written CRUD API                              | Custom REST service                         | [ADR index](../adr/README.md) |
-| Authorization            | Row Level Security on every table with helper functions                                 | Isolation enforced by the database for every access path                                                                | Application-level checks only               | [ADR index](../adr/README.md) |
-| Authentication           | Supabase Auth: email and password, TOTP MFA, PKCE                                       | Built in, MFA assurance level available to RLS                                                                          | Auth0, Clerk                                | [ADR index](../adr/README.md) |
-| Server functions         | Supabase Edge Functions (Deno, TypeScript)                                              | Secrets stay server-side; same language as the web app                                                                  | Cloudflare Workers                          | [ADR index](../adr/README.md) |
-| File storage             | Supabase Storage (private buckets, signed URLs)                                         | Same RLS model as the database                                                                                          | Cloudflare R2                               | [ADR index](../adr/README.md) |
-| Scheduling               | `pg_cron` (Supabase Cron)                                                               | Jobs run next to the data; no extra scheduler                                                                           | GitHub Actions cron for everything          | [ADR index](../adr/README.md) |
-| Money representation     | `BIGINT` paisa in the database, branded integer type in TypeScript                      | Exact arithmetic, deterministic rounding                                                                                | `NUMERIC` everywhere, floats (rejected)     | [ADR index](../adr/README.md) |
-| Hosting                  | Cloudflare Pages                                                                        | Free tier allows commercial use, unlimited static bandwidth, PR previews, global CDN with edge locations close to Dhaka | Vercel (free tier non-commercial), Netlify  | [ADR index](../adr/README.md) |
-| Unit and component tests | Vitest, Testing Library, fast-check (property tests)                                    | Fast, Vite-native; property tests for money and FEFO logic                                                              | Jest                                        | [ADR index](../adr/README.md) |
-| Database tests           | pgTAP via `supabase test db`                                                            | Tests functions, constraints and RLS inside PostgreSQL                                                                  | Integration tests only                      | [ADR index](../adr/README.md) |
-| End-to-end tests         | Playwright (Chromium), axe-core accessibility checks                                    | Reliable browser automation, trace viewer                                                                               | Cypress                                     | [ADR index](../adr/README.md) |
-| Code quality             | ESLint (flat config, jsx-a11y), Prettier, Husky, lint-staged, commitlint                | Consistent style, Conventional Commits enforced locally and in CI                                                       | None                                        | [ADR index](../adr/README.md) |
-| CI/CD                    | GitHub Actions                                                                          | Native to the repository, free minutes for small teams, Supabase CLI support                                            | GitLab CI                                   | [ADR index](../adr/README.md) |
-| Monitoring               | Sentry (frontend), Supabase logs and reports, external uptime monitor                   | Low cost, adequate for one region and a small team                                                                      | Self-hosted Grafana stack                   | [ADR index](../adr/README.md) |
-| Package manager, runtime | pnpm, Node 22 LTS                                                                       | Fast, strict dependency resolution; LTS runtime                                                                         | npm, Yarn                                   | [ADR index](../adr/README.md) |
-| AI (M5)                  | Anthropic Claude API through the official TypeScript SDK in an Edge Function            | Strong reasoning and vision, structured outputs, prompt caching, batch discounts                                        | Other LLM providers                         | [ADR index](../adr/README.md) |
+| Layer                    | Choice                                                                                  | Rationale                                                                                                               | Alternatives considered                     | Decision record                                                               |
+| ------------------------ | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
+| Language                 | TypeScript (strict) in the web app and Edge Functions; SQL and PL/pgSQL in the database | One language across client and server code; strict mode catches null and type errors at build time                      | JavaScript, Go for functions                | [ADR-0003](../adr/0003-react-vite-typescript-spa.md)                          |
+| UI framework             | React 19                                                                                | Largest ecosystem, mature accessibility libraries, easy hiring in Bangladesh                                            | Vue, Svelte, Angular                        | [ADR-0003](../adr/0003-react-vite-typescript-spa.md)                          |
+| Build tool               | Vite                                                                                    | Fast dev server and builds, first-class TypeScript, simple static output for Cloudflare Pages                           | Next.js (server features not needed)        | [ADR-0003](../adr/0003-react-vite-typescript-spa.md)                          |
+| Routing                  | React Router (data router, lazy route modules)                                          | Code splitting per feature, route-level error boundaries, navigation blocking for unsaved carts                         | TanStack Router                             | [ADR index](../adr/README.md)                                                 |
+| Server state             | TanStack Query                                                                          | Caching, invalidation, retries and request de-duplication without a global store                                        | Redux Toolkit Query, SWR                    | [ADR index](../adr/README.md)                                                 |
+| Forms and validation     | React Hook Form with Zod (via `@hookform/resolvers`)                                    | Performant uncontrolled forms; one Zod schema types the form and the RPC payload                                        | Formik, Yup                                 | [ADR index](../adr/README.md)                                                 |
+| Styling and components   | Tailwind CSS with shadcn/ui on Radix primitives                                         | Accessible primitives (focus management, ARIA) owned as source code; consistent design tokens                           | MUI, Ant Design (heavier, harder to theme)  | [ADR index](../adr/README.md)                                                 |
+| Internationalization     | i18next with react-i18next                                                              | Mature pluralization and interpolation, lazy resources, Bangla support                                                  | FormatJS                                    | [ADR index](../adr/README.md)                                                 |
+| Charts                   | Recharts (lazy-loaded in reports only)                                                  | Declarative React charts, adequate for dashboards                                                                       | Chart.js, ECharts                           | [ADR index](../adr/README.md)                                                 |
+| PWA                      | vite-plugin-pwa (Workbox), planned                                                      | Installable app, app-shell caching, controlled update prompts                                                           | Hand-written service worker                 | [ADR index](../adr/README.md)                                                 |
+| Offline storage (M4)     | IndexedDB through the `idb` wrapper, planned                                            | Durable, transactional browser storage; tiny wrapper                                                                    | Dexie, localStorage (not durable enough)    | Backlog ([ADR index](../adr/README.md))                                       |
+| Backend platform         | Supabase (managed PostgreSQL, PostgREST, Auth, Edge Functions, Storage)                 | Postgres-native security (RLS), no servers to run, generous free tier, portable SQL                                     | Firebase (no SQL), custom Node API on a VPS | [ADR-0002](../adr/0002-supabase-postgresql-over-firebase.md)                  |
+| Database                 | PostgreSQL 17 (Supabase default; design requires 15 or later)                           | Transactions, constraints, RLS, `pg_trgm`, `pg_cron`, materialized views, partitioning                                  | MySQL                                       | [ADR-0002](../adr/0002-supabase-postgresql-over-firebase.md)                  |
+| API style                | PostgREST for reads; RPC (PostgreSQL functions) for business writes                     | Business invariants enforced in one transaction next to the data; no hand-written CRUD API                              | Custom REST service                         | [ADR-0007](../adr/0007-business-logic-in-transactional-postgres-functions.md) |
+| Authorization            | Row Level Security on every table with helper functions                                 | Isolation enforced by the database for every access path                                                                | Application-level checks only               | [ADR-0006](../adr/0006-multi-tenant-organization-branch-model-with-rls.md)    |
+| Authentication           | Supabase Auth: email and password, TOTP MFA, PKCE                                       | Built in, MFA assurance level available to RLS                                                                          | Auth0, Clerk                                | [ADR-0002](../adr/0002-supabase-postgresql-over-firebase.md)                  |
+| Server functions         | Supabase Edge Functions (Deno, TypeScript)                                              | Secrets stay server-side; same language as the web app                                                                  | Cloudflare Workers                          | [ADR-0002](../adr/0002-supabase-postgresql-over-firebase.md)                  |
+| File storage             | Supabase Storage (private buckets, signed URLs)                                         | Same RLS model as the database                                                                                          | Cloudflare R2                               | [ADR-0002](../adr/0002-supabase-postgresql-over-firebase.md)                  |
+| Scheduling               | `pg_cron` (Supabase Cron)                                                               | Jobs run next to the data; no extra scheduler                                                                           | GitHub Actions cron for everything          | [ADR-0002](../adr/0002-supabase-postgresql-over-firebase.md)                  |
+| Money representation     | `BIGINT` paisa in the database, branded integer type in TypeScript                      | Exact arithmetic, deterministic rounding                                                                                | `NUMERIC` everywhere, floats (rejected)     | [ADR-0005](../adr/0005-money-as-integer-paisa.md)                             |
+| Hosting                  | Cloudflare Pages                                                                        | Free tier allows commercial use, unlimited static bandwidth, PR previews, global CDN with edge locations close to Dhaka | Vercel (free tier non-commercial), Netlify  | [ADR-0004](../adr/0004-cloudflare-pages-hosting.md)                           |
+| Unit and component tests | Vitest, Testing Library, fast-check (property tests)                                    | Fast, Vite-native; property tests for money and FEFO logic                                                              | Jest                                        | Backlog ([ADR index](../adr/README.md))                                       |
+| Database tests           | pgTAP via `supabase test db`                                                            | Tests functions, constraints and RLS inside PostgreSQL                                                                  | Integration tests only                      | Backlog ([ADR index](../adr/README.md))                                       |
+| End-to-end tests         | Playwright (Chromium), axe-core accessibility checks                                    | Reliable browser automation, trace viewer                                                                               | Cypress                                     | Backlog ([ADR index](../adr/README.md))                                       |
+| Code quality             | ESLint (flat config, jsx-a11y), Prettier, Husky, lint-staged, commitlint                | Consistent style, Conventional Commits enforced locally and in CI                                                       | None                                        | [ADR index](../adr/README.md)                                                 |
+| CI/CD                    | GitHub Actions                                                                          | Native to the repository, free minutes for small teams, Supabase CLI support                                            | GitLab CI                                   | Backlog ([ADR index](../adr/README.md))                                       |
+| Monitoring               | Sentry (frontend), Supabase logs and reports, external uptime monitor                   | Low cost, adequate for one region and a small team                                                                      | Self-hosted Grafana stack                   | [ADR index](../adr/README.md)                                                 |
+| Package manager, runtime | pnpm, Node 22 LTS                                                                       | Fast, strict dependency resolution; LTS runtime                                                                         | npm, Yarn                                   | [ADR index](../adr/README.md)                                                 |
+| AI (M5)                  | Anthropic Claude API through the official TypeScript SDK in an Edge Function            | Strong reasoning and vision, structured outputs, prompt caching, batch discounts                                        | Other LLM providers                         | Backlog ([ADR index](../adr/README.md))                                       |
 
 ---
 
@@ -676,15 +681,15 @@ Design decisions:
 
 PIMS keeps client state minimal. Server data is cached, not copied into a store.
 
-| Kind of state       | Examples                                                            | Owner                                     | Persistence                                    |
-| ------------------- | ------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------- |
-| Server state        | Stock, medicines, invoices, customers, reports                      | TanStack Query cache                      | Memory (catalog snapshot in IndexedDB from M4) |
-| URL state           | Active branch, filters, date ranges, pagination, open tab           | React Router path and search params       | URL                                            |
-| Form state          | Goods receipt, customer profile, loyalty plan                       | React Hook Form                           | Memory; long forms keep a local draft          |
-| Session state       | Auth session, current user, memberships, active organization        | supabase-js and an `AuthProvider` context | supabase-js storage                            |
-| POS working state   | Cart lines, selected customer or loyalty card, payments in progress | `useReducer` inside the POS slice         | `sessionStorage` (survives reload of the tab)  |
-| Parked (held) bills | Bills put aside while serving another customer                      | POS slice                                 | IndexedDB on the terminal (see 22.3, OI-02)    |
-| Ephemeral UI state  | Open dialogs, hover, focus                                          | Component `useState`                      | None                                           |
+| Kind of state       | Examples                                                            | Owner                                         | Persistence                                                                          |
+| ------------------- | ------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Server state        | Stock, medicines, invoices, customers, reports                      | TanStack Query cache                          | Memory (catalog snapshot in IndexedDB from M4)                                       |
+| URL state           | Active branch, filters, date ranges, pagination, open tab           | React Router path and search params           | URL                                                                                  |
+| Form state          | Goods receipt, customer profile, loyalty plan                       | React Hook Form                               | Memory; long forms keep a local draft                                                |
+| Session state       | Auth session, current user, memberships, active organization        | supabase-js and an `AuthProvider` context     | supabase-js storage                                                                  |
+| POS working state   | Cart lines, selected customer or loyalty card, payments in progress | `useReducer` inside the POS slice             | `sessionStorage` (survives reload of the tab)                                        |
+| Parked (held) bills | Bills put aside while serving another customer                      | Server, per branch (FR-POS-037 to FR-POS-039) | Database; no invoice number, no stock reservation, discarded at end of business date |
+| Ephemeral UI state  | Open dialogs, hover, focus                                          | Component `useState`                          | None                                                                                 |
 
 There is no global client-state library (Redux, Zustand) in v1. Adding one requires an ADR.
 
@@ -694,8 +699,8 @@ Query conventions:
   `['org', orgId, 'branch', branchId, 'stock', filters]`, so switching organization or branch can never
   show another scope's cached data. Sign-out calls `queryClient.clear()`.
 - **Defaults** (set in `src/main.tsx`): `staleTime` 30 seconds, one retry for queries, no refetch on
-  window focus, and no automatic retry for mutations. Writes are retried only explicitly, with the
-  same idempotency key.
+  window focus, and no automatic TanStack Query retry for mutations. Writes are retried only by the RPC
+  wrapper (section 9.4), always with the same idempotency key.
 - **Per-query overrides:** catalog 5 minutes; POS stock 15 seconds and invalidated after every sale;
   reports 5 minutes; settings 10 minutes; notifications polled every 60 seconds.
 - **Invalidation after writes:** for example, a successful `create_sale` invalidates the branch stock,
@@ -712,12 +717,15 @@ Query conventions:
 - **Only `api/` modules call Supabase.** Components use hooks such as `useBranchStock()` or
   `useCreateSale()`; this keeps data access testable and replaceable.
 - **RPC wrapper.** A small `callRpc(name, args)` helper adds the correlation ID header, applies the
-  idempotency key where required and converts database errors into a typed `AppError`
-  (`code`, `messageKey`, `fieldErrors`, `retryable`).
-- **Error contract.** Database functions raise errors with stable machine-readable codes (catalogued in
-  the [database design](../database/database-design.md)). The client maps each code to an i18n key
-  (`errors.<code>`). Unknown errors show a generic message with a short correlation ID and are reported
-  to Sentry.
+  idempotency key (`p_client_request_id`) where required, retries network failures and server errors at
+  most 3 times with exponential backoff using the same key (NFR-AVAIL-005), shows "saving", "saved" or
+  "failed, retry", and converts database errors into a typed `AppError`
+  (`code`, `messageKey`, `hint`, `retryable`). Business-rule errors are never retried.
+- **Error contract.** Database functions raise errors through `app.fail(code, message, hint)`: SQLSTATE
+  `P0001`, the stable machine-readable code in the error `DETAIL` and an optional user hint in `HINT`
+  (codes are catalogued in the [database design](../database/database-design.md)). The client maps each
+  code to an i18n key (`errors.<code>`) and never displays raw database messages. Unknown errors show a
+  generic message with a short correlation ID and are reported to Sentry.
 - **No personal data in URLs.** Lookups by phone number or card number use RPC `POST` bodies, not query
   strings, so they do not appear in gateway logs.
 - **Pagination.** Keyset pagination (`created_at`, `id`) for ledgers and invoices; offset pagination for
@@ -747,8 +755,9 @@ Query conventions:
   (`pos.*`, `inventory.*`, `errors.*`). They can be split into lazily loaded namespaces if the bundle
   grows. A CI script checks that both languages have the same key set.
 - No string concatenation for sentences; interpolation and i18next plural rules are used instead.
-- Currency is formatted from paisa with lakh and crore grouping (`৳12,34,567.89`) by `formatTaka()`,
-  with optional Bangla digits. Dates and times are always formatted with
+- Currency is formatted from paisa with South Asian digit grouping (`৳1,23,456.50`) by `formatTaka()`;
+  the Bangla interface uses Bangla digits (`৳১,২৩,৪৫৬.৫০`) unless the organization chooses Latin digits
+  (NFR-I18N-004, CFG-38). Dates use DD/MM/YYYY and 12-hour time, always formatted with
   `timeZone: 'Asia/Dhaka'`, never the browser's zone, so a terminal with a wrong zone setting still shows
   correct business dates.
 - A Bangla-capable font (for example Noto Sans Bengali) is self-hosted, consistent with the
@@ -766,8 +775,10 @@ Target: WCAG 2.1 level AA for every screen.
   without a mouse. Proposed default shortcuts: `F2` focus search, `Enter` add the highlighted item,
   `+` and `-` change quantity, `Delete` remove a line, `F4` customer or loyalty lookup, `F6` park bill,
   `F8` recall parked bill, `F9` open payment, `Ctrl+Enter` confirm payment, `Esc` close dialog.
-  Browser-reserved keys (`F1`, `F3`, `F5`, `F11`, `F12`) are avoided. The final map is defined with
-  the UX specification.
+  Browser-reserved keys (`F1`, `F3`, `F5`, `F11`, `F12`) are avoided, and every chosen key (in
+  particular `F6`, which Chrome also uses for the address bar) is verified as capturable in Chrome and
+  Edge on Windows. The full indicative map is in Appendix C of the [SRS](../requirements/SRS.md); the
+  final map is fixed in the UX specification.
 - An `aria-live="polite"` region announces cart total changes; stock and validation errors use
   `aria-live="assertive"`.
 - Colour is never the only signal: expiry and stock states combine colour, icon and text.
@@ -809,8 +820,10 @@ Target: WCAG 2.1 level AA for every screen.
 - A strict Content Security Policy and other headers are defined in `public/_headers`
   (`script-src 'self'`, `connect-src` limited to Supabase and Sentry, `frame-ancestors 'none'`).
 - React escapes output by default; `dangerouslySetInnerHTML` is forbidden by lint rules.
-- Counter PCs are shared, so every person has an individual account; the app locks after a period of
-  inactivity defined in the [security model](../security/security-model.md).
+- Counter PCs are shared, so every person has an individual account. The app locks after 15 minutes of
+  inactivity (CFG-31) and asks for the password while keeping the cart; a session never lasts more than
+  12 hours without a full sign-in (FR-IAM-011). Details are in the
+  [security model](../security/security-model.md).
 - Sign-out clears the query cache and session storage, and clears IndexedDB unless unsynced offline
   sales exist (section 15.5).
 - Sentry runs with `sendDefaultPii: false`, a `beforeSend` scrubber and session replay disabled.
@@ -853,50 +866,60 @@ The schema layout is shown in section 6.2. Additional hardening:
 
 Heavy or multi-table reads (POS search, dashboards, reports) are `STABLE` RPC functions such as
 `search_medicines` and `report_*`, which PostgREST runs in read-only transactions. The authoritative
-classification of every table is in the [database design](../database/database-design.md).
+classification of every table is in the [database design](../database/database-design.md). The
+RPC-first write path is recorded in
+[ADR-0007](../adr/0007-business-logic-in-transactional-postgres-functions.md); the append-only stock
+ledger with FEFO allocation that the Tier 1 and Tier 3 rows depend on is recorded in
+[ADR-0008](../adr/0008-append-only-inventory-ledger-with-fefo.md).
 
 ### 10.4 RPC design conventions
 
-Business-critical write functions such as `create_sale`, `process_return`, `receive_purchase`,
-`adjust_stock`, the transfer functions and `enroll_loyalty` follow the same template:
+Business-critical write functions follow the same template
+([ADR-0007](../adr/0007-business-logic-in-transactional-postgres-functions.md)). Examples are
+`create_sale`, `void_sale`, `process_sale_return`, `process_purchase_return`, `receive_goods`,
+`adjust_stock`, `request_stock_transfer`, `dispatch_stock_transfer`, `receive_stock_transfer`,
+`enroll_loyalty`, `record_customer_payment` and `record_supplier_payment`. Names, signatures and status
+(implemented or designed) are defined only in the
+[database design, section 8.5](../database/database-design.md#85-public-rpc-summary); this document uses
+those names.
 
-| Concern       | Convention                                                                                                                                                                                                                                                                                 |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Naming        | `verb_noun` in snake_case; parameters prefixed `p_`; returns a JSON object with IDs, human-readable codes and computed totals                                                                                                                                                              |
-| Privilege     | `SECURITY DEFINER`, `SET search_path = ''`, every object schema-qualified, owned by a dedicated non-login owner role; `EXECUTE` revoked from `PUBLIC` and `anon`, granted to `authenticated`                                                                                               |
-| Authorization | First statements check tenancy and permissions explicitly (`app.has_branch_access`, `app.has_role`, MFA assurance where required), because `SECURITY DEFINER` bypasses RLS                                                                                                                 |
-| Validation    | Every referenced ID is checked to belong to the caller's organization; quantities positive; dates sane; enums valid                                                                                                                                                                        |
-| Transaction   | PostgREST wraps each call in one transaction; any error rolls back everything, including counter increments, so invoice numbers stay gapless                                                                                                                                               |
-| Locking       | Rows are locked in a deterministic order (batches by `expiry_date`, then `id`) with `SELECT ... FOR UPDATE` to prevent overselling and deadlocks; no external calls inside a transaction                                                                                                   |
-| Idempotency   | Tier 1 creates take `p_idempotency_key uuid`; a unique constraint per organization stores it with a hash of the request; a replay with the same payload returns the original result with `replayed = true`; the same key with a different payload fails with an idempotency conflict error |
-| Money         | All prices, discounts, loyalty benefits, rounding and totals are computed in the function from database data; an optional `p_expected_total` from the client is used only to detect drift and ask the cashier to re-confirm                                                                |
-| Errors        | Exceptions carry a stable machine-readable code (catalogue in the database design) and never leak SQL details                                                                                                                                                                              |
-| Time budget   | Designed for under 500 ms at p95; the `authenticated` role keeps a statement timeout as a safety net                                                                                                                                                                                       |
-| Tests         | pgTAP: happy path, each validation error, authorization denial per role, cross-tenant denial, and concurrency cases where relevant                                                                                                                                                         |
+| Concern       | Convention                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Naming        | `verb_noun` in snake_case; parameters prefixed `p_`; returns a JSON object with IDs, human-readable codes and computed totals                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Privilege     | `SECURITY DEFINER`, `SET search_path = ''`, every object schema-qualified, owned by the migration role, never by a role that clients can assume; `EXECUTE` revoked from `PUBLIC` and `anon`, granted to `authenticated`                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Authorization | The first statement checks tenancy and permission explicitly, for example `app.require_branch_permission(p_branch_id, 'sales.create')`, which also enforces MFA for Owner and Manager permissions; this is required because `SECURITY DEFINER` bypasses RLS                                                                                                                                                                                                                                                                                                                                                                        |
+| Validation    | Every referenced ID is checked to belong to the caller's organization; quantities positive; dates sane; enums valid                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Transaction   | PostgREST wraps each call in one transaction; any error rolls back everything, including counter increments, so invoice numbers stay gapless                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Locking       | One global lock order for every function ([database design, section 9.3](../database/database-design.md#93-locking-strategy-and-canonical-lock-order)): document header -> customer -> supplier -> loyalty card and membership -> point lots -> batches `FOR UPDATE ORDER BY medicine_id, expiry_date, received_at, id` -> cash session `FOR SHARE` -> document counters -> controlled-register advisory locks -> daily summary. Locks up to the cash session are taken in a validation phase before the first write; `lock_timeout` is 3 s and a timeout or deadlock returns `busy_retry`. No external calls inside a transaction |
+| Idempotency   | Document-creating functions take a client-generated `p_client_request_id uuid`. The function first calls `app.claim_request()`, which takes a transaction-scoped advisory lock on the organization and request ID so concurrent duplicates serialize, and only then looks up the stored request; the key is unique per organization and stored with a `request_hash` of the canonical request. A replay with the same hash returns the original result, the same ID with a different hash fails with `request_id_conflict`; IDs are honoured for at least 7 days (NFR-REL-006, database design section 9.5)                        |
+| Money         | All prices, discounts, loyalty benefits, rounding and totals are computed in the function from database data and returned to the client; submitted payments are validated against the computed total (for example `overpayment`), so a stale client preview cannot produce a wrong invoice                                                                                                                                                                                                                                                                                                                                         |
+| Errors        | Raised through `app.fail(code, message, hint)` (SQLSTATE `P0001`, code in `DETAIL`); codes are stable and catalogued in the database design; SQL details are never exposed                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Time budget   | Designed for under 500 ms at p95; the `authenticated` role keeps a statement timeout as a safety net                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Tests         | pgTAP: happy path, each validation error, authorization denial per role, cross-tenant denial, and concurrency cases where relevant                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ### 10.5 Row Level Security
 
 - RLS is enabled on every table in every exposed schema, with no permissive default: a table without
-  policies returns nothing.
+  policies returns nothing. The tenancy and RLS model is recorded in
+  [ADR-0006](../adr/0006-multi-tenant-organization-branch-model-with-rls.md).
 - Policies use helper functions in the private `app` schema, declared `SECURITY DEFINER`, `STABLE`,
   with a fixed empty `search_path`. Helpers read the memberships table for `auth.uid()`; they do not
   rely on custom JWT claims, because claims stay stale until the token refreshes and a deactivated user
   must lose access on the next request.
-- Policies call set-returning helpers inside sub-selects, so PostgreSQL evaluates them once per
-  statement rather than once per row. Row-level helpers such as `app.has_branch_access(branch_id)` are
-  used inside RPCs for single-record checks. An illustrative policy (exact helper names and signatures
-  are defined in the [security model](../security/security-model.md) and
-  [database design](../database/database-design.md)):
+- Policies call the set-returning helpers `app.user_org_ids()` and `app.user_branch_ids()` inside
+  sub-selects, so PostgreSQL evaluates them once per statement rather than once per row. Row-level and
+  permission helpers (`app.has_branch_access(branch_id)`, `app.has_permission(organization_id, permission)`,
+  `app.can(branch_id, permission)`) are used for permission-gated tables and inside RPCs. Two policies
+  from the M1 migrations illustrate the pattern (the [database design](../database/database-design.md)
+  and [security model](../security/security-model.md) are authoritative):
 
 ```sql
-create policy sales_select_branch_members
-  on public.sales
-  for select
-  to authenticated
-  using (
-    organization_id in (select app.current_org_ids())
-    and branch_id in (select app.accessible_branch_ids())
-  );
+create policy sales_select on public.sales for select to authenticated
+  using (branch_id in (select app.user_branch_ids()));
+
+create policy daily_branch_sales_select on public.daily_branch_sales for select to authenticated
+  using (branch_id in (select app.user_branch_ids())
+         and app.has_permission(organization_id, 'reports.view'));
 ```
 
 - Every column used by a policy (`organization_id`, `branch_id`) is indexed.
@@ -904,17 +927,30 @@ create policy sales_select_branch_members
 - Storage objects have RLS policies based on the organization and branch segments of the object path
   (section 10.8).
 - Verification: a pgTAP matrix tests every table for every role and operation, plus cross-tenant and
-  cross-branch negative cases; `supabase db lint` and the Supabase security advisor must be clean before
-  merge.
+  cross-branch negative cases. `supabase db lint` must be clean before merge (CI `database` job); the
+  Supabase Security Advisor is run before each production migration and weekly, with no new errors
+  allowed ([security model, section 18.1](../security/security-model.md)).
 
 ### 10.6 Authentication and MFA
 
-- Supabase Auth with email and password; public sign-up is disabled. Users join only by invitation from
-  an authorized user through the `admin-users` Edge Function, which creates the membership (role and
-  branches) at the same time.
-- **TOTP MFA is mandatory for Owner and Branch Manager.** It is enforced twice: the UI routes users with
-  these roles to `/mfa`, and the database helpers ignore memberships with an MFA-required role unless
-  the JWT's `aal` claim is `aal2`. A stolen password alone therefore exposes no Owner or Manager data.
+- Supabase Auth with email and password; public sign-up is disabled. Users join only by invitation
+  (FR-IAM-003). An authorized user invites through the `admin-users` Edge Function, which records a
+  pending invitation (organization, role, branches, inviter, 72-hour expiry) and asks Supabase Auth to
+  send the invitation email; **no membership exists yet**. The membership is created only by
+  `accept_invitation()`, called under the invitee's own session. Because acceptance is bound to the
+  signed-in account's email, `accept_invitation()` must refuse unless `auth.users.email_confirmed_at` is
+  set and the account email equals the invitation email case-insensitively, and the Auth setting
+  "secure email change" (confirmation on both the old and the new address) must stay on in every
+  environment ([runbook](../operations/runbook.md) baseline). The flow and its threats are owned by the
+  [security model, section 7.1](../security/security-model.md); the table and function details by the
+  [database design](../database/database-design.md).
+- **TOTP MFA is mandatory for Owner and Branch Manager** (FR-IAM-005, NFR-SEC-004). It is enforced in
+  two places: the UI routes users with these roles to `/mfa`, and the database refuses their privileges
+  unless the JWT's `aal` claim is `aal2`. In the M1 migrations, `app.has_permission` denies every Owner
+  and Manager permission at `aal1` while the organization setting `enforce_mfa` is on (the default), so
+  no privileged action or permission-gated report works with a password alone. FR-IAM-005 also requires
+  that such users cannot read business data before `aal2`; extending the same check to the read helpers
+  `app.user_org_ids()` and `app.user_branch_ids()` is tracked as OI-08.
 - Salesman accounts may use MFA but are not forced to (shared counter PCs); compensating controls are
   individual accounts, branch-scoped access, role discount limits and the inactivity lock.
 - Sessions: access tokens expire after 1 hour (`jwt_expiry = 3600`), refresh tokens rotate with reuse
@@ -927,12 +963,12 @@ create policy sales_select_branch_members
 
 ### 10.7 Edge Functions
 
-| Function      | Milestone | Invoked by                 | Purpose                                                                    | Secrets used                               | Authorization                                                      |
-| ------------- | --------- | -------------------------- | -------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------ |
-| `admin-users` | M2        | Web app (HTTPS, user JWT)  | Invite user, set role and branches, deactivate, revoke sessions, reset MFA | Service role key (injected by the runtime) | Caller verified, AAL2, permitted by the security model's matrix    |
-| `health`      | M4        | Uptime monitor             | Check database reachability and report the deployed version                | None                                       | Public, returns no data, rate-limited                              |
-| `ai-gateway`  | M5        | Web app and `pg_cron`      | All AI features (section 16)                                               | Anthropic API key, AI database role        | Caller verified, AAL2 for Owner, organization AI flag, permissions |
-| `notify-sms`  | v2        | `pg_cron` through `pg_net` | Loyalty expiry and due reminders                                           | SMS gateway credentials                    | Scheduler-only shared secret                                       |
+| Function      | Milestone | Invoked by                 | Purpose                                                                                                                       | Secrets used                               | Authorization                                                      |
+| ------------- | --------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------ |
+| `admin-users` | M2        | Web app (HTTPS, user JWT)  | Record invitation (role and branches applied on acceptance), change role and branches, deactivate, revoke sessions, reset MFA | Service role key (injected by the runtime) | Caller verified, AAL2, permitted by the security model's matrix    |
+| `health`      | M4        | Uptime monitor             | Check database reachability and report the deployed version                                                                   | None                                       | Public, returns no data, rate-limited                              |
+| `ai-gateway`  | M5        | Web app and `pg_cron`      | All AI features (section 16)                                                                                                  | Anthropic API key, AI database role        | Caller verified, AAL2 for Owner, organization AI flag, permissions |
+| `notify-sms`  | v2        | `pg_cron` through `pg_net` | Loyalty expiry and due reminders                                                                                              | SMS gateway credentials                    | Scheduler-only shared secret                                       |
 
 Conventions:
 
@@ -952,24 +988,38 @@ Conventions:
 
 - Object paths follow `{organization_id}/{branch_id}/{yyyy}/{mm}/{uuid}.{ext}`; storage RLS policies
   check the organization and branch segments against the caller's memberships.
-- Images are compressed in the browser before upload (longest edge 1,600 px, target under 500 KB), which
-  keeps storage within the free tier for longer.
-- Files are read through signed URLs that expire after 5 minutes; no bucket is public.
-- Retention of prescription images follows the policy in the
-  [security model](../security/security-model.md) (open issue OI-07).
+- Images are compressed in the browser before upload (longest edge 1,600 px, target under 500 KB) and
+  EXIF metadata (GPS, device) is removed (FR-AI-004), which also keeps storage within the free tier for
+  longer.
+- Files are read through signed URLs valid for at most 300 seconds; every view of a prescription image
+  is audited; no bucket is public.
+- Prescription images are retained for 6 years when linked to a controlled-drug sale and 2 years
+  otherwise (NFR-PRIV-004, CFG-28), then purged by a scheduled job.
 
 ### 10.9 Scheduled jobs
 
-`pg_cron` schedules are written in UTC; Asia/Dhaka is UTC+6 all year.
+Scheduled work runs in two places. Schedules are written in UTC; Asia/Dhaka is UTC+6 all year.
 
-| Job                                                                                      | Schedule (Asia/Dhaka)  | Cron (UTC)    | Mechanism                                |
-| ---------------------------------------------------------------------------------------- | ---------------------- | ------------- | ---------------------------------------- |
-| Mark expired loyalty memberships, create reminders                                       | Daily 00:05            | `5 18 * * *`  | SQL function                             |
-| Refresh reporting materialized views                                                     | Daily 02:30            | `30 20 * * *` | `REFRESH MATERIALIZED VIEW CONCURRENTLY` |
-| Nightly encrypted backup (free tier only)                                                | Daily 03:00            | `0 21 * * *`  | GitHub Actions `backup.yml`              |
-| Expiry (30/60/90 days) and low-stock notifications                                       | Daily 06:00            | `0 0 * * *`   | SQL function                             |
-| Retention clean-up (AI request logs older than 90 days, expired rate-limit counters; M5) | Weekly, Friday 04:00   | `0 22 * * 4`  | SQL function                             |
-| Weekly AI insights (M5)                                                                  | Weekly, Saturday 07:00 | `0 1 * * 6`   | `pg_net` call to `ai-gateway`            |
+**Database jobs.** `pg_cron` calls the `app.job_*` functions next to the data: loyalty expiry and
+reminders, discarding held bills of the previous business date (FR-POS-039), the stock-value snapshot,
+the refresh of reporting materialized views, integrity checks (NFR-REL-003, NFR-REL-004), the daily
+expiry and low-stock digests (CFG-26), transfer escalation, and retention purges. Their functions,
+times and milestones are defined only in
+[database design, section 17.1](../database/database-design.md#171-jobs), which is the single source for
+these schedules; this document does not repeat the times. The audit-chain anchoring job is specified in
+the [security model, section 14.3](../security/security-model.md).
+
+**Platform jobs.** Work that needs a credential or service outside PostgreSQL:
+
+| Job                                                        | Schedule (Asia/Dhaka)                          | Cron (UTC)    | Mechanism                                                                                                |
+| ---------------------------------------------------------- | ---------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------- |
+| Nightly encrypted backup (free tier only)                  | Daily 03:00                                    | `0 21 * * *`  | GitHub Actions `backup.yml`                                                                              |
+| Delete prescription images queued by `app.job_retention()` | Weekly, Friday 04:30 (after the retention job) | `30 22 * * 4` | `pg_net` call to an Edge Function that deletes the queued objects through the Storage API (NFR-PRIV-004) |
+| Weekly AI insights (M5)                                    | Weekly, Saturday 07:00                         | `0 1 * * 6`   | `pg_net` call to `ai-gateway`                                                                            |
+| External uptime check of the `health` function (M4)        | Every 5 minutes                                | Not `pg_cron` | Uptime monitor (section 17.3)                                                                            |
+
+Failures of any job are logged and alert the Owner or the operator as described in the
+[runbook](../operations/runbook.md).
 
 ### 10.10 Audit logging
 
@@ -988,8 +1038,8 @@ Conventions:
 
 ```mermaid
 flowchart LR
-  rpc["Tier 1 RPCs<br/>create_sale, receive_purchase, ..."]
-  oltp[("Transactional tables<br/>sales, lines, movements")]
+  rpc["Tier 1 RPCs<br/>create_sale, receive_goods, ..."]
+  oltp[("Transactional tables<br/>sales, sale_items, movements")]
   daily[("Daily summary tables<br/>per branch, same transaction")]
   mv[("Materialized views<br/>schema reporting")]
   reports["report_* RPCs<br/>tenant and branch checks"]
@@ -1017,8 +1067,8 @@ flowchart LR
 
 ## 11. Key runtime flows
 
-Function names and error codes in these diagrams are illustrative; signatures and the error catalogue
-are defined in the [database design](../database/database-design.md).
+Function names in these diagrams are the canonical names of database design section 8.5; signatures and
+the error catalogue are defined in the [database design](../database/database-design.md).
 
 ### 11.1 Sign-in with MFA
 
@@ -1050,7 +1100,7 @@ sequenceDiagram
   alt Code valid
     A-->>W: New session at aal2
     W->>R: Load branches and permissions
-    R->>D: Helpers now include privileged memberships
+    R->>D: Owner and Manager permissions now granted (aal2)
     D-->>W: Branch list (RLS-filtered)
     W-->>U: Open last used branch dashboard
   else Code invalid or rate limited
@@ -1061,8 +1111,9 @@ sequenceDiagram
 
 Notes:
 
-- Until the session reaches `aal2`, the database helpers ignore the user's Manager membership, so
-  business queries return no rows even if the UI were bypassed.
+- Until the session reaches `aal2`, the database refuses the Manager's permissions, so privileged
+  actions fail even if the UI were bypassed. The target per FR-IAM-005 is that business reads also
+  return no rows at `aal1`; the current migrations enforce this only for permission-gated data (OI-08).
 - Failed attempts are rate-limited by Supabase Auth and visible in Auth logs (section 17).
 - Lost authenticator: an Owner resets the factor through `admin-users`; an Owner who loses their own
   factor follows the recovery procedure in the [runbook](../operations/runbook.md).
@@ -1082,22 +1133,25 @@ sequenceDiagram
   W->>R: POST rpc/search_medicines (branch, text)
   R-->>W: Matches with sellable stock, MRP, schedule
   S->>W: Add lines, enter loyalty card or phone
-  W->>R: POST rpc/find_loyalty_membership (card or phone)
+  W->>R: POST rpc/lookup_loyalty (card number or phone)
   R-->>W: Active plan, discount, cap, points balance
   Note over W: Totals previewed with src/domain/money.ts (display only)
   S->>W: Enter payments (for example cash plus bKash) and confirm
-  W->>R: POST rpc/create_sale with idempotency key, branch, lines in base units, customer, card, payments, expected total
+  W->>R: POST rpc/create_sale with client request ID, branch, items in base units, customer, card, payments
   R->>F: One transaction as authenticated
-  F->>F: Authorize branch access, role discount limits, open cash session
-  F->>T: Look up idempotency key
+  F->>F: Authorize branch access and permission
+  F->>T: app.claim_request (advisory lock on organization and request ID)
+  F->>T: Look up idempotency key and request hash
   alt Key already processed
-    T-->>F: Existing sale
+    T-->>F: Existing sale (same hash, otherwise request_id_conflict)
     F-->>R: Original result, replayed true
   else New sale
-    F->>T: Lock non-expired batches FOR UPDATE ordered by expiry date then id
-    F->>F: Allocate each line across batches (FEFO), price from batch MRP
-    F->>F: Validate membership and eligible lines, apply discount and cap, points
-    F->>F: Round each line to paisa, total equals sum of lines, compare expected total
+    F->>T: Lock customer, loyalty card and membership, point lots (validation phase)
+    F->>T: Lock sellable batches FOR UPDATE ordered by medicine_id, expiry_date, received_at, id (expired and near-expiry blocked)
+    F->>T: Lock open cash session FOR SHARE
+    F->>F: Allocate each line across batches (FEFO), price from the lot's sale price or pricing rule (never above MRP)
+    F->>F: Validate role discount limits, membership and eligible lines, apply discount and cap, points
+    F->>F: Round each line to paisa, total equals sum of lines, validate payments against total
     F->>T: Take next invoice number from locked branch counter
     F->>T: Insert sale, lines, batch allocations, payments, negative stock movements
     F->>T: Update batch on-hand (CHECK on_hand >= 0), daily summary, loyalty usage, customer due, controlled-drug register
@@ -1109,15 +1163,16 @@ sequenceDiagram
   W-->>S: Print receipt with invoice number (for example MPR-2026-000123)
 ```
 
-| Failure                                       | Illustrative code         | Database effect                          | UI behaviour                                                   |
-| --------------------------------------------- | ------------------------- | ---------------------------------------- | -------------------------------------------------------------- |
-| Not enough sellable stock                     | `insufficient_stock`      | Rolled back; invoice number not consumed | Highlight the line, show available quantity                    |
-| Price or discount changed since preview       | `price_changed`           | Rolled back                              | Show the new total and ask the Salesman to re-confirm          |
-| Loyalty membership expired or cancelled       | `loyalty_inactive`        | Rolled back                              | Remove the benefit, show reason, re-confirm                    |
-| Discount above the role's limit               | `discount_limit_exceeded` | Rolled back                              | Ask a Branch Manager to apply the discount                     |
-| Controlled medicine without prescription data | `prescription_required`   | Rolled back                              | Open the prescription form (doctor, registration number, date) |
-| Credit sale above the customer's limit        | `credit_limit_exceeded`   | Rolled back                              | Show limit and current due                                     |
-| Network failure after the server committed    | None                      | Committed once                           | Retry with the same idempotency key returns the original sale  |
+| Failure                                         | Illustrative code       | Database effect                          | UI behaviour                                                   |
+| ----------------------------------------------- | ----------------------- | ---------------------------------------- | -------------------------------------------------------------- |
+| Not enough sellable stock                       | `insufficient_stock`    | Rolled back; invoice number not consumed | Highlight the line, show available quantity                    |
+| Payments do not match the computed total        | `payment_mismatch`      | Rolled back                              | Show the server total and ask the Salesman to re-confirm       |
+| Loyalty membership expired or cancelled         | `loyalty_inactive`      | Rolled back                              | Remove the benefit, show reason, re-confirm                    |
+| Discount above the role's limit (CFG-05)        | `discount_limit`        | Rolled back                              | Ask a Branch Manager to apply the discount                     |
+| Controlled medicine without prescription data   | `prescription_required` | Rolled back                              | Open the prescription form (doctor, registration number, date) |
+| Credit sale above the customer's limit          | `credit_limit`          | Rolled back                              | Show limit and current due                                     |
+| Same client request ID with a different payload | `request_id_conflict`   | Rolled back                              | Generate a new ID for the new intent; report to Sentry         |
+| Network failure after the server committed      | None                    | Committed once                           | Retry with the same idempotency key returns the original sale  |
 
 ### 11.3 Goods receipt
 
@@ -1127,7 +1182,7 @@ sequenceDiagram
   actor M as Branch Manager
   participant W as Web app
   participant R as PostgREST
-  participant F as receive_purchase function
+  participant F as receive_goods function
   participant T as Tables
 
   M->>W: Start goods receipt (from a purchase order or direct)
@@ -1137,11 +1192,12 @@ sequenceDiagram
   M->>W: Enter lines: batch number, expiry, packs, bonus quantity, unit cost, MRP
   W->>W: Zod validation, convert packs to base units, preview totals
   M->>W: Submit
-  W->>R: POST rpc/receive_purchase with idempotency key, branch, supplier, invoice, lines
+  W->>R: POST rpc/receive_goods with idempotency key, branch, supplier, invoice, lines
   R->>F: One transaction
   F->>F: Authorize purchasing permission for the branch
+  F->>T: app.claim_request, then idempotency lookup
   F->>F: Validate expiry after receipt date, cost and MRP positive, flag short-expiry lines
-  F->>T: Find or create batch per branch, medicine, batch number and expiry
+  F->>T: Find or create the lot on branch, medicine, batch number, expiry, MRP, price basis, unit cost and origin supplier (batches_lot_key), lock lots in canonical order
   F->>T: Insert goods receipt, lines, positive stock movements
   F->>T: Update batch on-hand and purchase order received quantities
   F->>T: Insert supplier invoice and supplier ledger entry (amount payable)
@@ -1152,14 +1208,21 @@ sequenceDiagram
 ```
 
 Notes: bonus (free) quantities increase stock at zero cost, which lowers the effective unit cost used
-for profit. Lines whose remaining shelf life is below the organization's threshold need explicit
-confirmation. Supplier payments are separate RPCs that reduce the supplier due.
+for profit. Lines whose remaining shelf life is below the organization's threshold (CFG-09, default
+180 days) need explicit confirmation. Supplier payments are a separate RPC (`record_supplier_payment`)
+that reduces the supplier due.
 
 ### 11.4 Inter-branch stock transfer
 
-States: `requested` → `dispatched` (in transit) → `received`; a request can be `cancelled` before
-dispatch. Stock in transit belongs to neither branch's sellable stock but is included in stock value
-reports.
+States: `requested` → `dispatched` (in transit) → `received`. A request can be cancelled by the
+requester before dispatch or rejected by the source; after dispatch only the Owner can recall a transfer,
+which returns the stock to the source batches (FR-TRF-008). A source Manager or the Owner may also push
+a transfer without a request; it starts as `dispatched` (FR-TRF-004). Dispatch may be partial; stock in
+transit is not sellable at either branch but is reported as a separate "in transit" stock value
+(FR-TRF-007). The functions are `request_stock_transfer`, `dispatch_stock_transfer` and
+`receive_stock_transfer`, with `reject_stock_transfer`, `cancel_stock_transfer` and
+`recall_stock_transfer` for the other transitions
+([database design, section 8.6.8](../database/database-design.md#868-stock-transfers)).
 
 ```mermaid
 sequenceDiagram
@@ -1171,21 +1234,21 @@ sequenceDiagram
   participant T as Tables
 
   D->>W: Request medicines and quantities from source branch
-  W->>F: rpc request_transfer (idempotency key)
+  W->>F: rpc request_stock_transfer (idempotency key)
   F->>T: Insert transfer (requested) and lines
   F->>T: Insert notification for source branch
   S->>W: Open pending transfer, review lines
-  W->>F: rpc dispatch_transfer (idempotency key)
-  F->>F: Authorize source branch, allocate batches by FEFO or chosen batches
-  F->>T: Lock batches, insert transfer-out movements, reduce on-hand
-  F->>T: Record batch number, expiry and cost per line, status dispatched
+  W->>F: rpc dispatch_stock_transfer (idempotency key)
+  F->>F: Authorize source branch, use chosen batches (FEFO suggested), full or partial
+  F->>T: Lock lots in canonical order (medicine_id, expiry_date, received_at, id), insert transfer-out movements, reduce on-hand
+  F->>T: Record batch number, expiry, cost and MRP per line, transfer number TRF-FY-sequence, status dispatched
   D->>W: Goods arrive, count received quantities per batch
-  W->>F: rpc receive_transfer (idempotency key)
+  W->>F: rpc receive_stock_transfer (idempotency key)
   F->>F: Authorize destination branch
-  F->>T: Create or update destination batches with same batch number, expiry and cost
+  F->>T: Find or create destination lots with the same batch number, expiry, MRP, price basis, sale price and cost
   F->>T: Insert transfer-in movements, increase on-hand
   alt Received less than dispatched
-    F->>T: Record shortage as transit loss with reason (audited)
+    F->>T: Record transfer loss with reason short, damaged or other, notify Owner
   end
   F->>T: Status received, notify source branch
 ```
@@ -1285,7 +1348,7 @@ seeded per organization, is defined in the [database design](../database/databas
 
 | Event                         | Handling                                                                                                                                      |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Create organization           | M1 to M4: provisioning script run by the operator (first tenant only). Later: SaaS self-service onboarding.                                   |
+| Create organization           | M1 to M4: the operator calls the `create_organization` RPC for the first tenant. Later: SaaS self-service onboarding (FR-ORG-012).            |
 | Add branch                    | Owner adds the branch in settings; branch code (for example `MPR`) prefixes its invoice numbers.                                              |
 | Deactivate branch             | `is_active = false`; history stays; no new sales, receipts or transfers. Branches are never hard-deleted.                                     |
 | User in several organizations | Supported by the membership model; an organization switcher appears only when a user has more than one.                                       |
@@ -1296,20 +1359,20 @@ seeded per organization, is defined in the [database design](../database/databas
 
 ## 13. Cross-cutting concerns
 
-| Concern          | Decision                                                                                                                                                                                                                 | Where enforced                                                                         |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| Money            | `BIGINT` paisa (1 BDT = 100 paisa); percentages as basis points or `NUMERIC(5,2)`; round half up to the paisa per line; invoice total = sum of lines; optional rounding to the nearest taka as an explicit rounding line | Database functions; `src/domain/money.ts` mirrors the rules for previews               |
-| Quantities       | `INTEGER` base units (smallest sellable unit); pack conversion factors in the catalog                                                                                                                                    | Database constraints; domain helpers                                                   |
-| Time             | `TIMESTAMPTZ` stored in UTC; business dates (sale date, fiscal year) computed in Asia/Dhaka inside the database; UI formats with `timeZone: 'Asia/Dhaka'`                                                                | Database functions; i18n formatters                                                    |
-| Identifiers      | UUIDs from `gen_random_uuid()`; human-readable codes (invoice number, card number, SKU) are separate columns                                                                                                             | Database defaults                                                                      |
-| Document numbers | Gapless per branch per fiscal year (for example `MPR-2026-000123`), allocated from a locked counter row in the same transaction; sequences are never used because they leave gaps                                        | Database functions                                                                     |
-| Concurrency      | Pessimistic row locks in deterministic order for stock; optimistic concurrency (`updated_at` or version check) for master-data edits                                                                                     | RPCs; updates filtered on the previous `updated_at` (zero rows updated means conflict) |
-| Idempotency      | Client-generated UUID per business intent; unique per organization; replay returns the stored result                                                                                                                     | RPCs; offline outbox                                                                   |
-| Deletion         | Soft delete with `archived_at` or `is_active`; no hard deletes of business records; ledgers immutable                                                                                                                    | Privileges and policies                                                                |
-| Audit            | Generic append-only trigger (section 10.10)                                                                                                                                                                              | Database                                                                               |
-| Errors           | Stable error codes from the database, mapped to i18n messages; correlation ID shown to the user                                                                                                                          | RPCs; data access layer                                                                |
-| Configuration    | Organization and branch settings tables (VAT rate, rounding, loyalty, offline and AI flags); no third-party feature-flag service                                                                                         | Database; settings UI                                                                  |
-| Personal data    | Collected only where needed (customer name and phone); excluded from logs, telemetry and AI prompts                                                                                                                      | Security model; section 16.4                                                           |
+| Concern          | Decision                                                                                                                                                                                                                                                                                                           | Where enforced                                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| Money            | `BIGINT` paisa (1 BDT = 100 paisa); percentages as basis points or `NUMERIC(5,2)`; round half up to the paisa per line; invoice total = sum of lines; optional rounding to the nearest taka as an explicit rounding line                                                                                           | Database functions; `src/domain/money.ts` mirrors the rules for previews ([ADR-0005](../adr/0005-money-as-integer-paisa.md)) |
+| Quantities       | `INTEGER` base units (smallest sellable unit); pack conversion factors in the catalog                                                                                                                                                                                                                              | Database constraints; domain helpers                                                                                         |
+| Time             | `TIMESTAMPTZ` stored in UTC; business dates (sale date, fiscal year) computed in Asia/Dhaka inside the database; UI formats with `timeZone: 'Asia/Dhaka'`                                                                                                                                                          | Database functions; i18n formatters                                                                                          |
+| Identifiers      | UUIDs from `gen_random_uuid()`; human-readable codes (invoice number, card number, SKU) are separate columns                                                                                                                                                                                                       | Database defaults                                                                                                            |
+| Document numbers | Gapless per branch per fiscal year, allocated from a locked counter row in the same transaction; sequences are never used because they leave gaps. Formats per CFG-04: invoice `MPR-2026-000123`, credit note `MPR-CN-2026-000012`, transfer `TRF-2026-000001`; the fiscal year starts in July by default (CFG-03) | Database functions                                                                                                           |
+| Concurrency      | Pessimistic row locks in one global order (database design section 9.3) on an append-only stock ledger ([ADR-0008](../adr/0008-append-only-inventory-ledger-with-fefo.md)); optimistic concurrency (`updated_at` or version check) for master-data edits                                                           | RPCs; updates filtered on the previous `updated_at` (zero rows updated means conflict)                                       |
+| Idempotency      | Client-generated UUID per business intent; unique per organization; serialized by `app.claim_request()`; replay with the same request hash returns the stored result                                                                                                                                               | RPCs; offline outbox                                                                                                         |
+| Deletion         | Soft delete with `archived_at` or `is_active`; no hard deletes of business records; ledgers immutable                                                                                                                                                                                                              | Privileges and policies                                                                                                      |
+| Audit            | Generic append-only trigger (section 10.10)                                                                                                                                                                                                                                                                        | Database                                                                                                                     |
+| Errors           | Stable error codes from the database, mapped to i18n messages; correlation ID shown to the user                                                                                                                                                                                                                    | RPCs; data access layer                                                                                                      |
+| Configuration    | Organization and branch settings tables (VAT rate, rounding, loyalty, offline and AI flags); no third-party feature-flag service                                                                                                                                                                                   | Database; settings UI                                                                                                        |
+| Personal data    | Collected only where needed (customer name and phone); excluded from logs, telemetry and AI prompts                                                                                                                                                                                                                | Security model; section 16.4                                                                                                 |
 
 ---
 
@@ -1344,7 +1407,7 @@ migrations applied, is therefore the quality gate; previews are for UI review. S
 
 No secret is committed to the repository; gitleaks scans every push. The production GitHub
 Environment requires a reviewer's approval before any job can read its secrets. Source maps are
-uploaded to Sentry and are not served publicly (open issue OI-04).
+uploaded to Sentry and are not served publicly (open issue OI-03).
 
 ### 14.3 Continuous integration
 
@@ -1419,8 +1482,9 @@ flowchart TB
 - **Cloudflare Pages project.** One project with Git integration: the production branch is
   `production`, which only the release workflow updates; every other branch, including `main`, builds
   as a preview with staging variables. Build watch paths skip builds for documentation-only changes.
-- **Release cadence.** Small, frequent releases; production deploys happen outside peak counter hours
-  (preferably 14:00 to 16:00 or after 23:00 Asia/Dhaka) unless fixing an incident.
+- **Release cadence.** Small, frequent releases. Production deploys and migrations run between 01:00
+  and 06:00 Asia/Dhaka with at least 24 hours' notice to the Owner (NFR-AVAIL-002); only urgent fixes are
+  deployed outside that window.
 
 Rollback:
 
@@ -1464,11 +1528,14 @@ connection returns.
 | Credit (বাকি) sales                                       | No                                                               | Credit limit cannot be checked reliably                      |
 | Controlled-medicine sales                                 | No                                                               | Register and prescription validation must be online          |
 | Returns, voids, loyalty enrolment                         | No                                                               | Depend on server state                                       |
+| Discounts above the user's limit                          | No                                                               | Need a Manager online                                        |
 | Goods receipt, transfers, adjustments, cash session close | No                                                               | Ledger-critical, multi-party                                 |
 | Reports                                                   | Last loaded view only, marked stale                              | Read-only                                                    |
 | Sign-in                                                   | No                                                               | An existing session continues; new sign-ins need the network |
 
-Offline mode is enabled per branch by the Owner and only on registered counter terminals.
+Offline mode is enabled per branch by the Owner and only on registered counter terminals. The POS always
+shows an online or offline indicator with the number of unsynchronized sales (FR-POS-059). The scope above
+implements FR-POS-055 to FR-POS-059 and NFR-AVAIL-004.
 
 ### 15.2 Components
 
@@ -1476,9 +1543,16 @@ Offline mode is enabled per branch by the Owner and only on registered counter t
 - **IndexedDB database `pims-offline`** with stores:
   - `catalog`: the branch's sellable medicines with barcodes, prices, schedule, loyalty eligibility and
     a sellable-quantity snapshot; refreshed every 15 minutes while online and at sign-in.
-  - `loyalty`: active card numbers with plan benefits, and salted SHA-256 hashes of member phone numbers
-    so phone lookup works offline without storing phone numbers.
+  - `loyalty`: active card numbers with plan benefits only. There is **no phone lookup offline** and no
+    phone-derived value is stored: Bangladeshi mobile numbers (`01[3-9]` plus 8 digits, about 7 x 10^8
+    values) are so few that any hash of them, salted on the same device, is reversed by brute force in
+    seconds. A customer without the card is served offline without the loyalty benefit, and lookup by
+    phone works online only. When a card number is typed offline, the last three phone digits entered by
+    the cashier (CFG-20, FR-LOY-024) travel in the queued request and are checked by the server at sync;
+    a mismatch makes the entry an exception (section 15.4).
   - `outbox`: pending commands.
+  - `device_key`: the terminal's device key, imported into WebCrypto at terminal registration as a
+    **non-extractable** HMAC-SHA-256 `CryptoKey`, so page scripts can use it but cannot read or export it.
   - `sync_log`: results of past sync attempts for troubleshooting.
 - **Sync engine** in `src/features/offline`.
 
@@ -1491,8 +1565,9 @@ interface OutboxEntry {
   organizationId: string
   branchId: string
   terminalId: string // registered device ID
-  createdBy: string // auth user ID of the Salesman
+  reportedBy: string // auth user ID of the Salesman, informational only: the server never trusts it
   createdAtDevice: string // ISO 8601 from the device clock
+  deviceProof: string // HMAC-SHA-256 with the device key, see section 15.3
   provisionalReceiptNo: string // for example MPR-T1-OFF-000042
   payload: CreateSaleArgs // same Zod schema as the online flow
   collectedTotalPaisa: number // what the customer actually paid
@@ -1521,8 +1596,8 @@ sequenceDiagram
   W->>R: Refresh session token
   loop Each pending entry, oldest first
     W->>Q: Mark syncing
-    W->>R: POST rpc/create_sale with same idempotency key and offline metadata
-    R->>F: Validate stock, prices, loyalty, time window
+    W->>R: POST rpc/create_sale with same idempotency key, offline metadata and device proof
+    R->>F: Verify device proof and time window, then validate stock, prices, loyalty
     alt Committed or replayed
       F-->>W: Invoice number
       W->>Q: Mark synced, store invoice number
@@ -1537,39 +1612,67 @@ sequenceDiagram
   M->>W: Resolve each exception (resubmit, accept variance or cancel with reason)
 ```
 
+- Synchronization starts within 1 minute of reconnection (FR-POS-058).
 - Entries are processed one at a time, oldest first, per terminal; independent entries continue after
   an exception.
 - Every retry reuses the idempotency key, so each sale is recorded at most once.
-- The create_sale call carries offline metadata: device timestamp, terminal ID, provisional receipt
-  number and the collected total.
-- Entries belong to the Salesman who created them. If that user's session cannot be refreshed, a Branch
-  Manager signs in on the terminal and submits them; the sale records both the original Salesman and
-  the submitting user.
+- The `create_sale` call carries offline metadata in `p_offline`: terminal ID, provisional receipt
+  number, device timestamp, the Salesman reported by the device, and the device proof. The collected
+  total is sent as the expected total, so any difference becomes an exception (section 15.4).
+- **Terminal authentication (device proof).** When a Branch Manager registers a terminal (online, at
+  `aal2`), the server generates a 256-bit device secret, keeps it server-side encrypted (Supabase Vault)
+  and returns it once; the browser imports it as a non-extractable HMAC-SHA-256 key and discards the raw
+  bytes. Each queued sale carries `HMAC(device secret, terminal_id | client_request_id | request_hash |
+device_at | provisional_ref)`, where `request_hash` is the canonical request hash computed without
+  the proof itself. `create_sale` recomputes and compares it in constant time and rejects a missing or
+  wrong proof, an unknown, inactive or offline-disabled terminal, or a terminal of another branch;
+  rejections are audited. A stored hash of the secret alone cannot verify an HMAC, so the server must
+  hold the secret itself (database design `terminals`). Deactivating a terminal revokes its key; its
+  unsynced entries then become exceptions.
+- **Attribution.** The server always records `created_by = auth.uid()` of the session that submits the
+  entry (security model rule: the actor comes only from the JWT, T-RPC-06). The sync engine submits
+  only the entries whose `reportedBy` equals the signed-in user, so normally each Salesman's sales are
+  recorded under their own session. If that Salesman cannot sign in again, a Branch Manager may submit
+  the remaining entries explicitly from the Sync exceptions screen; those sales are recorded with the
+  Manager as `created_by`, and the device-reported Salesman is stored only as an unverified
+  "reported by" value, labelled as unverified in reports and never used for permissions, commissions or
+  audit attribution.
 
 ### 15.4 Conflict rules
 
-The server is the source of truth. Stock, prices and memberships are always re-validated on sync.
+The server is the source of truth. Stock, prices and memberships are always re-validated on sync; a
+conflicting sale is never silently dropped and never auto-accepted at a different total (FR-POS-058).
 
-| Situation at sync time                                   | Rule                                                                                                                                                            |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Not enough stock (sold elsewhere, or snapshot was stale) | Stock never goes negative. Entry becomes an exception; the Manager investigates (cycle count, adjustment) and resubmits.                                        |
-| Server-computed total differs from the collected total   | Never auto-accepted. The Manager either accepts with the server price, recording the difference as a cash-session variance with reason, or cancels with reason. |
-| Loyalty membership expired or cancelled meanwhile        | Exception. The Manager removes the benefit (variance recorded) or, if permitted, honours it as an audited override.                                             |
-| Same entry submitted twice (retry, two tabs)             | Idempotency key guarantees exactly one sale.                                                                                                                    |
-| Invoice numbering                                        | Gapless numbers are assigned only by the server at sync. The provisional receipt states it is provisional; reprints show the final invoice number.              |
-| Sale time                                                | Device time is used as the sale time if it lies between 72 hours before and 5 minutes after server time; otherwise server time is used and the sale is flagged. |
-| Cash session                                             | The sale belongs to the cash session that was open on the terminal at the device time; a terminal cannot close its session while it has unsynced entries.       |
-| Outbox limits                                            | At most 72 hours of age or 500 entries per terminal (configurable); beyond that the POS stops accepting offline sales.                                          |
+| Situation at sync time                                   | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Not enough stock (sold elsewhere, or snapshot was stale) | Stock never goes negative. Entry becomes an exception; the Manager investigates (cycle count, adjustment) and resubmits.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Server-computed total differs from the collected total   | Never auto-accepted. The Manager either accepts with the server price, recording the difference as a cash-session variance with reason, or cancels with reason.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Loyalty membership expired or cancelled meanwhile        | Exception. The Manager removes the benefit (variance recorded) or, if permitted, honours it as an audited override.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Typed card number with wrong last three phone digits     | Exception (`card_verification_failed`). Handled like an expired membership.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Device proof missing or invalid, or terminal not allowed | Rejected and audited; never posted. The Manager investigates the terminal; a genuine sale is re-entered online.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Same entry submitted twice (retry, two tabs)             | Idempotency key guarantees exactly one sale.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Invoice numbering                                        | Gapless numbers are assigned only by the server at sync. The provisional receipt states it is provisional; reprints show the final invoice number.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Sale time                                                | Device time becomes `sold_at` only if it is (1) at most 5 minutes after server time; (2) at most 72 hours before server time; (3) not earlier than the terminal's last confirmed online time (`terminals.last_seen_at`, advanced only by the online heartbeat that the client sends while its outbox is empty, never by offline sync calls); (4) not earlier than the opening of the cash session described in the next row; and (5) on that session's business date. Otherwise the entry becomes an exception (`offline_time_rejected`); the Manager may resubmit it at server time into the current open session, which sets `is_time_flagged`. |
+| Cash session                                             | The sale is posted only into the cash session of the terminal's register that is open at sync time and that contains the device time; it is never posted into a closed session or an earlier business date. A terminal cannot close its session while it has unsynced entries, and the server refuses offline entries for a closed session (exception).                                                                                                                                                                                                                                                                                           |
+| Review of backdated sales                                | Every accepted offline sale has `sold_at` earlier than its server receipt time and is listed on the Branch Manager's offline sales review (device time, server time, terminal, submitting user, unverified reported Salesman) until reviewed.                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Outbox limits                                            | At most 72 hours of age or 500 entries per terminal (configurable); beyond that the POS stops accepting offline sales.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ### 15.5 Security of offline data
 
-- IndexedDB is not encrypted by the browser, so offline data is minimized: no customer names or
-  addresses, only card numbers and hashed phone numbers, prices and stock snapshots.
+- IndexedDB is not encrypted by the browser, so offline data is minimized: no customer names,
+  addresses, phone numbers or phone-derived values (not even hashes, section 15.2); only card numbers
+  with plan benefits, prices and stock snapshots, plus the queued sales themselves.
+- The device key is non-extractable, so a script or a person copying the IndexedDB files cannot take it
+  to another browser; a stolen terminal is handled by deactivating it, which revokes the key.
 - Offline mode is limited to registered counter terminals that have an operating-system account
   password and are physically controlled by the branch.
 - Sign-out clears all offline stores when the outbox is empty; with unsynced entries, sign-out warns
   and keeps only the outbox.
 - Every resolution of a sync exception is audited.
+- Threats specific to offline mode (forged terminal, attribution to another user, backdating into an
+  earlier session or business date, phone-number recovery from the store) belong in the
+  [security model](../security/security-model.md) threat table (T-WEB) and need test cases in the
+  [testing strategy](../engineering/testing-strategy.md).
 
 ---
 
@@ -1591,14 +1694,14 @@ The server is the source of truth. Stock, prices and memberships are always re-v
 
 ### 16.2 Feature map
 
-| Feature                  | Technique                                                                                                                                                                                                | Data sent to the LLM                                                                                    | Writes                                  | Human gate                                                                         |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------- |
-| Smart medicine search    | `pg_trgm` search first; on request or no match, the LLM maps free text (generic, brand, symptom words) to generic names from the organization's catalog vocabulary; the database returns in-stock brands | Query text and candidate generic names; no customer data                                                | None                                    | Pharmacist chooses; Rx and controlled badges; "not medical advice" label           |
-| Prescription reading     | Vision model extracts medicine names, strengths, quantities; matched to the catalog with `search_medicines`                                                                                              | The prescription image (may show patient and doctor names; organization opt-in and disclosure required) | None; suggested cart lines only         | Pharmacist confirms each line; controlled medicines need manual prescription entry |
-| Reorder forecasting      | SQL: moving average with day-of-week seasonality, supplier lead time and safety stock (materialized view)                                                                                                | None (optional narration of results)                                                                    | Draft purchase order only on user click | Branch Manager reviews and submits                                                 |
-| Expiry-risk detection    | SQL: projected days to sell out versus days to expiry per batch                                                                                                                                          | None                                                                                                    | None                                    | Manager decides (transfer, return to supplier, promotion)                          |
-| Ask your data            | Text-to-SQL over allow-listed reporting views, then narration                                                                                                                                            | View catalog, question, then at most 50 aggregated result rows                                          | None                                    | Owner sees the SQL and the data behind the answer                                  |
-| Weekly business insights | Scheduled summary of aggregated KPIs per branch using the Message Batches API                                                                                                                            | Aggregated KPIs only                                                                                    | Stored as an in-app notification        | Owner reads                                                                        |
+| Feature                  | Technique                                                                                                                                                                                                                                                                                                                     | Data sent to the LLM                                                                                    | Writes                                  | Human gate                                                                                                          |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Smart medicine search    | `pg_trgm` search first; on request or when nothing matches, the LLM maps free text (English, Bangla or Banglish; generic, brand or symptom words) to generic names from the organization's catalog vocabulary; the database returns in-stock brands; names that do not match the catalog are discarded (FR-AI-001, FR-AI-002) | Query text and candidate generic names; no customer data                                                | None                                    | Pharmacist chooses; Rx and controlled badges; "Suggestion for the pharmacist, not medical advice" label (FR-AI-003) |
+| Prescription reading     | Vision model extracts medicine names, strengths, quantities; matched to the catalog with `search_medicines`                                                                                                                                                                                                                   | The prescription image (may show patient and doctor names; organization opt-in and disclosure required) | None; suggested cart lines only         | Pharmacist confirms each line; controlled medicines need manual prescription entry                                  |
+| Reorder forecasting      | SQL: moving average with day-of-week seasonality, supplier lead time and safety stock (materialized view)                                                                                                                                                                                                                     | None (optional narration of results)                                                                    | Draft purchase order only on user click | Branch Manager reviews and submits                                                                                  |
+| Expiry-risk detection    | SQL: projected days to sell out versus days to expiry per batch                                                                                                                                                                                                                                                               | None                                                                                                    | None                                    | Manager decides (transfer, return to supplier, promotion)                                                           |
+| Ask your data            | Text-to-SQL over allow-listed reporting views, then narration                                                                                                                                                                                                                                                                 | View catalog, question, then at most 50 aggregated result rows                                          | None                                    | Owner sees the SQL and the data behind the answer                                                                   |
+| Weekly business insights | Scheduled summary of aggregated KPIs per branch using the Message Batches API                                                                                                                                                                                                                                                 | Aggregated KPIs only                                                                                    | Stored as an in-app notification        | Owner reads                                                                                                         |
 
 ### 16.3 AI gateway components
 
@@ -1641,24 +1744,24 @@ flowchart LR
 
 ### 16.4 Guardrails
 
-| #   | Control                          | Implementation                                                                                                                                                                                                                                                                                             | Threat mitigated                                    |
-| --- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| 1   | Kill switches                    | Organization setting `ai_enabled` plus per-feature flags; a global function secret disables all AI immediately                                                                                                                                                                                             | Runaway cost, provider incident, policy change      |
-| 2   | Authentication and authorization | Verified JWT, AAL2 for Owner; ask-your-data limited to roles allowed by the [security model](../security/security-model.md)                                                                                                                                                                                | Unauthorized use                                    |
-| 3   | Read-only database role          | `ai_reader`: `USAGE` on `reporting` only, `SELECT` on allow-listed views only, no table privileges, `default_transaction_read_only = on`; each query runs in `BEGIN READ ONLY`                                                                                                                             | Data modification, access to base tables            |
-| 4   | Tenant isolation                 | Reporting views filter rows with the same `app` helpers as RLS; the verified caller's claims are set in the transaction, so `auth.uid()` resolves to the caller; pgTAP proves zero cross-tenant rows                                                                                                       | Cross-tenant leakage through generated SQL          |
-| 5   | SQL allow-list validation        | Parse with the PostgreSQL parser (libpg_query compiled to WebAssembly), never regular expressions; checks listed below                                                                                                                                                                                     | SQL injection, data exfiltration, denial of service |
-| 6   | Statement timeout                | `statement_timeout = 5s`, `lock_timeout = 1s`, `idle_in_transaction_session_timeout = 10s` on every AI query                                                                                                                                                                                               | Expensive queries degrading the POS                 |
-| 7   | Row and size limits              | Outer `LIMIT 200` for display; at most 50 rows and 64 KB sent back to the LLM; `max_tokens` capped per feature                                                                                                                                                                                             | Bulk extraction, cost spikes                        |
-| 8   | PII minimization and redaction   | Reporting views exclude names, phone numbers, addresses and prescription details (customers appear as surrogate references); a redactor removes Bangladeshi mobile numbers (`01[3-9]` plus 8 digits) and email addresses from any text before it leaves the function                                       | Personal data disclosure to a third party           |
-| 9   | Rate limits                      | Defaults: 20 requests per user per hour and 200 per organization per day, configurable; counters updated atomically in `ai` schema                                                                                                                                                                         | Abuse, cost spikes                                  |
-| 10  | Cost metering and budgets        | Token usage from each API response multiplied by a price table is stored per request; monthly budget per organization (default USD 20) with an alert at 80 percent and a hard stop at 100 percent                                                                                                          | Unbounded spend                                     |
-| 11  | Prompt-injection defenses        | User text, database rows and image text are placed in delimited data blocks and declared untrusted; no write-capable tools are given to the model; outputs constrained by JSON schema (structured outputs); generated SQL is validated regardless of what the model says; narration cannot trigger actions | Instructions hidden in questions, data or images    |
-| 12  | Human confirmation               | Prescription suggestions show the source crop and confidence; nothing enters the cart without a click per line; controlled medicines always require manual entry                                                                                                                                           | Misreading a prescription                           |
-| 13  | No medical advice                | System prompts forbid dosing, diagnosis and treatment advice; refusals (`stop_reason` of `refusal`) produce a neutral message; UI disclaimer                                                                                                                                                               | Patient harm, regulatory risk                       |
-| 14  | Logging and audit                | `ai` request log: user, organization, feature, prompt template version, generated SQL, validation result, token counts, cost, latency, outcome; result rows are not stored; 90-day retention                                                                                                               | Accountability, incident analysis                   |
-| 15  | Evaluation before change         | A versioned golden set (at least 50 questions with expected results on seeded data, plus at least 30 red-team prompts) runs against staging before any prompt or model change                                                                                                                              | Silent quality regressions                          |
-| 16  | Provider data handling           | API-only use under Anthropic's commercial terms, reviewed and recorded in an ADR before M5 launch; disclosed in the privacy notice                                                                                                                                                                         | Unexpected data retention or use                    |
+| #   | Control                          | Implementation                                                                                                                                                                                                                                                                                                                                                                                              | Threat mitigated                                    |
+| --- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| 1   | Kill switches                    | Organization and per-feature flags, off by default (FR-AI-015, CFG-29); a global function secret lets the platform operator disable all AI immediately                                                                                                                                                                                                                                                      | Runaway cost, provider incident, policy change      |
+| 2   | Authentication and authorization | Verified JWT, AAL2 for Owner; ask-your-data limited to roles allowed by the [security model](../security/security-model.md)                                                                                                                                                                                                                                                                                 | Unauthorized use                                    |
+| 3   | Read-only database role          | `ai_reader`: `USAGE` on `reporting` only, `SELECT` on allow-listed views only, no table privileges, `default_transaction_read_only = on`; each query runs in `BEGIN READ ONLY`                                                                                                                                                                                                                              | Data modification, access to base tables            |
+| 4   | Tenant isolation                 | Reporting views filter rows with the same `app` helpers as RLS; the verified caller's claims are set in the transaction, so `auth.uid()` resolves to the caller; pgTAP proves zero cross-tenant rows                                                                                                                                                                                                        | Cross-tenant leakage through generated SQL          |
+| 5   | SQL allow-list validation        | Parse with the PostgreSQL parser (libpg_query compiled to WebAssembly), never regular expressions; checks listed below                                                                                                                                                                                                                                                                                      | SQL injection, data exfiltration, denial of service |
+| 6   | Statement timeout                | `statement_timeout = 5s`, `lock_timeout = 1s`, `idle_in_transaction_session_timeout = 10s` on every AI query                                                                                                                                                                                                                                                                                                | Expensive queries degrading the POS                 |
+| 7   | Row and size limits              | Outer `LIMIT 200` for display; at most 50 rows and 64 KB sent back to the LLM; `max_tokens` capped per feature                                                                                                                                                                                                                                                                                              | Bulk extraction, cost spikes                        |
+| 8   | PII minimization and redaction   | Reporting views exclude names, phone numbers, addresses and prescription details; customers and loyalty cards appear only as tokens (FR-AI-023); a redactor removes Bangladeshi mobile numbers (`01[3-9]` plus 8 digits) and email addresses from any text before it leaves the function                                                                                                                    | Personal data disclosure to a third party           |
+| 9   | Rate limits                      | Defaults: 20 requests per user per hour and 200 per organization per day, configurable; counters updated atomically in `ai` schema                                                                                                                                                                                                                                                                          | Abuse, cost spikes                                  |
+| 10  | Cost metering and budgets        | Token usage from each API response multiplied by a price table is stored per request; monthly budget per organization (default USD 20) with an alert at 80 percent and a hard stop at 100 percent                                                                                                                                                                                                           | Unbounded spend                                     |
+| 11  | Prompt-injection defenses        | User text, database rows and image text are placed in delimited data blocks and declared untrusted (FR-AI-024); no write-capable tools are given to the model; outputs are requested as JSON schema (structured outputs) and validated again with Zod, invalid outputs are discarded and logged (FR-AI-025); generated SQL is validated regardless of what the model says; narration cannot trigger actions | Instructions hidden in questions, data or images    |
+| 12  | Human confirmation               | Prescription suggestions show the source crop and a confidence value, lines below 0.80 are highlighted, and nothing enters the cart until the pharmacist accepts, edits or rejects each line (FR-AI-006); controlled medicines are shown as text only and must be entered manually (FR-AI-007)                                                                                                              | Misreading a prescription                           |
+| 13  | No medical advice                | System prompts forbid dosing, diagnosis and treatment advice; refusals (`stop_reason` of `refusal`) produce a neutral message; UI disclaimer                                                                                                                                                                                                                                                                | Patient harm, regulatory risk                       |
+| 14  | Logging and audit                | `ai` request log: user, organization, feature, prompt template version, generated SQL, validation result, token counts, cost, latency, outcome; result rows are not stored; 90-day retention                                                                                                                                                                                                                | Accountability, incident analysis                   |
+| 15  | Evaluation before change         | Versioned golden sets and gates per FR-AI-018 (for example at least 50 ask-your-data questions with 85 percent correct, at least 30 red-team prompts with zero unsafe outputs) run against staging before a feature is enabled and before any prompt or model change                                                                                                                                        | Silent quality regressions                          |
+| 16  | Provider data handling           | API use under terms that exclude training on submitted data, reviewed and recorded in an ADR before M5 launch and stated in the privacy notice (FR-AI-028); hosting and AI processing disclosed (NFR-PRIV-009)                                                                                                                                                                                              | Unexpected data retention or use                    |
 
 SQL validation checks (all must pass):
 
@@ -1683,7 +1786,8 @@ SQL validation checks (all must pass):
   schema) for SQL and prescription extraction; image input for prescriptions; prompt caching for the
   static system prompt and view catalog; the Message Batches API (50 percent discount) for weekly
   insights; explicit handling of `refusal` and `max_tokens` stop reasons.
-- Timeouts: 30 seconds per interactive request with at most one retry on rate-limit or server errors;
+- Timeouts: 30 seconds per interactive request (FR-AI-026) with at most one retry on rate-limit or
+  server errors; AI failures never block the POS, and smart search falls back to standard search;
   the UI shows progress and can be cancelled.
 
 ---
@@ -1696,7 +1800,7 @@ SQL validation checks (all must pass):
 | --------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------- |
 | Frontend errors and Web Vitals    | Sentry browser SDK                                      | Exceptions with release and route, LCP, INP and CLS samples (10 percent)                               | Per Sentry plan            |
 | API, Auth, Storage, function logs | Supabase Logs Explorer                                  | Requests, status codes, latency, auth events                                                           | 1 day (Free), 7 days (Pro) |
-| Query performance                 | `pg_stat_statements`, Supabase query performance report | Slowest and most frequent queries                                                                      | Until reset                |
+| Query performance                 | `pg_stat_statements`, Supabase query performance report | Slowest and most frequent queries; reviewed monthly, queries over 500 ms triaged (NFR-OBS-005)         | Until reset                |
 | Database health                   | Supabase reports                                        | CPU, memory, disk, connections                                                                         | Per plan                   |
 | Edge Function logs                | Supabase function logs                                  | Structured JSON: request ID, function, organization ID, latency, outcome                               | Per plan                   |
 | Availability                      | External uptime monitor                                 | Web app URL and `health` function every 5 minutes                                                      | Per monitor plan           |
@@ -1714,45 +1818,50 @@ SQL validation checks (all must pass):
 
 ### 17.3 Alerts
 
-| Alert                   | Condition                                                                           | Channel                             | First response                                    |
-| ----------------------- | ----------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------- |
-| Application unavailable | Two consecutive failed uptime checks (10 minutes)                                   | Email and mobile push               | Check provider status pages, follow the runbook   |
-| Error spike             | More than 20 new Sentry events in 10 minutes, or any new issue on the POS route     | Email                               | Triage, roll back the frontend if release-related |
-| Sale commit failures    | More than 5 percent of `create_sale` calls failing with server errors in 15 minutes | Email                               | Check database health and recent migrations       |
-| Database size           | Over 70 percent of plan quota                                                       | Weekly usage review, email          | Apply the upgrade trigger (section 20.3)          |
-| Backup failure          | `backup.yml` failed or no backup in 26 hours                                        | GitHub email                        | Re-run, investigate before the next business day  |
-| Stale reporting data    | Materialized view older than 26 hours                                               | In-app banner                       | Check `pg_cron` job history                       |
-| Offline backlog         | A terminal with unsynced entries for more than 2 hours while online                 | In-app notice to the Branch Manager | Resolve sync exceptions                           |
-| AI budget               | 80 percent and 100 percent of the monthly budget                                    | In-app and email to the Owner       | Raise budget or wait for the next month           |
+| Alert                   | Condition                                                                           | Channel                                    | First response                                         |
+| ----------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------ |
+| Application unavailable | Two consecutive failed uptime checks (10 minutes)                                   | Email and mobile push                      | Check provider status pages, follow the runbook        |
+| Error spike             | More than 20 new Sentry events in 10 minutes, or any new issue on the POS route     | Email                                      | Triage, roll back the frontend if release-related      |
+| Sale commit failures    | More than 5 percent of `create_sale` calls failing with server errors in 15 minutes | Email                                      | Check database health and recent migrations            |
+| Database size           | Over 70 percent of plan quota                                                       | Weekly usage review, email                 | Apply the upgrade trigger (section 20.3)               |
+| Backup failure          | `backup.yml` failed or no backup in 26 hours                                        | GitHub email and in-app Owner notification | Re-run, investigate before the next business day       |
+| Integrity check failure | Nightly integrity or gapless-series check fails (NFR-REL-003, NFR-REL-004)          | Email and in-app Owner notification        | Stop affected operations if needed, follow the runbook |
+| Stale reporting data    | Materialized view older than 26 hours                                               | In-app banner                              | Check `pg_cron` job history                            |
+| Offline backlog         | A terminal with unsynced entries for more than 2 hours while online                 | In-app notice to the Branch Manager        | Resolve sync exceptions                                |
+| AI budget               | 80 percent and 100 percent of the monthly budget                                    | In-app and email to the Owner              | Raise budget or wait for the next month                |
 
-### 17.4 Service level objectives (proposed)
+Every alert type links to a procedure in the [runbook](../operations/runbook.md) (NFR-OBS-008).
+
+### 17.4 Service level objectives
 
 The binding targets are the NFRs in the [SRS](../requirements/SRS.md); these are the operational
 objectives used to tune alerts.
 
-| Objective                                                      | Target                 |
-| -------------------------------------------------------------- | ---------------------- |
-| Availability during business hours (08:00 to 24:00 Asia/Dhaka) | 99.5 percent per month |
-| Successful sale commits, excluding business-rule rejections    | 99.9 percent           |
-| Latency                                                        | Budgets in section 18  |
+| Objective                                                                     | Target                 |
+| ----------------------------------------------------------------------------- | ---------------------- |
+| Availability during business hours (08:00 to 24:00 Asia/Dhaka), NFR-AVAIL-001 | 99.5 percent per month |
+| Successful sale commits, excluding business-rule rejections                   | 99.9 percent           |
+| Latency                                                                       | Budgets in section 18  |
 
 ---
 
 ## 18. Performance budgets
 
-| Metric                                              | Budget                               | Measured with                                        | Enforcement                                  |
-| --------------------------------------------------- | ------------------------------------ | ---------------------------------------------------- | -------------------------------------------- |
-| POS search, server time                             | p95 under 200 ms                     | `pg_stat_statements`, load test on staging           | Release checklist; regression blocks release |
-| POS search, keystroke to results rendered           | p95 under 400 ms on 4G in Dhaka      | Sentry custom span                                   | Monitored                                    |
-| Barcode scan to line added                          | p95 under 300 ms                     | Sentry custom span                                   | Monitored                                    |
-| Sale commit (`create_sale`), server time            | p95 under 500 ms                     | `pg_stat_statements`, load test                      | Release checklist                            |
-| Sale commit, click to confirmation                  | p95 under 800 ms                     | Sentry custom span                                   | Monitored                                    |
-| Initial load, Largest Contentful Paint              | under 2.5 s on 4G, mid-range device  | Lighthouse in CI (planned for M4), Sentry Web Vitals | CI budget (M4)                               |
-| Interaction to Next Paint / Cumulative Layout Shift | under 200 ms / under 0.1             | Sentry Web Vitals                                    | Monitored                                    |
-| JavaScript for the first screen                     | at most 250 KB gzip (shell plus POS) | Build report                                         | CI bundle-size check (planned)               |
-| Each lazy feature chunk                             | at most 150 KB gzip                  | Build report                                         | CI bundle-size check (planned)               |
-| Reports (one branch, one year of data)              | under 2 s                            | Load test with synthetic year of data                | Release checklist                            |
-| Goods receipt with 50 lines                         | p95 under 1 s                        | Load test                                            | Release checklist                            |
+| Metric                                                             | Budget                                           | Measured with                                        | Enforcement                                  |
+| ------------------------------------------------------------------ | ------------------------------------------------ | ---------------------------------------------------- | -------------------------------------------- |
+| POS search, server time (NFR-PERF-001)                             | p95 under 200 ms                                 | `pg_stat_statements`, load test on staging           | Release checklist; regression blocks release |
+| POS search, keystroke to results rendered (NFR-PERF-001)           | p95 under 400 ms on 4G in Dhaka                  | Sentry custom span                                   | Monitored                                    |
+| Barcode scan to line added (NFR-PERF-006)                          | p95 under 300 ms                                 | Sentry custom span                                   | Monitored                                    |
+| Sale commit (`create_sale`), server time (NFR-PERF-002)            | p95 under 500 ms (up to 10 lines), p99 under 1 s | `pg_stat_statements`, load test                      | Release checklist                            |
+| Sale commit, click to confirmation (NFR-PERF-002)                  | p95 under 800 ms                                 | Sentry custom span                                   | Monitored                                    |
+| Initial load, Largest Contentful Paint (NFR-PERF-003)              | under 2.5 s on 4G, mid-range device              | Lighthouse in CI (planned for M4), Sentry Web Vitals | CI budget (M4)                               |
+| Interaction to Next Paint / Cumulative Layout Shift (NFR-PERF-005) | under 200 ms / under 0.1                         | Sentry Web Vitals                                    | Monitored                                    |
+| JavaScript for the first screen (NFR-PERF-007)                     | at most 250 KB gzip (shell plus POS)             | Build report                                         | CI bundle-size check (planned)               |
+| Each lazy feature chunk (NFR-PERF-007)                             | at most 150 KB gzip                              | Build report                                         | CI bundle-size check (planned)               |
+| Reports, one branch, one year of data (NFR-PERF-004)               | under 2 s                                        | Load test with synthetic year of data                | Release checklist                            |
+| Goods receipt with 50 lines (NFR-PERF-011)                         | p95 under 1 s                                    | Load test                                            | Release checklist                            |
+| Owner dashboard with 20 branches (NFR-PERF-008)                    | p95 under 2 s                                    | Load test                                            | Release checklist                            |
+| Export of up to 50,000 rows (NFR-PERF-009)                         | under 30 s                                       | Load test                                            | Release checklist                            |
 
 How the budgets are met:
 
@@ -1765,7 +1874,8 @@ How the budgets are met:
 - **Frontend:** route-level code splitting, Recharts loaded only in reports, self-hosted subset fonts,
   `preconnect` to the Supabase origin, immutable caching of hashed assets on Cloudflare.
 
-Load tests use a seeded dataset of 30,000 catalog items, 10 branches and one year of sales at the
+Load tests follow NFR-PERF-010 (3 times the reference peak hour, 4 terminals per branch across 5
+branches) and NFR-SCAL-003 (a seeded dataset of 30,000 catalog items, 10 branches and one year of sales at the
 volumes in assumption A-04; scripts live in `scripts/` and run against staging before each minor release.
 
 ---
@@ -1787,7 +1897,7 @@ data in M4.
 | S0 Pilot                           | One branch, database under 350 MB                                                                                    | Supabase Free, nightly encrypted `pg_dump` through GitHub Actions                                                                                                               |
 | S1 Production baseline             | Any trigger in section 20.3 (recommended at the M4 launch)                                                           | Supabase Pro with Micro compute; daily managed backups; 7-day logs                                                                                                              |
 | S2 Growth (about 5 to 10 branches) | Sustained CPU above 70 percent at peak, budgets in section 18 breached, or connections above 60 percent of the limit | Compute upgrade (Small, then Medium); index and query tuning; point-in-time recovery if a recovery point under 24 hours is required                                             |
-| S3 Read scale-out                  | Reporting or AI load measurably slows POS latency, or about 20 or more branches                                      | Read replica for `report_*` functions and the AI gateway; partition `sales`, `sale_lines`, `inventory_movements` and `audit.log` by month (tables are designed partition-ready) |
+| S3 Read scale-out                  | Reporting or AI load measurably slows POS latency, or about 20 or more branches                                      | Read replica for `report_*` functions and the AI gateway; partition `sales`, `sale_items`, `inventory_movements` and `audit.log` by month (tables are designed partition-ready) |
 | S4 SaaS                            | Multiple paying organizations                                                                                        | Per-organization rate limits and quotas; tenant data export; large tenants moved to dedicated projects; evaluate the Team plan for compliance needs                             |
 
 Additional levers, in order of preference: better indexes and queries, more precomputation (summary
@@ -1814,7 +1924,7 @@ purchase decision.
 | Supabase compute add-ons        | Micro included with Pro                                                                                                                                                    | Small USD 15, Medium USD 60, Large USD 110 (before the USD 10 credit)                                            | 0 to 100                                                                                                 |
 | Supabase point-in-time recovery | Not available                                                                                                                                                              | When a recovery point under 24 hours is required                                                                 | about USD 100 for 7 days of retention                                                                    |
 | Cloudflare Pages                | Unlimited static requests and bandwidth, 500 builds per month, commercial use allowed                                                                                      | More than 500 builds per month (use build watch paths first)                                                     | Plan upgrade only if needed                                                                              |
-| GitHub                          | Free private repository; included Actions minutes                                                                                                                          | If CI exceeds included minutes; CodeQL on a private repository needs a paid GitHub code-security licence (OI-05) | Pay-as-you-go minutes                                                                                    |
+| GitHub                          | Free private repository; included Actions minutes                                                                                                                          | If CI exceeds included minutes; CodeQL on a private repository needs a paid GitHub code-security licence (OI-04) | Pay-as-you-go minutes                                                                                    |
 | Sentry                          | Developer plan: 1 user, 5,000 errors per month                                                                                                                             | More users or volume                                                                                             | about USD 26 (Team)                                                                                      |
 | Uptime monitor                  | Free plans with 5-minute checks                                                                                                                                            | Not expected                                                                                                     | 0                                                                                                        |
 | Transactional email             | Free tiers of common SMTP providers cover invitation and reset volumes                                                                                                     | Not expected                                                                                                     | 0                                                                                                        |
@@ -1875,25 +1985,25 @@ Owner can raise it. Actual costs are measured per request by the usage meter.
 Each scenario follows the source, stimulus, environment, artifact, response and response-measure form.
 Targets marked with the SRS are authoritative there; the others are architecture targets.
 
-| ID     | Quality         | Stimulus (source, environment)                                                                                          | Response                                                                             | Response measure                                                                     | Tactics (sections)                                     |
-| ------ | --------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| QAS-01 | Performance     | Salesman types three characters or scans a barcode; normal load of 5 terminals per branch across 10 branches            | Ranked matches with sellable stock are shown                                         | Server p95 under 200 ms; end-to-end p95 under 400 ms                                 | Trigram index, limit 20, scan detection (9.8, 18)      |
-| QAS-02 | Performance     | 60 sales per hour per branch across 10 branches at evening peak                                                         | Every sale commits in one transaction                                                | p95 under 500 ms server; no deadlocks                                                | Single RPC, deterministic lock order (10.4)            |
-| QAS-03 | Integrity       | Two terminals sell the last strip of the same batch at the same moment                                                  | One sale succeeds; the other receives `insufficient_stock`                           | Zero negative on-hand rows (constraint); verified by a concurrent test               | Row locks, `CHECK` constraint (10.4)                   |
-| QAS-04 | Integrity       | Network drops after the server commits a sale; the client retries                                                       | The original sale is returned, not duplicated                                        | Exactly one sale per idempotency key; invoice numbers remain gapless                 | Idempotency keys, counter in transaction (10.4, 13)    |
-| QAS-05 | Security        | An authenticated user of organization A crafts PostgREST requests for organization B's rows                             | Requests return no rows or are rejected                                              | Zero rows leaked; isolation suite passes on every PR                                 | RLS, composite keys, tests (10.5, 12.2)                |
-| QAS-06 | Security        | A Salesman's password is stolen and used from outside the shop                                                          | Access is limited to that branch and role; the Owner deactivates the user            | Revocation effective on the next request (under 1 minute)                            | Membership-based helpers, no stale claims (10.5, 10.6) |
-| QAS-07 | Security        | An Owner's password is stolen                                                                                           | Without the TOTP code no privileged data is returned                                 | Zero business rows at `aal1` for MFA-required roles                                  | MFA in helpers (10.6)                                  |
-| QAS-08 | Availability    | The branch's internet is down for 2 hours during business hours (M4)                                                    | Cash and mobile-payment sales continue offline and sync on reconnect                 | Zero lost sales; backlog synced within 5 minutes of reconnect; exceptions visible    | Outbox, idempotency, conflict rules (15)               |
-| QAS-09 | Recoverability  | A faulty migration or operator error corrupts data in production                                                        | Service is restored from backup following the runbook                                | RPO 24 hours on Free (nightly dump), minutes with PITR; RTO 4 hours; quarterly drill | Backups, runbook (10.9, 14.4)                          |
-| QAS-10 | Deployability   | A frontend release breaks a screen                                                                                      | The previous deployment is restored                                                  | Under 5 minutes, no database rollback needed                                         | Pages rollback, expand and contract (14.4, 14.5)       |
-| QAS-11 | Modifiability   | The Owner changes the loyalty program from 3-month free cards with 5 percent discount to 6-month paid cards with points | Plans are reconfigured in settings                                                   | No code change or deployment                                                         | Configuration over code (P5)                           |
-| QAS-12 | Modifiability   | A new payment method (for example Upay) must be accepted                                                                | Added through configuration or a small migration plus translations                   | Under 1 developer-day including tests; no change to sale logic                       | Data-driven payment methods (13)                       |
-| QAS-13 | Scalability     | The tenth branch is opened                                                                                              | The branch is created in settings and starts selling                                 | No code change; budgets in section 18 still met in the 10-branch load test           | Tenancy model, indexes (12, 18, 19)                    |
-| QAS-14 | Usability       | A newly hired Salesman serves a customer buying three items                                                             | The sale is completed with the keyboard only                                         | Under 45 seconds after 30 minutes of training; zero serious axe violations           | Keyboard-first POS (9.7, 9.8)                          |
-| QAS-15 | Usability, i18n | A user switches the interface to Bangla                                                                                 | All labels, numbers and dates display in Bangla formats without reload               | 100 percent key parity between languages (CI check); no truncated layouts at 320 px  | i18n (9.6)                                             |
-| QAS-16 | Safety (AI)     | A question tries prompt injection, for example asking to ignore rules, drop a table or show another pharmacy's data     | The request is refused or answered only from the caller's permitted, read-only views | 100 percent of the red-team set blocked; zero writes; zero cross-tenant rows         | Guardrails 3 to 11 (16.4)                              |
-| QAS-17 | Cost            | AI usage grows unexpectedly in one organization                                                                         | Requests are throttled and stopped at the budget                                     | Spend never exceeds the configured monthly budget by more than one request           | Rate limits, budgets (16.4)                            |
+| ID     | Quality         | Stimulus (source, environment)                                                                                                                 | Response                                                                                    | Response measure                                                                                                      | Tactics (sections)                                     |
+| ------ | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| QAS-01 | Performance     | Salesman types three characters or scans a barcode at 3 times the reference peak hour, 4 terminals per branch across 5 branches (NFR-PERF-010) | Ranked matches with sellable stock are shown                                                | Server p95 under 200 ms; end-to-end p95 under 400 ms (NFR-PERF-001)                                                   | Trigram index, limit 20, scan detection (9.8, 18)      |
+| QAS-02 | Performance     | Evening peak at 3 times the reference peak hour (60 invoices per branch per hour), 4 terminals per branch across 5 branches                    | Every sale commits in one transaction                                                       | Server p95 under 500 ms; no deadlocks (NFR-PERF-002)                                                                  | Single RPC, deterministic lock order (10.4)            |
+| QAS-03 | Integrity       | 20 parallel sessions sell the last units of the same batch at the same moment                                                                  | Exactly the available quantity is sold; the others receive `insufficient_stock`             | Zero negative on-hand rows (NFR-REL-002)                                                                              | Row locks, `CHECK` constraint (10.4)                   |
+| QAS-04 | Integrity       | Network drops after the server commits a sale; the client retries                                                                              | The original sale is returned, not duplicated                                               | Exactly one sale per idempotency key; invoice numbers remain gapless                                                  | Idempotency keys, counter in transaction (10.4, 13)    |
+| QAS-05 | Security        | An authenticated user of organization A crafts PostgREST requests for organization B's rows                                                    | Requests return no rows or are rejected                                                     | Zero rows leaked; isolation suite passes on every PR                                                                  | RLS, composite keys, tests (10.5, 12.2)                |
+| QAS-06 | Security        | A Salesman's password is stolen and used from outside the shop                                                                                 | Access is limited to that branch and role; the Owner deactivates the user                   | Revocation effective on the next request (under 1 minute)                                                             | Membership-based helpers, no stale claims (10.5, 10.6) |
+| QAS-07 | Security        | An Owner's password is stolen                                                                                                                  | Without the TOTP code no privileged action succeeds and no business data is readable        | Zero permission-gated operations and zero business rows at `aal1` (FR-IAM-005; read path tracked as OI-08)            | MFA in database helpers (10.6)                         |
+| QAS-08 | Availability    | The branch's internet is down for 2 hours during business hours (M4)                                                                           | Cash and mobile-payment sales continue offline and sync on reconnect                        | Zero lost sales; synchronization starts within 1 minute of reconnection (FR-POS-058); exceptions visible              | Outbox, idempotency, conflict rules (15)               |
+| QAS-09 | Recoverability  | A faulty migration or operator error corrupts data in production                                                                               | Service is restored from backup following the runbook                                       | RPO 24 hours and RTO 4 hours on Free (NFR-BACKUP-001); RPO minutes with PITR on Pro (NFR-BACKUP-002); quarterly drill | Backups, runbook (10.9, 14.4)                          |
+| QAS-10 | Deployability   | A frontend release breaks a screen                                                                                                             | The previous deployment is restored                                                         | Under 5 minutes, no database rollback needed                                                                          | Pages rollback, expand and contract (14.4, 14.5)       |
+| QAS-11 | Modifiability   | The Owner changes the loyalty program from 3-month free cards with 5 percent discount to 6-month paid cards with points                        | Plans are reconfigured in settings                                                          | No code change or deployment                                                                                          | Configuration over code (P5)                           |
+| QAS-12 | Modifiability   | A new payment method (for example Upay) must be accepted                                                                                       | Added through configuration or a small migration plus translations                          | Under 1 developer-day including tests; no change to sale logic                                                        | Data-driven payment methods (13)                       |
+| QAS-13 | Scalability     | A new branch is opened (tests run with 50 branches)                                                                                            | The branch is created in settings and starts selling                                        | Operational through configuration only within 30 minutes (NFR-SCAL-001); budgets in section 18 still met              | Tenancy model, indexes (12, 18, 19)                    |
+| QAS-14 | Usability       | A trained Salesman serves a customer buying three items for cash                                                                               | The sale is completed with the keyboard only                                                | Median at most 30 s by barcode and 45 s by name search (NFR-USAB-004); zero serious axe violations                    | Keyboard-first POS (9.7, 9.8)                          |
+| QAS-15 | Usability, i18n | A user switches the interface to Bangla in the middle of a sale                                                                                | All labels, numbers and dates display in Bangla formats without reload and the cart is kept | E2E test passes (NFR-I18N-003); CI key-parity check; no truncated layouts at 320 px                                   | i18n (9.6)                                             |
+| QAS-16 | Safety (AI)     | A question tries prompt injection, for example asking to ignore rules, drop a table or show another pharmacy's data                            | The request is refused or answered only from the caller's permitted, read-only views        | 100 percent of the red-team set blocked; zero writes; zero cross-tenant rows                                          | Guardrails 3 to 11 (16.4)                              |
+| QAS-17 | Cost            | AI usage grows unexpectedly in one organization                                                                                                | Requests are throttled and stopped at the budget                                            | Spend never exceeds the configured monthly budget by more than one request                                            | Rate limits, budgets (16.4)                            |
 
 ---
 
@@ -1925,18 +2035,16 @@ Targets marked with the SRS are authoritative there; the others are architecture
 
 ### 22.3 Open issues
 
-| ID    | Issue                                                                                                                                             | Owner                  | Needed by |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | --------- |
-| OI-01 | Exact names and signatures of the transfer functions (`request_transfer`, `dispatch_transfer`, `receive_transfer` are used here as working names) | Database design        | M3        |
-| OI-02 | Parked bills: local to the terminal (current design) or stored server-side for resuming on another terminal                                       | Owner and engineering  | M2        |
-| OI-03 | Fiscal year for invoice numbering: calendar year or the Bangladesh fiscal year (July to June)                                                     | Owner, database design | M1        |
-| OI-04 | Source maps: switch the build to hidden source maps uploaded to Sentry so they are not publicly served                                            | Engineering            | M2        |
-| OI-05 | CodeQL requires a paid licence on private repositories; decide on licence or an alternative scanner                                               | Owner and engineering  | M0        |
-| OI-06 | Whether production starts on Supabase Pro at launch (recommended) or on Free with backups                                                         | Owner                  | M4        |
-| OI-07 | Retention period for prescription images and controlled-drug records under DGDA rules                                                             | Owner, security model  | M3        |
-| OI-08 | AI model per feature after evaluation; owner approval of the AI budget                                                                            | Owner                  | M5        |
-| OI-09 | Offline limits (72 hours, 500 entries) and whether Rx sales are allowed offline                                                                   | Owner                  | M4        |
-| OI-10 | Validate sizing assumptions A-04 to A-06 with real counts from the Mohammadpur branch                                                             | Owner and engineering  | M2        |
+| ID    | Issue                                                                                                                                                                                                                                                                                                                                                   | Owner                           | Needed by |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | --------- |
+| OI-01 | **Closed in 1.1.** Function names: this document now uses the canonical names of database design section 8.5 (`receive_goods`, `process_sale_return`, `process_purchase_return`, `request_stock_transfer`, `dispatch_stock_transfer`, `receive_stock_transfer`) and the table `sale_items`; the SRS must cite the same names (database design DB-OI-01) | Database design, SRS            | M3        |
+| OI-02 | Invoice fiscal-year label: FR-POS-030 and CFG-04 label the fiscal year by its start year (`MPR-2026-000123` for July 2026 to June 2027), but `app.fiscal_year_label` in migration `20261006120000_foundation.sql` produces `2627` (`MPR-2627-000123`); align before the first production invoice                                                        | Owner, database design          | M1        |
+| OI-03 | Source maps: the build currently emits public source maps (`sourcemap: true`); switch to hidden source maps uploaded privately to Sentry (NFR-OBS-001)                                                                                                                                                                                                  | Engineering                     | M2        |
+| OI-04 | CodeQL requires a paid licence on private repositories; decide on the licence or an alternative scanner                                                                                                                                                                                                                                                 | Owner and engineering           | M0        |
+| OI-05 | Whether production starts on Supabase Pro at launch (recommended) or on Free with nightly backups                                                                                                                                                                                                                                                       | Owner                           | M4        |
+| OI-06 | AI model per feature after evaluation; owner approval of the AI budget                                                                                                                                                                                                                                                                                  | Owner                           | M5        |
+| OI-07 | Validate the reference workload and sizing (A-04 to A-06) with real counts from the Mohammadpur branch                                                                                                                                                                                                                                                  | Owner and engineering           | M2        |
+| OI-08 | MFA on the read path: `app.user_org_ids()` and `app.user_branch_ids()` do not yet check `aal`, so Owner and Manager can read branch data at `aal1`, which FR-IAM-005 forbids; add the check and pgTAP tests                                                                                                                                             | Database design, security model | M2        |
 
 ---
 
