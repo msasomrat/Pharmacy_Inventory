@@ -1,0 +1,5 @@
+# Require owner review for security-sensitive areas.
+*                       @msasomrat
+/supabase/              @msasomrat
+/.github/               @msasomrat
+/public/_headers        @msasomrat

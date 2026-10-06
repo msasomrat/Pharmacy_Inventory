@@ -1,0 +1,11 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', 'Noto Sans Bengali', ui-sans-serif, system-ui, sans-serif;
+  --color-brand-600: oklch(0.55 0.13 165);
+  --color-brand-700: oklch(0.48 0.12 165);
+}
+
+:root {
+  color-scheme: light dark;
+}

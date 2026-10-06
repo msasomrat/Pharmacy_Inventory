@@ -1,0 +1,8 @@
+{
+  "app": {
+    "name": "Pharmacy Inventory",
+    "tagline": "Multi-branch pharmacy inventory, POS and loyalty management",
+    "status": "Foundation milestone (M0) — the database and screens are being built.",
+    "language": "Language"
+  }
+}
