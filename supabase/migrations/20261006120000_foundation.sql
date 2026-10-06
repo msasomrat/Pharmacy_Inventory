@@ -42,17 +42,40 @@ grant usage on schema audit to authenticated, service_role;
 
 -- Called at the end of every migration: re-asserts that anon can touch nothing and that no
 -- function is executable by PUBLIC. Grants for authenticated are explicit per object.
+-- Ledgers are append-only for every API role, service_role included: TRUNCATE is revoked on all
+-- tables, and UPDATE / DELETE on every table guarded by app.forbid_mutation() (design 3.5, 16).
 create or replace procedure app.harden_privileges()
 language plpgsql
 set search_path = ''
 as $$
 declare
   fn record;
+  tbl record;
 begin
   execute 'revoke all on all tables in schema public from anon';
   execute 'revoke all on all sequences in schema public from anon';
   execute 'revoke all on all tables in schema app from anon, authenticated';
   execute 'revoke all on all tables in schema audit from anon';
+  execute 'revoke truncate on all tables in schema public from service_role, authenticated';
+  execute 'revoke truncate on all tables in schema audit from service_role, authenticated';
+  for tbl in
+    select distinct t.tgrelid::regclass as relation,
+           bool_or((t.tgtype & 16) <> 0) as guards_update,
+           bool_or((t.tgtype & 8) <> 0) as guards_delete
+      from pg_trigger t
+      join pg_proc p on p.oid = t.tgfoid
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'app'
+       and p.proname = 'forbid_mutation'
+     group by t.tgrelid
+  loop
+    if tbl.guards_update then
+      execute format('revoke update on %s from service_role, authenticated', tbl.relation);
+    end if;
+    if tbl.guards_delete then
+      execute format('revoke delete on %s from service_role, authenticated', tbl.relation);
+    end if;
+  end loop;
   for fn in
     select p.oid::regprocedure as signature
       from pg_proc p
@@ -137,11 +160,10 @@ as $$
 declare
   n integer := coalesce(array_length(p_weights, 1), 0);
   weight_sum numeric := 0;
-  parts bigint[] := '{}';
-  remainders numeric[] := '{}';
+  parts bigint[] := '{}'::bigint[];
+  remainders numeric[] := '{}'::numeric[];
   allocated bigint := 0;
   leftover bigint;
-  i integer;
   best integer;
   exact numeric;
 begin
@@ -231,7 +253,6 @@ as $$
 declare
   total integer := 0;
   d integer;
-  i integer;
   len integer := length(p_digits);
 begin
   if p_digits !~ '^[0-9]+$' then
@@ -249,6 +270,19 @@ begin
   end loop;
   return (10 - (total % 10)) % 10;
 end;
+$$;
+
+-- Serializes concurrent calls that carry the same idempotency key (design 9.5). Called before the
+-- "does this request already exist?" check, so a retry that races the original waits for it and then
+-- replays its result instead of failing on a unique key or on stock the original already took.
+create or replace function app.claim_request(p_organization_id uuid, p_client_request_id uuid)
+returns void
+language sql
+volatile
+set search_path = ''
+as $$
+  select pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_organization_id::text || ':' || p_client_request_id::text, 0))
 $$;
 
 -- Pure utility functions may run inside triggers/policies on behalf of signed-in users.
@@ -290,6 +324,20 @@ begin
 end;
 $$;
 
+-- Row triggers do not fire on TRUNCATE, so every append-only table also gets this statement trigger.
+create or replace procedure app.forbid_truncate(p_table regclass)
+language plpgsql
+set search_path = ''
+as $$
+begin
+  execute format(
+    'create trigger %I before truncate on %s for each statement execute function app.forbid_mutation()',
+    (select c.relname from pg_catalog.pg_class c where c.oid = p_table) || '_no_truncate',
+    p_table
+  );
+end;
+$$;
+
 -- -----------------------------------------------------------------------------
 -- Audit log
 -- -----------------------------------------------------------------------------
@@ -317,6 +365,7 @@ create index log_record_idx on audit.log (table_name, record_id);
 create trigger log_append_only
   before update or delete on audit.log
   for each row execute function app.forbid_mutation();
+call app.forbid_truncate('audit.log');
 
 alter table audit.log enable row level security;
 

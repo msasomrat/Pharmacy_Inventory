@@ -136,6 +136,9 @@ create table public.batches (
   mrp_paisa bigint not null check (mrp_paisa > 0),
   sale_price_paisa bigint not null check (sale_price_paisa > 0),
   quantity_on_hand integer not null default 0 check (quantity_on_hand >= 0),
+  -- Indexes filter on this flag instead of quantity_on_hand, so the stock changes made by every sale
+  -- stay HOT updates (no index touched) unless the lot crosses zero.
+  is_depleted boolean generated always as (quantity_on_hand = 0) stored,
   received_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   created_by uuid references auth.users (id),
@@ -145,16 +148,17 @@ create table public.batches (
   unique (organization_id, id),
   foreign key (organization_id, branch_id) references public.branches (organization_id, id),
   foreign key (organization_id, medicine_id) references public.medicines (organization_id, id)
-);
+) with (fillfactor = 85);
 
 comment on table public.batches is
   'Stock lot per branch. quantity_on_hand is a projection of inventory_movements, maintained in the same transaction.';
 comment on column public.batches.cost_paisa is 'Purchase cost per base unit (net of bonus units and discounts).';
 comment on column public.batches.mrp_paisa is 'Maximum retail price per base unit printed on the pack. Selling above MRP is not allowed.';
 
+-- quantity_on_hand must not appear in any index (key, INCLUDE or predicate): see is_depleted.
 create index batches_fefo_idx on public.batches (branch_id, medicine_id, expiry_date, received_at, id)
-  where quantity_on_hand > 0;
-create index batches_org_expiry_idx on public.batches (organization_id, expiry_date) where quantity_on_hand > 0;
+  where not is_depleted;
+create index batches_org_expiry_idx on public.batches (organization_id, expiry_date) where not is_depleted;
 create index batches_medicine_idx on public.batches (medicine_id);
 
 create table public.inventory_movements (
@@ -173,6 +177,7 @@ create table public.inventory_movements (
   created_at timestamptz not null default now(),
   foreign key (organization_id, batch_id) references public.batches (organization_id, id),
   foreign key (organization_id, branch_id) references public.branches (organization_id, id),
+  foreign key (organization_id, medicine_id) references public.medicines (organization_id, id),
   constraint inventory_movements_direction check (
     case
       when movement_type in ('purchase_receipt', 'sale_void', 'sale_return', 'transfer_in', 'opening_balance')
@@ -194,6 +199,7 @@ create index inventory_movements_medicine_idx on public.inventory_movements (med
 create trigger inventory_movements_append_only
   before update or delete on public.inventory_movements
   for each row execute function app.forbid_mutation();
+call app.forbid_truncate('public.inventory_movements');
 
 create table public.stock_adjustments (
   id uuid primary key default gen_random_uuid(),
@@ -203,17 +209,40 @@ create table public.stock_adjustments (
   quantity_delta integer not null check (quantity_delta <> 0),
   reason public.adjustment_reason not null,
   note text check (length(note) <= 500),
+  client_request_id uuid not null,
   created_by uuid not null references auth.users (id),
   created_at timestamptz not null default now(),
+  unique (organization_id, client_request_id),
   foreign key (organization_id, batch_id) references public.batches (organization_id, id),
   foreign key (organization_id, branch_id) references public.branches (organization_id, id),
-  constraint stock_adjustments_note_required check (reason <> 'other' or length(btrim(note)) >= 3)
+  -- coalesce: a NULL note must fail the rule, not slip through as an unknown CHECK result.
+  constraint stock_adjustments_note_required check (reason <> 'other' or coalesce(length(btrim(note)), 0) >= 3)
 );
 create index stock_adjustments_branch_time_idx on public.stock_adjustments (branch_id, created_at desc);
 
 create trigger stock_adjustments_append_only
   before update or delete on public.stock_adjustments
   for each row execute function app.forbid_mutation();
+call app.forbid_truncate('public.stock_adjustments');
+
+-- One row per add_opening_stock call (idempotency key and reference of its opening movements).
+create table public.opening_stock_loads (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null,
+  branch_id uuid not null,
+  line_count integer not null check (line_count > 0),
+  client_request_id uuid not null,
+  created_by uuid not null references auth.users (id),
+  created_at timestamptz not null default now(),
+  unique (organization_id, id),
+  unique (organization_id, client_request_id),
+  foreign key (organization_id, branch_id) references public.branches (organization_id, id)
+);
+
+create trigger opening_stock_loads_append_only
+  before update or delete on public.opening_stock_loads
+  for each row execute function app.forbid_mutation();
+call app.forbid_truncate('public.opening_stock_loads');
 
 -- -----------------------------------------------------------------------------
 -- Triggers
@@ -254,6 +283,30 @@ call app.enable_audit('public.medicines');
 call app.enable_audit('public.medicine_packs');
 call app.enable_audit('public.medicine_barcodes');
 
+-- quantity_on_hand is a projection of the stock ledger: it may only change inside app.post_movement,
+-- which writes the matching inventory_movements row (design delta D-23). Guards privileged code too.
+create or replace function app.batches_quantity_guard()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.quantity_on_hand <> 0 then
+      perform app.fail('ledger_only', 'Stock enters a batch only through the stock ledger (app.post_movement)');
+    end if;
+  elsif new.quantity_on_hand is distinct from old.quantity_on_hand
+        and coalesce(current_setting('app.movement_batch_id', true), '') <> new.id::text then
+    perform app.fail('ledger_only', 'batches.quantity_on_hand changes only through the stock ledger (app.post_movement)');
+  end if;
+  return new;
+end;
+$$;
+
+create trigger batches_quantity_guard
+  before insert or update of quantity_on_hand on public.batches
+  for each row execute function app.batches_quantity_guard();
+
 -- Batches change on every sale; only price changes are audited.
 create trigger audit_price_change
   after update on public.batches
@@ -275,6 +328,7 @@ alter table public.branch_medicine_settings enable row level security;
 alter table public.batches enable row level security;
 alter table public.inventory_movements enable row level security;
 alter table public.stock_adjustments enable row level security;
+alter table public.opening_stock_loads enable row level security;
 
 -- Catalog: readable by every member; editable with catalog.manage.
 do $$
@@ -315,11 +369,17 @@ create policy batches_select on public.batches for select to authenticated
   using (branch_id in (select app.user_branch_ids()));
 create policy inventory_movements_select on public.inventory_movements for select to authenticated
   using (branch_id in (select app.user_branch_ids()));
+-- Permission checks in policies on growing tables use the set-returning app.permitted_org_ids(), which
+-- runs once per statement; app.has_permission() per row does not scale.
 create policy stock_adjustments_select on public.stock_adjustments for select to authenticated
-  using (branch_id in (select app.user_branch_ids()) and app.has_permission(organization_id, 'reports.view'));
+  using (branch_id in (select app.user_branch_ids())
+         and organization_id in (select app.permitted_org_ids('reports.view')));
+create policy opening_stock_loads_select on public.opening_stock_loads for select to authenticated
+  using (branch_id in (select app.user_branch_ids()));
 
 grant select on public.manufacturers, public.generics, public.medicines, public.medicine_packs,
-  public.medicine_barcodes, public.branch_medicine_settings, public.stock_adjustments to authenticated;
+  public.medicine_barcodes, public.branch_medicine_settings, public.stock_adjustments,
+  public.opening_stock_loads to authenticated;
 grant insert (organization_id, name, country) on public.manufacturers to authenticated;
 grant update (name, country, is_active) on public.manufacturers to authenticated;
 grant insert (organization_id, name, therapeutic_class) on public.generics to authenticated;
@@ -340,7 +400,7 @@ grant update (reorder_level, max_stock_level, rack_location) on public.branch_me
 -- Cost columns are deliberately NOT granted: purchase cost and profit are visible only through
 -- permission-checked report functions (reports.view_cost).
 grant select (id, organization_id, branch_id, medicine_id, batch_no, expiry_date, mrp_paisa,
-  sale_price_paisa, quantity_on_hand, received_at, created_at, created_by, updated_at, updated_by)
+  sale_price_paisa, quantity_on_hand, is_depleted, received_at, created_at, created_by, updated_at, updated_by)
   on public.batches to authenticated;
 grant select (id, organization_id, branch_id, batch_id, medicine_id, movement_type, quantity,
   reference_type, reference_id, note, created_by, created_at)
@@ -371,7 +431,9 @@ create trigger medicine_barcodes_created_by before insert on public.medicine_bar
 
 -- -----------------------------------------------------------------------------
 -- Internal: post one stock movement and update the batch projection atomically.
--- Callers must already hold the batch row lock (SELECT ... FOR UPDATE) when ordering matters.
+-- Lock order (every stock-changing RPC, design 9.3): lots in (medicine_id, expiry_date, received_at, id)
+-- order, then the customer row, then the loyalty card row, then document counters, then the daily
+-- summary. Callers lock the lots they touch in that order before posting.
 -- -----------------------------------------------------------------------------
 create or replace function app.post_movement(
   p_batch_id uuid,
@@ -389,12 +451,15 @@ as $$
 declare
   v_batch public.batches;
 begin
+  -- Tells app.batches_quantity_guard() that this projection change has a ledger row.
+  perform set_config('app.movement_batch_id', p_batch_id::text, true);
   update public.batches
      set quantity_on_hand = quantity_on_hand + p_quantity,
          updated_by = auth.uid()
    where id = p_batch_id
      and quantity_on_hand + p_quantity >= 0
   returning * into v_batch;
+  perform set_config('app.movement_batch_id', '', true);
 
   if v_batch.id is null then
     if not exists (select 1 from public.batches where id = p_batch_id) then
@@ -458,7 +523,8 @@ $$;
 
 -- Loads existing stock when a branch goes live. Items:
 -- [{medicine_id, batch_no, expiry_date, quantity, cost_paisa, mrp_paisa, sale_price_paisa}]
-create or replace function public.add_opening_stock(p_branch_id uuid, p_items jsonb)
+-- Idempotent: a retry with the same p_client_request_id returns the original line count.
+create or replace function public.add_opening_stock(p_branch_id uuid, p_items jsonb, p_client_request_id uuid)
 returns integer
 language plpgsql
 security definer
@@ -466,14 +532,32 @@ set search_path = ''
 as $$
 declare
   v_org uuid := app.require_branch_permission(p_branch_id, 'stock.adjust');
+  v_existing public.opening_stock_loads;
+  v_load uuid := gen_random_uuid();
   v_item jsonb;
   v_batch uuid;
   v_qty integer;
   v_count integer := 0;
 begin
-  if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) not between 1 and 1000 then
+  if p_client_request_id is null then
+    perform app.fail('missing_request_id', 'client_request_id is required');
+  end if;
+  perform app.claim_request(v_org, p_client_request_id);
+  select * into v_existing from public.opening_stock_loads
+   where organization_id = v_org and client_request_id = p_client_request_id;
+  if v_existing.id is not null then
+    if v_existing.branch_id <> p_branch_id then
+      perform app.fail('request_id_conflict', 'This request id was already used for another operation');
+    end if;
+    return v_existing.line_count;
+  end if;
+
+  if jsonb_typeof(p_items) is distinct from 'array' or jsonb_array_length(p_items) not between 1 and 1000 then
     perform app.fail('invalid_items', 'Provide between 1 and 1000 items');
   end if;
+
+  insert into public.opening_stock_loads (id, organization_id, branch_id, line_count, client_request_id, created_by)
+  values (v_load, v_org, p_branch_id, jsonb_array_length(p_items), p_client_request_id, auth.uid());
 
   for v_item in select * from jsonb_array_elements(p_items) loop
     v_qty := (v_item ->> 'quantity')::integer;
@@ -493,7 +577,7 @@ begin
       (v_item ->> 'mrp_paisa')::bigint, (v_item ->> 'sale_price_paisa')::bigint, auth.uid(), auth.uid()
     ) returning id into v_batch;
 
-    perform app.post_movement(v_batch, 'opening_balance', v_qty, 'opening_stock', null, 'Opening stock');
+    perform app.post_movement(v_batch, 'opening_balance', v_qty, 'opening_stock', v_load, 'Opening stock');
     v_count := v_count + 1;
   end loop;
 
@@ -502,10 +586,12 @@ end;
 $$;
 
 -- Manual stock correction (damage, loss, count correction, expiry write-off...).
+-- Idempotent: a retry with the same p_client_request_id returns the original adjustment.
 create or replace function public.adjust_stock(
   p_batch_id uuid,
   p_quantity_delta integer,
   p_reason public.adjustment_reason,
+  p_client_request_id uuid,
   p_note text default null
 )
 returns uuid
@@ -515,14 +601,29 @@ set search_path = ''
 as $$
 declare
   v_batch public.batches;
+  v_existing public.stock_adjustments;
   v_adjustment uuid;
   v_type public.movement_type;
+  v_note text := nullif(btrim(p_note), '');
 begin
-  select * into v_batch from public.batches where id = p_batch_id for update;
+  if p_client_request_id is null then
+    perform app.fail('missing_request_id', 'client_request_id is required');
+  end if;
+  select * into v_batch from public.batches where id = p_batch_id;
   if v_batch.id is null then
     perform app.fail('not_found', 'Batch not found');
   end if;
   perform app.require_branch_permission(v_batch.branch_id, 'stock.adjust');
+
+  perform app.claim_request(v_batch.organization_id, p_client_request_id);
+  select * into v_existing from public.stock_adjustments
+   where organization_id = v_batch.organization_id and client_request_id = p_client_request_id;
+  if v_existing.id is not null then
+    if v_existing.batch_id <> p_batch_id then
+      perform app.fail('request_id_conflict', 'This request id was already used for another operation');
+    end if;
+    return v_existing.id;
+  end if;
 
   if p_quantity_delta is null or p_quantity_delta = 0 then
     perform app.fail('invalid_quantity', 'Adjustment quantity cannot be zero');
@@ -533,21 +634,26 @@ begin
   if p_reason = 'expired_writeoff' and p_quantity_delta > 0 then
     perform app.fail('invalid_quantity', 'An expiry write-off must reduce stock');
   end if;
+  if p_reason = 'other' and coalesce(length(v_note), 0) < 3 then
+    perform app.fail('note_required', 'Explain an adjustment with reason "other" (at least 3 characters)');
+  end if;
 
-  v_type := case p_reason
+  select * into v_batch from public.batches where id = p_batch_id for update;
+
+  v_type := (case p_reason
     when 'expired_writeoff' then 'expiry_writeoff'
     when 'count_correction' then 'count_correction'
     else 'adjustment'
-  end;
+  end)::public.movement_type;
 
   insert into public.stock_adjustments (
-    organization_id, branch_id, batch_id, quantity_delta, reason, note, created_by
+    organization_id, branch_id, batch_id, quantity_delta, reason, note, client_request_id, created_by
   ) values (
     v_batch.organization_id, v_batch.branch_id, v_batch.id, p_quantity_delta, p_reason,
-    nullif(btrim(p_note), ''), auth.uid()
+    v_note, p_client_request_id, auth.uid()
   ) returning id into v_adjustment;
 
-  perform app.post_movement(v_batch.id, v_type, p_quantity_delta, 'stock_adjustment', v_adjustment, p_note);
+  perform app.post_movement(v_batch.id, v_type, p_quantity_delta, 'stock_adjustment', v_adjustment, v_note);
   return v_adjustment;
 end;
 $$;
@@ -583,6 +689,10 @@ end;
 $$;
 
 -- POS search by barcode, brand or generic name with live branch stock and the FEFO price.
+-- SECURITY DEFINER after an explicit branch-access check: every read is filtered by the branch's
+-- organization, so the barcode key (organization_id, barcode) and the trigram indexes are usable
+-- (under RLS the planner falls back to scanning every tenant's catalog). Candidates are ranked and
+-- limited first; stock and FEFO price are looked up only for the rows returned.
 create or replace function public.search_medicines(
   p_branch_id uuid,
   p_query text,
@@ -603,14 +713,16 @@ returns table (
 )
 language plpgsql
 stable
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
   v_query text := btrim(coalesce(p_query, ''));
-  v_pattern text;
+  v_org uuid;
+  v_escaped text;
   v_today date;
   v_block integer;
+  v_limit integer := least(greatest(coalesce(p_limit, 20), 1), 100);
 begin
   if not app.has_branch_access(p_branch_id) then
     perform app.fail('forbidden', 'You do not have access to this branch');
@@ -618,34 +730,49 @@ begin
   if length(v_query) < 2 then
     return;
   end if;
-  v_pattern := '%' || replace(replace(replace(v_query, '\', '\\'), '%', '\%'), '_', '\_') || '%';
-  v_today := app.business_date(app.branch_org_id(p_branch_id));
-  select s.near_expiry_block_days into v_block
-    from public.organization_settings s where s.organization_id = app.branch_org_id(p_branch_id);
+  select b.organization_id into v_org from public.branches b where b.id = p_branch_id;
+  select app.business_date(v_org), s.near_expiry_block_days into v_today, v_block
+    from public.organization_settings s where s.organization_id = v_org;
+  v_escaped := replace(replace(replace(v_query, '\', '\\'), '%', '\%'), '_', '\_');
 
   return query
-  with matches as (
-    select m.id,
-           case
-             when exists (select 1 from public.medicine_barcodes mb where mb.medicine_id = m.id and mb.barcode = v_query) then 3.0
-             when m.brand_name ilike v_query || '%' then 2.0 + extensions.similarity(m.brand_name, v_query)
-             else greatest(extensions.similarity(m.brand_name, v_query), coalesce(extensions.similarity(g.name, v_query), 0))
-           end as score
-      from public.medicines m
-      left join public.generics g on g.id = m.generic_id
-     where m.organization_id = app.branch_org_id(p_branch_id)
+  with candidates as (
+    select m.id, m.brand_name, 3.0::real as score
+      from public.medicine_barcodes mb
+      join public.medicines m on m.id = mb.medicine_id
+     where mb.organization_id = v_org
+       and mb.barcode = v_query
        and m.is_active
-       and (
-         m.brand_name ilike v_pattern
-         or g.name ilike v_pattern
-         or exists (select 1 from public.medicine_barcodes mb where mb.medicine_id = m.id and mb.barcode = v_query)
-       )
+    union all
+    select m.id, m.brand_name,
+           case when m.brand_name ilike v_escaped || '%'
+                then 2.0::real + extensions.similarity(m.brand_name, v_query)
+                else extensions.similarity(m.brand_name, v_query) end
+      from public.medicines m
+     where m.organization_id = v_org
+       and m.is_active
+       and m.brand_name ilike '%' || v_escaped || '%'
+    union all
+    select m.id, m.brand_name, extensions.similarity(g.name, v_query)
+      from public.generics g
+      join public.medicines m on m.generic_id = g.id
+     where g.organization_id = v_org
+       and m.organization_id = v_org
+       and m.is_active
+       and g.name ilike '%' || v_escaped || '%'
+  ),
+  top_matches as (
+    select c.id, max(c.score) as score, c.brand_name
+      from candidates c
+     group by c.id, c.brand_name
+     order by max(c.score) desc, c.brand_name
+     limit v_limit
   )
   select m.id, m.brand_name, g.name, mf.name, m.dosage_form, m.strength, m.schedule, m.base_unit_label,
          coalesce(stock.qty, 0)::bigint,
          fefo.sale_price_paisa,
          fefo.expiry_date
-    from matches x
+    from top_matches x
     join public.medicines m on m.id = x.id
     left join public.generics g on g.id = m.generic_id
     left join public.manufacturers mf on mf.id = m.manufacturer_id
@@ -653,29 +780,29 @@ begin
       select sum(b.quantity_on_hand) as qty
         from public.batches b
        where b.branch_id = p_branch_id and b.medicine_id = m.id
-         and b.quantity_on_hand > 0 and b.expiry_date > v_today + v_block
+         and not b.is_depleted and b.expiry_date > v_today + v_block
     ) stock on true
     left join lateral (
       select b.sale_price_paisa, b.expiry_date
         from public.batches b
        where b.branch_id = p_branch_id and b.medicine_id = m.id
-         and b.quantity_on_hand > 0 and b.expiry_date > v_today + v_block
+         and not b.is_depleted and b.expiry_date > v_today + v_block
        order by b.expiry_date, b.received_at, b.id
        limit 1
     ) fefo on true
-   order by x.score desc, m.brand_name
-   limit least(greatest(coalesce(p_limit, 20), 1), 100);
+   order by x.score desc, m.brand_name;
 end;
 $$;
 
 grant execute on function
-  public.add_opening_stock(uuid, jsonb),
-  public.adjust_stock(uuid, integer, public.adjustment_reason, text),
+  public.add_opening_stock(uuid, jsonb, uuid),
+  public.adjust_stock(uuid, integer, public.adjustment_reason, uuid, text),
   public.set_batch_price(uuid, bigint, bigint),
   public.search_medicines(uuid, text, integer)
 to authenticated;
 
--- search_medicines runs as the caller (RLS applies) and needs these helpers.
+-- Used by RLS policies (branch_medicine_settings) and by clients for business dates. Both answer a
+-- signed-in user only for organizations the user belongs to.
 grant execute on function app.branch_org_id(uuid), app.business_date(uuid, timestamptz), app.fail(text, text, text)
   to authenticated;
 

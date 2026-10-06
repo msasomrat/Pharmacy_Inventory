@@ -53,6 +53,42 @@ begin
 end;
 $$;
 
+create or replace function tests.user_id_by_email(p_email text)
+returns uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select u.id from auth.users u where lower(u.email) = lower(btrim(p_email))
+$$;
+
+-- Invites a person (public.add_member, as the current caller) and accepts the invitation with the
+-- invitee's own session, then restores the caller's identity. Returns the new membership id.
+create or replace function tests.add_member(
+  p_organization_id uuid,
+  p_email text,
+  p_role public.org_role,
+  p_branch_ids uuid[] default '{}'
+)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_claims text := current_setting('request.jwt.claims', true);
+  v_role text := current_user;
+  v_invitation uuid;
+  v_membership uuid;
+begin
+  v_invitation := public.add_member(p_organization_id, p_email, p_role, p_branch_ids);
+  perform tests.authenticate_as(tests.user_id_by_email(p_email), 'aal1');
+  v_membership := public.accept_invitation(v_invitation);
+  perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
+  execute format('set local role %I', v_role);
+  return v_membership;
+end;
+$$;
+
 grant usage on schema tests to anon, authenticated, service_role;
 grant execute on all functions in schema tests to anon, authenticated, service_role;
 

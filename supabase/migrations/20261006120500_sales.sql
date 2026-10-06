@@ -7,7 +7,11 @@
 --   * invoice numbers are gapless per branch per fiscal year
 --   * a retried request (same client_request_id) never creates a second sale
 --   * per sale:  paid - change + due = total;  per line: net = gross - discounts >= 0
---   * concurrency: batch rows are locked in (medicine_id, expiry, received_at, id) order
+--   * concurrency: one lock order in every RPC: lots in (medicine_id, expiry_date, received_at, id)
+--     order, then the customer row, then the loyalty card row, then document counters, then the daily
+--     summary row. Customer and card rows are locked FOR NO KEY UPDATE, which never blocks the
+--     foreign-key checks (FOR KEY SHARE) of other sales for the same customer or card
+--   * refunds settle exactly what was charged: each line stores its share of the cash rounding
 -- =============================================================================
 
 create type public.sale_status as enum ('completed', 'voided');
@@ -66,7 +70,8 @@ create table public.sales (
   points_earned integer not null default 0 check (points_earned >= 0),
   points_redeemed integer not null default 0 check (points_redeemed >= 0),
   points_redeemed_value_paisa bigint not null default 0 check (points_redeemed_value_paisa >= 0),
-  refunded_paisa bigint not null default 0 check (refunded_paisa >= 0 and refunded_paisa <= net_paisa),
+  -- Refunds are measured against what was charged (total = net + rounding), never above it.
+  refunded_paisa bigint not null default 0 check (refunded_paisa >= 0 and refunded_paisa <= total_paisa),
   note text check (length(note) <= 500),
   client_request_id uuid not null,
   created_by uuid not null references auth.users (id),
@@ -74,7 +79,11 @@ create table public.sales (
   voided_at timestamptz,
   voided_by uuid references auth.users (id),
   void_reason text check (length(void_reason) <= 200),
+  -- Money handed back by void_sale: money paid at the till plus any due already collected for the sale.
+  void_refund_paisa bigint not null default 0 check (void_refund_paisa >= 0),
+  void_refund_method public.payment_method check (void_refund_method is null or void_refund_method <> 'loyalty_points'),
   unique (organization_id, id),
+  unique (organization_id, id, branch_id),
   unique (organization_id, invoice_no),
   unique (organization_id, client_request_id),
   foreign key (organization_id, branch_id) references public.branches (organization_id, id),
@@ -108,12 +117,17 @@ create table public.sale_items (
   invoice_discount_paisa bigint not null check (invoice_discount_paisa >= 0),
   loyalty_discount_paisa bigint not null check (loyalty_discount_paisa >= 0),
   net_paisa bigint not null check (net_paisa >= 0),
+  -- This line's share of the invoice cash rounding: the lines' net + rounding add up to total_paisa.
+  rounding_paisa bigint not null default 0 check (rounding_paisa between -50 and 50 and net_paisa + rounding_paisa >= 0),
+  -- Loyalty points earned by this line (0 for items excluded from loyalty); reversed per line on return.
+  points_earned integer not null default 0 check (points_earned >= 0),
   cost_paisa bigint not null check (cost_paisa >= 0),
   returned_quantity integer not null default 0 check (returned_quantity >= 0 and returned_quantity <= quantity),
   unique (organization_id, id),
   unique (sale_id, line_no),
   unique (sale_id, medicine_id),
-  foreign key (organization_id, sale_id) references public.sales (organization_id, id),
+  -- A line always belongs to its sale's branch (the RLS policy relies on sale_items.branch_id).
+  foreign key (organization_id, sale_id, branch_id) references public.sales (organization_id, id, branch_id),
   foreign key (organization_id, medicine_id) references public.medicines (organization_id, id),
   constraint sale_items_net check (net_paisa = gross_paisa - line_discount_paisa - invoice_discount_paisa - loyalty_discount_paisa)
 );
@@ -151,9 +165,11 @@ create index sale_payments_sale_idx on public.sale_payments (sale_id);
 create trigger sale_payments_append_only
   before update or delete on public.sale_payments
   for each row execute function app.forbid_mutation();
+call app.forbid_truncate('public.sale_payments');
 create trigger prescriptions_append_only
   before update or delete on public.prescriptions
   for each row execute function app.forbid_mutation();
+call app.forbid_truncate('public.prescriptions');
 
 create table public.sale_returns (
   id uuid primary key default gen_random_uuid(),
@@ -166,6 +182,9 @@ create table public.sale_returns (
   cash_refund_paisa bigint not null check (cash_refund_paisa >= 0),
   due_reduction_paisa bigint not null check (due_reduction_paisa >= 0),
   points_refund_value_paisa bigint not null default 0 check (points_refund_value_paisa >= 0),
+  -- Value of points this sale earned that the customer had already spent (could not be reversed):
+  -- kept back from the money refund.
+  points_shortfall_value_paisa bigint not null default 0 check (points_shortfall_value_paisa >= 0),
   refund_method public.payment_method,
   cost_paisa bigint not null check (cost_paisa >= 0),
   points_returned integer not null default 0 check (points_returned >= 0),
@@ -179,7 +198,8 @@ create table public.sale_returns (
   unique (organization_id, client_request_id),
   foreign key (organization_id, branch_id) references public.branches (organization_id, id),
   foreign key (organization_id, sale_id) references public.sales (organization_id, id),
-  constraint sale_returns_split check (refund_paisa = cash_refund_paisa + due_reduction_paisa + points_refund_value_paisa)
+  constraint sale_returns_split check (
+    refund_paisa = cash_refund_paisa + due_reduction_paisa + points_refund_value_paisa + points_shortfall_value_paisa)
 );
 create index sale_returns_sale_idx on public.sale_returns (sale_id);
 create index sale_returns_branch_date_idx on public.sale_returns (branch_id, business_date desc);
@@ -200,9 +220,11 @@ create index sale_return_items_return_idx on public.sale_return_items (sale_retu
 create trigger sale_returns_append_only
   before update or delete on public.sale_returns
   for each row execute function app.forbid_mutation();
+call app.forbid_truncate('public.sale_returns');
 create trigger sale_return_items_append_only
   before update or delete on public.sale_return_items
   for each row execute function app.forbid_mutation();
+call app.forbid_truncate('public.sale_return_items');
 
 -- Controlled drug register (DGDA): one signed row per sale / void / return of a controlled medicine.
 create table public.controlled_drug_register (
@@ -223,14 +245,25 @@ create table public.controlled_drug_register (
   foreign key (organization_id, branch_id) references public.branches (organization_id, id),
   foreign key (organization_id, medicine_id) references public.medicines (organization_id, id),
   foreign key (organization_id, sale_id) references public.sales (organization_id, id),
+  foreign key (organization_id, sale_item_id) references public.sale_items (organization_id, id),
+  foreign key (organization_id, prescription_id) references public.prescriptions (organization_id, id),
   constraint controlled_drug_register_direction check ((entry_type = 'sale') = (quantity < 0))
 );
 create index controlled_drug_register_branch_time_idx on public.controlled_drug_register (branch_id, created_at desc);
 create index controlled_drug_register_medicine_idx on public.controlled_drug_register (medicine_id, created_at desc);
+-- void_sale and process_sale_return look up the original entries by sale / sale line.
+create index controlled_drug_register_sale_idx on public.controlled_drug_register (sale_id);
+create index controlled_drug_register_sale_item_idx on public.controlled_drug_register (sale_item_id)
+  where entry_type = 'sale';
 
 create trigger controlled_drug_register_append_only
   before update or delete on public.controlled_drug_register
   for each row execute function app.forbid_mutation();
+call app.forbid_truncate('public.controlled_drug_register');
+
+-- The points ledger (loyalty migration) is created before sales exist; tie its sale_id now.
+alter table public.loyalty_point_ledger
+  add foreign key (organization_id, sale_id) references public.sales (organization_id, id);
 
 -- Sales / sale lines are only ever changed by void and return functions, and only these columns.
 create or replace function app.sales_guard_update()
@@ -239,8 +272,10 @@ language plpgsql
 set search_path = ''
 as $$
 begin
-  if (to_jsonb(new) - array['status', 'voided_at', 'voided_by', 'void_reason', 'refunded_paisa'])
-     is distinct from (to_jsonb(old) - array['status', 'voided_at', 'voided_by', 'void_reason', 'refunded_paisa']) then
+  if (to_jsonb(new) - array['status', 'voided_at', 'voided_by', 'void_reason', 'void_refund_paisa',
+                            'void_refund_method', 'refunded_paisa'])
+     is distinct from (to_jsonb(old) - array['status', 'voided_at', 'voided_by', 'void_reason', 'void_refund_paisa',
+                                             'void_refund_method', 'refunded_paisa']) then
     perform app.fail('immutable_sale', 'A completed sale cannot be edited; void or return it instead');
   end if;
   if old.status = 'voided' then
@@ -276,6 +311,9 @@ create trigger sale_item_batches_guard_update before update on public.sale_item_
   for each row execute function app.sale_lines_guard_update();
 create trigger sale_item_batches_forbid_delete before delete on public.sale_item_batches
   for each row execute function app.forbid_mutation();
+call app.forbid_truncate('public.sales');
+call app.forbid_truncate('public.sale_items');
+call app.forbid_truncate('public.sale_item_batches');
 
 -- Voids are audited (status change); creation is already fully recorded in the sales tables.
 create trigger audit_void
@@ -369,8 +407,17 @@ alter table public.sale_return_items enable row level security;
 alter table public.controlled_drug_register enable row level security;
 alter table public.daily_branch_sales enable row level security;
 
+-- Patient data (P-47, P-48): controlled.register.view (owner, manager, auditor), or the counter staff
+-- member who captured the prescription. Accountants read none of it.
 create policy prescriptions_select on public.prescriptions for select to authenticated
-  using (branch_id in (select app.user_branch_ids()));
+  using (
+    branch_id in (select app.user_branch_ids())
+    and (
+      organization_id in (select app.permitted_org_ids('controlled.register.view'))
+      or (created_by = (select auth.uid())
+          and organization_id in (select app.permitted_org_ids('sales.create')))
+    )
+  );
 create policy sales_select on public.sales for select to authenticated
   using (branch_id in (select app.user_branch_ids()));
 create policy sale_items_select on public.sale_items for select to authenticated
@@ -393,26 +440,30 @@ create policy sale_return_items_select on public.sale_return_items for select to
      where r.id = sale_return_items.sale_return_id and r.branch_id in (select app.user_branch_ids())
   ));
 create policy controlled_drug_register_select on public.controlled_drug_register for select to authenticated
-  using (branch_id in (select app.user_branch_ids()) and app.has_permission(organization_id, 'reports.view'));
+  using (branch_id in (select app.user_branch_ids())
+         and organization_id in (select app.permitted_org_ids('controlled.register.view')));
 create policy daily_branch_sales_select on public.daily_branch_sales for select to authenticated
-  using (branch_id in (select app.user_branch_ids()) and app.has_permission(organization_id, 'reports.view'));
+  using (branch_id in (select app.user_branch_ids())
+         and organization_id in (select app.permitted_org_ids('reports.view')));
 
-grant select on public.prescriptions, public.sale_payments, public.sale_return_items,
-  public.controlled_drug_register to authenticated;
+grant select on public.prescriptions, public.sale_payments, public.controlled_drug_register to authenticated;
 -- Cost columns are excluded (see reports functions for permission-checked profit figures).
 grant select (id, organization_id, branch_id, invoice_no, business_date, status, customer_id, loyalty_card_id,
   loyalty_membership_id, prescription_id, gross_paisa, line_discount_paisa, invoice_discount_paisa,
   loyalty_discount_paisa, net_paisa, rounding_paisa, total_paisa, vat_included_paisa, paid_paisa, change_paisa,
   due_paisa, points_earned, points_redeemed, points_redeemed_value_paisa, refunded_paisa, note, client_request_id,
-  created_by, created_at, voided_at, voided_by, void_reason) on public.sales to authenticated;
+  created_by, created_at, voided_at, voided_by, void_reason, void_refund_paisa, void_refund_method)
+  on public.sales to authenticated;
 grant select (id, organization_id, sale_id, branch_id, line_no, medicine_id, quantity, gross_paisa,
   line_discount_bp, line_discount_paisa, invoice_discount_paisa, loyalty_discount_paisa, net_paisa,
-  returned_quantity) on public.sale_items to authenticated;
+  rounding_paisa, points_earned, returned_quantity) on public.sale_items to authenticated;
 grant select (id, organization_id, sale_item_id, batch_id, quantity, unit_price_paisa, returned_quantity)
   on public.sale_item_batches to authenticated;
 grant select (id, organization_id, branch_id, sale_id, return_no, business_date, refund_paisa, cash_refund_paisa,
-  due_reduction_paisa, points_refund_value_paisa, refund_method, points_returned, points_reversed, reason,
-  client_request_id, created_by, created_at) on public.sale_returns to authenticated;
+  due_reduction_paisa, points_refund_value_paisa, points_shortfall_value_paisa, refund_method, points_returned,
+  points_reversed, reason, client_request_id, created_by, created_at) on public.sale_returns to authenticated;
+grant select (id, organization_id, sale_return_id, sale_item_id, quantity, refund_paisa)
+  on public.sale_return_items to authenticated;
 grant select (organization_id, branch_id, business_date, sales_count, gross_paisa, discount_paisa,
   loyalty_discount_paisa, net_paisa, credit_sales_paisa, returns_count, returns_paisa, voids_count, voided_paisa)
   on public.daily_branch_sales to authenticated;
@@ -449,28 +500,44 @@ declare
   v_existing public.sales;
   v_membership public.loyalty_memberships;
   v_customer public.customers;
+  v_card public.loyalty_cards;
   v_sale_id uuid := gen_random_uuid();
   v_invoice_no text;
   v_prescription_id uuid;
   v_max_bp integer;
 
   -- per-line working arrays (index = line number in medicine_id order)
-  v_medicine_ids uuid[] := '{}';
-  v_quantities integer[] := '{}';
-  v_discount_bps integer[] := '{}';
-  v_eligible boolean[] := '{}';
-  v_controlled boolean[] := '{}';
-  v_gross bigint[] := '{}';
-  v_line_disc bigint[] := '{}';
+  v_medicine_ids uuid[] := '{}'::uuid[];
+  v_quantities integer[] := '{}'::integer[];
+  v_discount_bps integer[] := '{}'::integer[];
+  v_eligible boolean[] := '{}'::boolean[];
+  v_controlled boolean[] := '{}'::boolean[];
+  v_gross bigint[] := '{}'::bigint[];
+  v_line_disc bigint[] := '{}'::bigint[];
   v_inv_disc bigint[];
-  v_loy_disc bigint[] := '{}';
-  v_net bigint[] := '{}';
-  v_cost bigint[] := '{}';
-  v_allocations jsonb[] := '{}';
-  v_after_line bigint[] := '{}';
+  v_loy_disc bigint[] := '{}'::bigint[];
+  v_net bigint[] := '{}'::bigint[];
+  v_rounding_parts bigint[];
+  v_points_weights bigint[] := '{}'::bigint[];
+  v_points_parts bigint[];
+  v_cost bigint[] := '{}'::bigint[];
+  v_allocations jsonb[] := '{}'::jsonb[];
+  v_after_line bigint[] := '{}'::bigint[];
+
+  -- Sellable lots of one medicine in FEFO order. Fetched one row at a time, so only the lots actually
+  -- used are locked (a FOR loop would prefetch, and lock, ten).
+  c_lots cursor (cur_medicine_id uuid) for
+    select b.id, b.quantity_on_hand, b.sale_price_paisa, b.cost_paisa
+      from public.batches b
+     where b.branch_id = p_branch_id
+       and b.medicine_id = cur_medicine_id
+       and not b.is_depleted
+       and b.expiry_date > v_today + v_settings.near_expiry_block_days
+     order by b.expiry_date, b.received_at, b.id
+       for update;
 
   v_item record;
-  v_batch record;
+  v_lot record;
   v_medicine public.medicines;
   v_need integer;
   v_take integer;
@@ -478,10 +545,10 @@ declare
   v_line_gross bigint;
   v_line_cost bigint;
   v_n integer := 0;
-  i integer;
 
   v_gross_total bigint := 0;
   v_line_disc_total bigint := 0;
+  v_line_cap_total bigint := 0;
   v_loy_total bigint := 0;
   v_net_total bigint := 0;
   v_cost_total bigint := 0;
@@ -504,10 +571,12 @@ declare
   v_has_rx boolean := false;
   v_sale_item_id uuid;
 begin
-  -- 1. Idempotency: a retried request returns the original sale.
+  -- 1. Idempotency: a retried request returns the original sale (even while the original is still
+  --    running: claim_request makes the retry wait for it).
   if p_client_request_id is null then
     perform app.fail('missing_request_id', 'client_request_id is required');
   end if;
+  perform app.claim_request(v_org, p_client_request_id);
   select * into v_existing from public.sales
    where organization_id = v_org and client_request_id = p_client_request_id;
   if v_existing.id is not null then
@@ -554,9 +623,13 @@ begin
       perform app.fail('loyalty_customer_mismatch', 'The loyalty card belongs to a different customer');
     end if;
     select * into v_customer from public.customers where id = v_membership.customer_id;
+    if v_customer.id is null or not v_customer.is_active then
+      perform app.fail('invalid_customer', 'Customer not found or inactive');
+    end if;
   end if;
 
-  -- 4. Lines in medicine_id order (global lock order => no deadlocks between concurrent sales)
+  -- 4. Lines in medicine_id order; within a medicine, lots in FEFO order. Together this is the global
+  --    lot lock order (medicine_id, expiry_date, received_at, id) shared by every stock-changing RPC.
   for v_item in
     select (e ->> 'medicine_id')::uuid as medicine_id,
            (e ->> 'quantity')::integer as quantity,
@@ -585,24 +658,19 @@ begin
     v_line_gross := 0;
     v_line_cost := 0;
     v_alloc := '[]'::jsonb;
-    for v_batch in
-      select b.id, b.quantity_on_hand, b.sale_price_paisa, b.cost_paisa
-        from public.batches b
-       where b.branch_id = p_branch_id
-         and b.medicine_id = v_medicine.id
-         and b.quantity_on_hand > 0
-         and b.expiry_date > v_today + v_settings.near_expiry_block_days
-       order by b.expiry_date, b.received_at, b.id
-       for update
+    open c_lots(v_medicine.id);
     loop
       exit when v_need = 0;
-      v_take := least(v_need, v_batch.quantity_on_hand);
-      v_alloc := v_alloc || jsonb_build_object('batch_id', v_batch.id, 'quantity', v_take,
-        'unit_price_paisa', v_batch.sale_price_paisa, 'unit_cost_paisa', v_batch.cost_paisa);
-      v_line_gross := v_line_gross + v_take::bigint * v_batch.sale_price_paisa;
-      v_line_cost := v_line_cost + v_take::bigint * v_batch.cost_paisa;
+      fetch c_lots into v_lot;
+      exit when not found;
+      v_take := least(v_need, v_lot.quantity_on_hand);
+      v_alloc := v_alloc || jsonb_build_object('batch_id', v_lot.id, 'quantity', v_take,
+        'unit_price_paisa', v_lot.sale_price_paisa, 'unit_cost_paisa', v_lot.cost_paisa);
+      v_line_gross := v_line_gross + v_take::bigint * v_lot.sale_price_paisa;
+      v_line_cost := v_line_cost + v_take::bigint * v_lot.cost_paisa;
       v_need := v_need - v_take;
     end loop;
+    close c_lots;
     if v_need > 0 then
       perform app.fail('insufficient_stock',
         format('Not enough sellable stock for %s (short by %s)', v_medicine.brand_name, v_need));
@@ -622,6 +690,7 @@ begin
     v_after_line := v_after_line || (v_line_gross - v_line_disc[v_n]);
     v_gross_total := v_gross_total + v_line_gross;
     v_line_disc_total := v_line_disc_total + v_line_disc[v_n];
+    v_line_cap_total := v_line_cap_total + app.percent_of(v_line_gross, v_max_bp);
     v_cost_total := v_cost_total + v_line_cost;
   end loop;
 
@@ -658,7 +727,11 @@ begin
      or p_invoice_discount_paisa > v_gross_total - v_line_disc_total then
     perform app.fail('invalid_discount', 'Invoice discount must be between zero and the amount after line discounts');
   end if;
-  if v_line_disc_total + p_invoice_discount_paisa > app.percent_of(v_gross_total, v_max_bp) then
+  -- Each line discount is rounded on its own, so lines that are each exactly at the limit may sum to more
+  -- than the limit rounded once on the invoice total; the cap is whichever of the two roundings is larger
+  -- (they differ by less than half a paisa per line).
+  if v_line_disc_total + p_invoice_discount_paisa
+       > greatest(app.percent_of(v_gross_total, v_max_bp), v_line_cap_total) then
     perform app.fail('discount_limit', 'Total discount exceeds your limit', 'Ask a manager to apply this discount');
   end if;
   v_inv_disc := app.allocate_proportionally(p_invoice_discount_paisa, v_after_line);
@@ -685,10 +758,12 @@ begin
     end if;
   end loop;
 
-  -- 8. Rounding and VAT (prices are VAT-inclusive; VAT is reported, not added)
+  -- 8. Rounding and VAT (prices are VAT-inclusive; VAT is reported, not added). The rounding is spread
+  --    over the lines so that refunds of every line add up to exactly what was charged.
   if v_settings.cash_rounding = 'nearest_taka' then
     v_rounding := round(v_net_total / 100.0)::bigint * 100 - v_net_total;
   end if;
+  v_rounding_parts := app.allocate_proportionally(v_rounding, v_net);
   v_total := v_net_total + v_rounding;
   v_vat := case when v_settings.vat_bp > 0
                 then round(v_total::numeric * v_settings.vat_bp / (10000 + v_settings.vat_bp))::bigint
@@ -716,12 +791,8 @@ begin
   end loop;
   if v_points_value > 0 then
     v_points_redeemed := (v_points_value / v_membership.point_value_paisa)::integer;
-    perform 1 from public.loyalty_cards where id = v_membership.card_id for update;
     if v_points_redeemed < v_membership.min_redeem_points then
       perform app.fail('invalid_payment', format('At least %s points must be redeemed', v_membership.min_redeem_points));
-    end if;
-    if app.loyalty_points_balance(v_membership.card_id) < v_points_redeemed then
-      perform app.fail('insufficient_points', 'Not enough loyalty points');
     end if;
   end if;
   if v_paid - v_cash > v_total then
@@ -730,21 +801,38 @@ begin
   v_change := greatest(v_paid - v_total, 0);
   v_due := greatest(v_total - v_paid, 0);
 
+  -- Customer row, then card row (global lock order). FOR NO KEY UPDATE serializes credit and points
+  -- checks without blocking the foreign-key checks of other sales for the same customer or card.
   if v_due > 0 then
     if v_customer.id is null then
       perform app.fail('customer_required', 'Select a customer to sell on credit (due)');
     end if;
     perform app.require_branch_permission(p_branch_id, 'sales.credit');
-    perform 1 from public.customers where id = v_customer.id for update;
+    perform 1 from public.customers where id = v_customer.id for no key update;
     if app.customer_balance(v_customer.id) + v_due > v_customer.credit_limit_paisa then
       perform app.fail('credit_limit', 'This sale would exceed the customer''s credit limit');
     end if;
   end if;
+  if v_membership.id is not null then
+    -- Re-checked under the lock: a card replaced meanwhile must not earn or spend points.
+    select * into v_card from public.loyalty_cards where id = v_membership.card_id for no key update;
+    if not v_card.is_active then
+      perform app.fail('loyalty_inactive', 'This loyalty card has been replaced; use the new card');
+    end if;
+    if v_points_redeemed > 0 and app.loyalty_points_balance(v_card.id) < v_points_redeemed then
+      perform app.fail('insufficient_points', 'Not enough loyalty points');
+    end if;
+  end if;
 
-  -- 10. Points earned on money spent on eligible items (not on the part paid with points)
+  -- 10. Points earned on money spent on eligible items (not on the part paid with points), allocated to
+  --     the eligible lines so that a return takes back exactly the points its lines earned.
   if v_membership.id is not null and v_membership.points_per_100_taka > 0 then
     v_points_earned := ((greatest(v_eligible_net - v_points_value, 0) / 10000) * v_membership.points_per_100_taka)::integer;
   end if;
+  for i in 1..v_n loop
+    v_points_weights := v_points_weights || (case when v_eligible[i] then v_net[i] else 0 end)::bigint;
+  end loop;
+  v_points_parts := app.allocate_proportionally(v_points_earned::bigint, v_points_weights);
 
   -- 11. Persist
   v_invoice_no := app.next_branch_document_no(p_branch_id, 'sale', '');
@@ -765,10 +853,12 @@ begin
   for i in 1..v_n loop
     insert into public.sale_items (
       organization_id, sale_id, branch_id, line_no, medicine_id, quantity, gross_paisa, line_discount_bp,
-      line_discount_paisa, invoice_discount_paisa, loyalty_discount_paisa, net_paisa, cost_paisa
+      line_discount_paisa, invoice_discount_paisa, loyalty_discount_paisa, net_paisa, rounding_paisa,
+      points_earned, cost_paisa
     ) values (
       v_org, v_sale_id, p_branch_id, i, v_medicine_ids[i], v_quantities[i], v_gross[i], v_discount_bps[i],
-      v_line_disc[i], v_inv_disc[i], v_loy_disc[i], v_net[i], v_cost[i]
+      v_line_disc[i], v_inv_disc[i], v_loy_disc[i], v_net[i], v_rounding_parts[i],
+      v_points_parts[i]::integer, v_cost[i]
     ) returning id into v_sale_item_id;
 
     for v_alloc in select * from jsonb_array_elements(v_allocations[i]) loop
@@ -808,11 +898,11 @@ begin
 
   if v_points_redeemed > 0 then
     insert into public.loyalty_point_ledger (organization_id, card_id, branch_id, entry_type, points, sale_id, created_by)
-    values (v_org, v_membership.card_id, p_branch_id, 'redeem', -v_points_redeemed, v_sale_id, v_user);
+    values (v_org, v_card.id, p_branch_id, 'redeem', -v_points_redeemed, v_sale_id, v_user);
   end if;
   if v_points_earned > 0 then
     insert into public.loyalty_point_ledger (organization_id, card_id, branch_id, entry_type, points, sale_id, created_by)
-    values (v_org, v_membership.card_id, p_branch_id, 'earn', v_points_earned, v_sale_id, v_user);
+    values (v_org, v_card.id, p_branch_id, 'earn', v_points_earned, v_sale_id, v_user);
   end if;
 
   perform app.bump_daily_sales(v_org, p_branch_id, v_today,
@@ -828,9 +918,17 @@ $$;
 
 -- -----------------------------------------------------------------------------
 -- void_sale: cancels a sale completely (same-day mistakes). Not allowed after any return.
+-- The customer gets back the money paid at the till plus any part of the due already collected
+-- (recorded as void_refund_paisa / void_refund_method); only the still-unpaid due is written off the
+-- ledger. Points paid with are restored and points earned are taken back on the customer's current
+-- card; if those points were already spent the void is refused (a return keeps their value back).
 -- -----------------------------------------------------------------------------
-create or replace function public.void_sale(p_sale_id uuid, p_reason text)
-returns void
+create or replace function public.void_sale(
+  p_sale_id uuid,
+  p_reason text,
+  p_refund_method public.payment_method default 'cash'
+)
+returns jsonb
 language plpgsql
 security definer
 set search_path = ''
@@ -839,7 +937,10 @@ declare
   v_sale public.sales;
   v_settings public.organization_settings;
   v_alloc record;
-  v_points_balance integer;
+  v_card_id uuid;
+  v_due_reduction bigint := 0;
+  v_refund bigint;
+  v_refund_method public.payment_method;
 begin
   select * into v_sale from public.sales where id = p_sale_id for update;
   if v_sale.id is null then
@@ -852,6 +953,9 @@ begin
   if coalesce(length(btrim(p_reason)), 0) < 3 then
     perform app.fail('reason_required', 'A reason is required');
   end if;
+  if p_refund_method is null or p_refund_method = 'loyalty_points' then
+    perform app.fail('invalid_payment', 'Choose a money refund method');
+  end if;
   select * into v_settings from public.organization_settings where organization_id = v_sale.organization_id;
   if now() - v_sale.created_at > make_interval(hours => v_settings.void_window_hours) then
     perform app.fail('void_window_passed', 'This sale is too old to void; process a return instead');
@@ -860,39 +964,62 @@ begin
     perform app.fail('has_returns', 'A sale with returns cannot be voided');
   end if;
 
-  -- Restock every allocation (batches locked in id order).
+  -- Lock order: lots (canonical order), customer, card.
+  perform 1
+     from public.batches b
+    where b.id in (
+      select sib.batch_id
+        from public.sale_item_batches sib
+        join public.sale_items si on si.id = sib.sale_item_id
+       where si.sale_id = p_sale_id
+    )
+    order by b.medicine_id, b.expiry_date, b.received_at, b.id
+      for update;
+  if v_sale.customer_id is not null and (v_sale.due_paisa > 0 or v_sale.loyalty_card_id is not null) then
+    perform 1 from public.customers where id = v_sale.customer_id for no key update;
+  end if;
+  if v_sale.loyalty_card_id is not null then
+    v_card_id := coalesce(app.active_card_id(v_sale.customer_id), v_sale.loyalty_card_id);
+    perform 1 from public.loyalty_cards where id = v_card_id for no key update;
+    if v_sale.points_earned > app.loyalty_points_balance(v_card_id) + v_sale.points_redeemed then
+      perform app.fail('points_spent', 'Points earned on this sale have already been spent; process a return instead');
+    end if;
+  end if;
+
+  -- Restock every allocation (the lots are locked).
   for v_alloc in
     select sib.batch_id, sib.quantity
       from public.sale_item_batches sib
       join public.sale_items si on si.id = sib.sale_item_id
      where si.sale_id = p_sale_id
-     order by sib.batch_id
   loop
-    perform 1 from public.batches where id = v_alloc.batch_id for update;
     perform app.post_movement(v_alloc.batch_id, 'sale_void', v_alloc.quantity, 'sale_void', p_sale_id, btrim(p_reason));
   end loop;
 
+  -- Write off only the part of this sale's due that is still owed; a part already collected is refunded.
   if v_sale.due_paisa > 0 then
-    insert into public.customer_ledger_entries (
-      organization_id, customer_id, branch_id, entry_type, amount_paisa, reference_type, reference_id, created_by
-    ) values (v_sale.organization_id, v_sale.customer_id, v_sale.branch_id, 'sale_void', -v_sale.due_paisa,
-              'sale_void', p_sale_id, auth.uid());
+    v_due_reduction := least(v_sale.due_paisa, greatest(app.customer_balance(v_sale.customer_id), 0));
+    if v_due_reduction > 0 then
+      insert into public.customer_ledger_entries (
+        organization_id, customer_id, branch_id, entry_type, amount_paisa, reference_type, reference_id, created_by
+      ) values (v_sale.organization_id, v_sale.customer_id, v_sale.branch_id, 'sale_void', -v_due_reduction,
+                'sale_void', p_sale_id, auth.uid());
+    end if;
   end if;
+  v_refund := v_sale.paid_paisa - v_sale.change_paisa - v_sale.points_redeemed_value_paisa
+            + (v_sale.due_paisa - v_due_reduction);
+  v_refund_method := case when v_refund > 0 then p_refund_method end;
 
-  if v_sale.loyalty_card_id is not null then
-    perform 1 from public.loyalty_cards where id = v_sale.loyalty_card_id for update;
+  if v_card_id is not null then
     if v_sale.points_redeemed > 0 then
       insert into public.loyalty_point_ledger (organization_id, card_id, branch_id, entry_type, points, sale_id, created_by)
-      values (v_sale.organization_id, v_sale.loyalty_card_id, v_sale.branch_id, 'reverse_redeem',
+      values (v_sale.organization_id, v_card_id, v_sale.branch_id, 'reverse_redeem',
               v_sale.points_redeemed, p_sale_id, auth.uid());
     end if;
     if v_sale.points_earned > 0 then
-      v_points_balance := app.loyalty_points_balance(v_sale.loyalty_card_id);
-      if least(v_sale.points_earned, v_points_balance) > 0 then
-        insert into public.loyalty_point_ledger (organization_id, card_id, branch_id, entry_type, points, sale_id, created_by)
-        values (v_sale.organization_id, v_sale.loyalty_card_id, v_sale.branch_id, 'reverse_earn',
-                -least(v_sale.points_earned, v_points_balance), p_sale_id, auth.uid());
-      end if;
+      insert into public.loyalty_point_ledger (organization_id, card_id, branch_id, entry_type, points, sale_id, created_by)
+      values (v_sale.organization_id, v_card_id, v_sale.branch_id, 'reverse_earn',
+              -v_sale.points_earned, p_sale_id, auth.uid());
     end if;
   end if;
 
@@ -906,19 +1033,30 @@ begin
    where r.sale_id = p_sale_id and r.entry_type = 'sale';
 
   update public.sales
-     set status = 'voided', voided_at = now(), voided_by = auth.uid(), void_reason = btrim(p_reason)
+     set status = 'voided', voided_at = now(), voided_by = auth.uid(), void_reason = btrim(p_reason),
+         void_refund_paisa = v_refund, void_refund_method = v_refund_method
    where id = p_sale_id;
 
+  -- Every summary column excludes the voided invoice (sales_count and net are netted in the report).
   perform app.bump_daily_sales(v_sale.organization_id, v_sale.branch_id, v_sale.business_date,
+    p_gross => -v_sale.gross_paisa,
+    p_discount => -(v_sale.line_discount_paisa + v_sale.invoice_discount_paisa + v_sale.loyalty_discount_paisa),
+    p_loyalty_discount => -v_sale.loyalty_discount_paisa, p_credit => -v_sale.due_paisa,
     p_voids_count => 1, p_voided => v_sale.total_paisa, p_voided_cost => v_sale.cost_paisa);
+
+  return jsonb_build_object('sale_id', p_sale_id, 'refund_paisa', v_refund, 'refund_method', v_refund_method,
+    'due_reduction_paisa', v_due_reduction, 'points_returned', v_sale.points_redeemed,
+    'points_reversed', v_sale.points_earned);
 end;
 $$;
 
 -- -----------------------------------------------------------------------------
 -- process_sale_return: partial or full return against the original invoice.
 -- p_items: [{ "sale_item_id": uuid, "quantity": int }]
--- Refunds use cumulative proportional rounding so that all returns of a line add up exactly to
--- the line's net amount. Refund order: points paid -> outstanding due on this sale -> money.
+-- Refunds use cumulative proportional rounding over each line's share of the invoice total (net plus
+-- its share of the cash rounding), so all returns of a sale add up exactly to what was charged.
+-- Refund order: points paid -> value of earned points already spent (kept back) -> outstanding due
+-- on this sale -> money. Returned units go back into the lots they came from, at those lots' cost.
 -- -----------------------------------------------------------------------------
 create or replace function public.process_sale_return(
   p_sale_id uuid,
@@ -945,39 +1083,53 @@ declare
   v_alloc record;
   v_left integer;
   v_take integer;
+  v_line_amount bigint;
+  v_line_cost_sum bigint;
   v_refund bigint := 0;
   v_cost bigint := 0;
-  v_line_ids uuid[] := '{}';
-  v_line_qty integer[] := '{}';
-  v_line_refund bigint[] := '{}';
-  v_line_cost bigint[] := '{}';
+  v_line_ids uuid[] := '{}'::uuid[];
+  v_line_qty integer[] := '{}'::integer[];
+  v_line_refund bigint[] := '{}'::bigint[];
+  v_line_cost bigint[] := '{}'::bigint[];
   v_restock jsonb := '[]'::jsonb;
   v_r jsonb;
+  v_card_id uuid;
   v_point_unit bigint;
+  v_point_value bigint;
   v_points_value_back bigint := 0;
   v_points_back integer := 0;
+  v_points_wanted integer := 0;
   v_points_reverse integer := 0;
+  v_shortfall_value bigint := 0;
+  v_money bigint;
   v_due_reduction bigint := 0;
   v_due_left bigint;
   v_cash_refund bigint;
-  i integer;
 begin
   if p_client_request_id is null then
     perform app.fail('missing_request_id', 'client_request_id is required');
   end if;
+  -- The sale row lock serializes all returns of a sale (and makes a concurrent retry replay).
   select * into v_sale from public.sales where id = p_sale_id for update;
   if v_sale.id is null then
     perform app.fail('not_found', 'Sale not found');
   end if;
   perform app.require_branch_permission(v_sale.branch_id, 'sales.return');
 
+  perform app.claim_request(v_sale.organization_id, p_client_request_id);
   select * into v_existing from public.sale_returns
    where organization_id = v_sale.organization_id and client_request_id = p_client_request_id;
   if v_existing.id is not null then
+    -- A replay must be the same return: the same sale, by the same user. Otherwise the caller would be
+    -- handed another sale's refund (and might pay it out again) while nothing is returned.
+    if v_existing.sale_id <> p_sale_id or v_existing.created_by <> v_user then
+      perform app.fail('request_id_conflict', 'This request id was already used for another return');
+    end if;
     return jsonb_build_object('sale_return_id', v_existing.id, 'return_no', v_existing.return_no,
       'refund_paisa', v_existing.refund_paisa, 'cash_refund_paisa', v_existing.cash_refund_paisa,
       'due_reduction_paisa', v_existing.due_reduction_paisa, 'points_returned', v_existing.points_returned,
-      'points_reversed', v_existing.points_reversed, 'replayed', true);
+      'points_reversed', v_existing.points_reversed,
+      'points_shortfall_value_paisa', v_existing.points_shortfall_value_paisa, 'replayed', true);
   end if;
 
   if v_sale.status <> 'completed' then
@@ -998,7 +1150,7 @@ begin
     perform app.fail('invalid_items', 'Provide the lines to return');
   end if;
 
-  -- Pass 1: lock and validate lines, compute refunds with cumulative rounding.
+  -- Pass 1: lock and validate lines; refund, points to take back and the restock plan per line.
   for v_req in
     select (e ->> 'sale_item_id')::uuid as sale_item_id, sum((e ->> 'quantity')::integer)::integer as quantity
       from jsonb_array_elements(p_items) e
@@ -1013,80 +1165,102 @@ begin
     if v_req.quantity is null or v_req.quantity <= 0 or v_req.quantity > v_line.quantity - v_line.returned_quantity then
       perform app.fail('invalid_quantity', 'Return quantity exceeds the quantity still returnable');
     end if;
+    v_line_amount := v_line.net_paisa + v_line.rounding_paisa;
     v_line_ids := v_line_ids || v_line.id;
     v_line_qty := v_line_qty || v_req.quantity;
     v_line_refund := v_line_refund || (
-      round(v_line.net_paisa::numeric * (v_line.returned_quantity + v_req.quantity) / v_line.quantity)::bigint
-      - round(v_line.net_paisa::numeric * v_line.returned_quantity / v_line.quantity)::bigint);
-    v_line_cost := v_line_cost || (
-      round(v_line.cost_paisa::numeric * (v_line.returned_quantity + v_req.quantity) / v_line.quantity)::bigint
-      - round(v_line.cost_paisa::numeric * v_line.returned_quantity / v_line.quantity)::bigint);
-    v_refund := v_refund + v_line_refund[array_length(v_line_ids, 1)];
-    v_cost := v_cost + v_line_cost[array_length(v_line_ids, 1)];
+      round(v_line_amount::numeric * (v_line.returned_quantity + v_req.quantity) / v_line.quantity)::bigint
+      - round(v_line_amount::numeric * v_line.returned_quantity / v_line.quantity)::bigint);
+    v_points_wanted := v_points_wanted + (
+      round(v_line.points_earned::numeric * (v_line.returned_quantity + v_req.quantity) / v_line.quantity)::integer
+      - round(v_line.points_earned::numeric * v_line.returned_quantity / v_line.quantity)::integer);
+
+    -- Units go back into the lots they came from (latest expiry first), valued at those lots' cost.
+    v_left := v_req.quantity;
+    v_line_cost_sum := 0;
+    for v_alloc in
+      select sib.id, sib.batch_id, sib.quantity - sib.returned_quantity as returnable, sib.unit_cost_paisa
+        from public.sale_item_batches sib
+        join public.batches b on b.id = sib.batch_id
+       where sib.sale_item_id = v_line.id and sib.quantity > sib.returned_quantity
+       order by b.expiry_date desc, sib.id desc
+    loop
+      exit when v_left = 0;
+      v_take := least(v_left, v_alloc.returnable);
+      v_restock := v_restock || jsonb_build_object('allocation_id', v_alloc.id, 'batch_id', v_alloc.batch_id,
+        'quantity', v_take);
+      v_line_cost_sum := v_line_cost_sum + v_take::bigint * v_alloc.unit_cost_paisa;
+      v_left := v_left - v_take;
+    end loop;
+    v_line_cost := v_line_cost || v_line_cost_sum;
+    v_refund := v_refund + v_line_refund[cardinality(v_line_ids)];
+    v_cost := v_cost + v_line_cost_sum;
   end loop;
 
-  -- Split the refund: points paid (proportional) -> this sale's unpaid due -> money.
-  if v_sale.points_redeemed > 0 and v_sale.net_paisa > 0 then
+  -- Lock order: lots (canonical order), customer, card, then the return counter.
+  perform 1
+     from public.batches b
+    where b.id in (select (x ->> 'batch_id')::uuid from jsonb_array_elements(v_restock) x)
+    order by b.medicine_id, b.expiry_date, b.received_at, b.id
+      for update;
+  if v_sale.customer_id is not null and (v_sale.due_paisa > 0 or v_sale.loyalty_card_id is not null) then
+    perform 1 from public.customers where id = v_sale.customer_id for no key update;
+  end if;
+  if v_sale.loyalty_card_id is not null then
+    -- Points follow the customer to a replacement card.
+    v_card_id := coalesce(app.active_card_id(v_sale.customer_id), v_sale.loyalty_card_id);
+    perform 1 from public.loyalty_cards where id = v_card_id for no key update;
+  end if;
+
+  -- Points the customer paid with come back in proportion to the refund.
+  if v_sale.points_redeemed > 0 and v_sale.total_paisa > 0 then
     v_point_unit := v_sale.points_redeemed_value_paisa / v_sale.points_redeemed;
-    v_points_back := (v_sale.points_redeemed::numeric * (v_sale.refunded_paisa + v_refund) / v_sale.net_paisa)::bigint
-                   - (v_sale.points_redeemed::numeric * v_sale.refunded_paisa / v_sale.net_paisa)::bigint;
+    v_points_back := (round(v_sale.points_redeemed::numeric * (v_sale.refunded_paisa + v_refund) / v_sale.total_paisa)
+                    - round(v_sale.points_redeemed::numeric * v_sale.refunded_paisa / v_sale.total_paisa))::integer;
     v_points_back := least(v_points_back, (v_refund / v_point_unit)::integer);
     v_points_value_back := v_points_back::bigint * v_point_unit;
   end if;
 
+  -- Points the returned lines earned are taken back. Points already spent cannot be; their value is
+  -- kept back from the money refund instead (at the sale membership's point value).
+  if v_card_id is not null and v_points_wanted > 0 then
+    v_points_reverse := greatest(least(v_points_wanted, app.loyalty_points_balance(v_card_id) + v_points_back), 0);
+    select lm.point_value_paisa into v_point_value
+      from public.loyalty_memberships lm where lm.id = v_sale.loyalty_membership_id;
+    v_shortfall_value := (v_points_wanted - v_points_reverse)::bigint * coalesce(v_point_value, 0);
+  end if;
+  v_money := v_refund - v_points_value_back - v_shortfall_value;
+  if v_money < 0 then
+    perform app.fail('points_spent', 'The points this sale earned have been spent and are worth more than the refund');
+  end if;
+
   if v_sale.due_paisa > 0 then
-    perform 1 from public.customers where id = v_sale.customer_id for update;
     v_due_left := v_sale.due_paisa - coalesce((
       select sum(r.due_reduction_paisa) from public.sale_returns r where r.sale_id = p_sale_id
     ), 0);
-    v_due_reduction := greatest(least(v_refund - v_points_value_back, v_due_left,
-                                      app.customer_balance(v_sale.customer_id)), 0);
+    v_due_reduction := greatest(least(v_money, v_due_left, app.customer_balance(v_sale.customer_id)), 0);
   end if;
-  v_cash_refund := v_refund - v_points_value_back - v_due_reduction;
-
-  if v_sale.loyalty_card_id is not null and v_sale.points_earned > 0 and v_sale.net_paisa > 0 then
-    perform 1 from public.loyalty_cards where id = v_sale.loyalty_card_id for update;
-    v_points_reverse := (v_sale.points_earned::numeric * (v_sale.refunded_paisa + v_refund) / v_sale.net_paisa)::bigint
-                      - (v_sale.points_earned::numeric * v_sale.refunded_paisa / v_sale.net_paisa)::bigint;
-    -- Points already spent cannot be clawed back below zero.
-    v_points_reverse := greatest(least(v_points_reverse,
-                                       app.loyalty_points_balance(v_sale.loyalty_card_id) + v_points_back), 0);
-  end if;
+  v_cash_refund := v_money - v_due_reduction;
 
   -- Write the return.
   v_return_no := app.next_branch_document_no(v_sale.branch_id, 'sale_return', 'R');
   insert into public.sale_returns (
     id, organization_id, branch_id, sale_id, return_no, business_date, refund_paisa, cash_refund_paisa,
-    due_reduction_paisa, points_refund_value_paisa, refund_method, cost_paisa, points_returned, points_reversed,
-    reason, client_request_id, created_by
+    due_reduction_paisa, points_refund_value_paisa, points_shortfall_value_paisa, refund_method, cost_paisa,
+    points_returned, points_reversed, reason, client_request_id, created_by
   ) values (
     v_return_id, v_sale.organization_id, v_sale.branch_id, p_sale_id, v_return_no, v_today, v_refund,
-    v_cash_refund, v_due_reduction, v_points_value_back, case when v_cash_refund > 0 then p_refund_method end,
+    v_cash_refund, v_due_reduction, v_points_value_back, v_shortfall_value,
+    case when v_cash_refund > 0 then p_refund_method end,
     v_cost, v_points_back, v_points_reverse, btrim(p_reason), p_client_request_id, v_user
   );
 
-  -- Pass 2: lines, restock plan, controlled register.
+  -- Pass 2: lines and controlled register.
   for i in 1..coalesce(array_length(v_line_ids, 1), 0) loop
     insert into public.sale_return_items (organization_id, sale_return_id, sale_item_id, quantity, refund_paisa, cost_paisa)
     values (v_sale.organization_id, v_return_id, v_line_ids[i], v_line_qty[i], v_line_refund[i], v_line_cost[i]);
 
     update public.sale_items set returned_quantity = returned_quantity + v_line_qty[i] where id = v_line_ids[i];
-
-    -- Put stock back into the batches it came from (latest-expiry allocation first).
-    v_left := v_line_qty[i];
-    for v_alloc in
-      select sib.id, sib.batch_id, sib.quantity - sib.returned_quantity as returnable
-        from public.sale_item_batches sib
-        join public.batches b on b.id = sib.batch_id
-       where sib.sale_item_id = v_line_ids[i] and sib.quantity > sib.returned_quantity
-       order by b.expiry_date desc, sib.id desc
-    loop
-      exit when v_left = 0;
-      v_take := least(v_left, v_alloc.returnable);
-      update public.sale_item_batches set returned_quantity = returned_quantity + v_take where id = v_alloc.id;
-      v_restock := v_restock || jsonb_build_object('batch_id', v_alloc.batch_id, 'quantity', v_take);
-      v_left := v_left - v_take;
-    end loop;
 
     insert into public.controlled_drug_register (
       organization_id, branch_id, medicine_id, sale_id, sale_item_id, prescription_id, entry_type, quantity,
@@ -1098,11 +1272,11 @@ begin
      where r.sale_item_id = v_line_ids[i] and r.entry_type = 'sale';
   end loop;
 
-  -- Restock in batch id order (deadlock-safe).
-  for v_r in
-    select x from jsonb_array_elements(v_restock) x order by (x ->> 'batch_id')
-  loop
-    perform 1 from public.batches where id = (v_r ->> 'batch_id')::uuid for update;
+  -- Restock (the lots are locked).
+  for v_r in select x from jsonb_array_elements(v_restock) x loop
+    update public.sale_item_batches
+       set returned_quantity = returned_quantity + (v_r ->> 'quantity')::integer
+     where id = (v_r ->> 'allocation_id')::uuid;
     perform app.post_movement((v_r ->> 'batch_id')::uuid, 'sale_return', (v_r ->> 'quantity')::integer,
       'sale_return', v_return_id);
   end loop;
@@ -1115,12 +1289,12 @@ begin
   end if;
   if v_points_back > 0 then
     insert into public.loyalty_point_ledger (organization_id, card_id, branch_id, entry_type, points, sale_id, note, created_by)
-    values (v_sale.organization_id, v_sale.loyalty_card_id, v_sale.branch_id, 'reverse_redeem', v_points_back,
+    values (v_sale.organization_id, v_card_id, v_sale.branch_id, 'reverse_redeem', v_points_back,
             p_sale_id, v_return_no, v_user);
   end if;
   if v_points_reverse > 0 then
     insert into public.loyalty_point_ledger (organization_id, card_id, branch_id, entry_type, points, sale_id, note, created_by)
-    values (v_sale.organization_id, v_sale.loyalty_card_id, v_sale.branch_id, 'reverse_earn', -v_points_reverse,
+    values (v_sale.organization_id, v_card_id, v_sale.branch_id, 'reverse_earn', -v_points_reverse,
             p_sale_id, v_return_no, v_user);
   end if;
 
@@ -1131,7 +1305,8 @@ begin
 
   return jsonb_build_object('sale_return_id', v_return_id, 'return_no', v_return_no, 'refund_paisa', v_refund,
     'cash_refund_paisa', v_cash_refund, 'due_reduction_paisa', v_due_reduction,
-    'points_returned', v_points_back, 'points_reversed', v_points_reverse, 'replayed', false);
+    'points_returned', v_points_back, 'points_reversed', v_points_reverse,
+    'points_shortfall_value_paisa', v_shortfall_value, 'replayed', false);
 end;
 $$;
 
@@ -1148,7 +1323,7 @@ grant select on public.loyalty_usage_daily to authenticated;
 
 grant execute on function
   public.create_sale(uuid, jsonb, jsonb, uuid, uuid, text, bigint, jsonb, text),
-  public.void_sale(uuid, text),
+  public.void_sale(uuid, text, public.payment_method),
   public.process_sale_return(uuid, jsonb, text, uuid, public.payment_method)
 to authenticated;
 

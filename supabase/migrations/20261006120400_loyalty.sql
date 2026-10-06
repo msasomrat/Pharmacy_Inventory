@@ -35,7 +35,7 @@ create table public.loyalty_cards (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null,
   customer_id uuid not null,
-  card_no text not null check (card_no ~ '^[0-9]{6,16}$'),
+  card_no text not null check (card_no ~ '^[0-9]{8,16}$'),
   is_active boolean not null default true,
   issued_at timestamptz not null default now(),
   issued_by uuid references auth.users (id),
@@ -119,6 +119,7 @@ create index loyalty_point_ledger_card_idx on public.loyalty_point_ledger (card_
 create trigger loyalty_point_ledger_append_only
   before update or delete on public.loyalty_point_ledger
   for each row execute function app.forbid_mutation();
+call app.forbid_truncate('public.loyalty_point_ledger');
 
 create trigger loyalty_plans_touch before update on public.loyalty_plans
   for each row execute function app.touch_updated();
@@ -195,7 +196,8 @@ as $$
   select coalesce(sum(points), 0)::integer from public.loyalty_point_ledger where card_id = p_card_id
 $$;
 
--- Active membership on a date for a card number (NULL if none).
+-- Active membership on a date for a card number (NULL if none). A deactivated customer's card does
+-- not work anywhere (POS and lookup).
 create or replace function app.active_membership_by_card(p_organization_id uuid, p_card_no text, p_on date)
 returns public.loyalty_memberships
 language sql
@@ -205,13 +207,44 @@ set search_path = ''
 as $$
   select lm.*
     from public.loyalty_cards c
+    join public.customers cu on cu.id = c.customer_id
     join public.loyalty_memberships lm on lm.card_id = c.id
    where c.organization_id = p_organization_id
      and c.card_no = btrim(p_card_no)
      and c.is_active
+     and cu.is_active
      and lm.status = 'active'
      and p_on between lm.starts_on and lm.ends_on
    limit 1
+$$;
+
+-- The customer's current (active) card. Points of an earlier sale are reversed or refunded on this
+-- card, because replace_loyalty_card moves the balance to the replacement.
+create or replace function app.active_card_id(p_customer_id uuid)
+returns uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select c.id from public.loyalty_cards c where c.customer_id = p_customer_id and c.is_active
+$$;
+
+-- Last day of a membership of p_months starting on p_starts_on: the day before the same day-of-month
+-- p_months later, or the clamped month end when that month is shorter (Oct 31 + 1 month -> Nov 30),
+-- so a member who starts on the 31st gets the whole of the shorter month and renewals do not drift.
+create or replace function app.membership_end_date(p_starts_on date, p_months integer)
+returns date
+language sql
+immutable
+strict
+set search_path = ''
+as $$
+  select case
+    when extract(day from (p_starts_on + make_interval(months => p_months))::date) < extract(day from p_starts_on)
+      then (p_starts_on + make_interval(months => p_months))::date
+    else (p_starts_on + make_interval(months => p_months))::date - 1
+  end
 $$;
 
 create or replace function app.generate_card_no(p_organization_id uuid)
@@ -222,10 +255,14 @@ security definer
 set search_path = ''
 as $$
 declare
+  v_seq text;
   v_body text;
 begin
+  -- CFG-25: 10 digits including the Luhn check digit ('8' + 8-digit sequence + check digit). Past
+  -- 99,999,999 cards the sequence is never truncated; the number just grows (up to 16 digits allowed).
   loop
-    v_body := '8' || lpad(app.next_number(p_organization_id, 'loyalty_card')::text, 9, '0');
+    v_seq := app.next_number(p_organization_id, 'loyalty_card')::text;
+    v_body := '8' || lpad(v_seq, greatest(8, length(v_seq)), '0');
     exit when not exists (
       select 1 from public.loyalty_cards
        where organization_id = p_organization_id
@@ -264,11 +301,13 @@ declare
   v_current public.loyalty_memberships;
   v_today date := app.business_date(v_org);
   v_starts date;
+  v_ends date;
   v_membership uuid;
 begin
   if p_client_request_id is null then
     perform app.fail('missing_request_id', 'client_request_id is required');
   end if;
+  perform app.claim_request(v_org, p_client_request_id);
   select * into v_existing from public.loyalty_memberships
    where organization_id = v_org and client_request_id = p_client_request_id;
   if v_existing.id is not null then
@@ -284,8 +323,10 @@ begin
   if v_plan.id is null or not v_plan.is_active then
     perform app.fail('invalid_plan', 'Loyalty plan not found or not active');
   end if;
+  -- Customer first, then card (lock order shared with replace_loyalty_card and the sales functions).
+  -- FOR NO KEY UPDATE does not block foreign-key checks of concurrent sales for this customer.
   select * into v_customer from public.customers
-   where id = p_customer_id and organization_id = v_org for update;
+   where id = p_customer_id and organization_id = v_org for no key update;
   if v_customer.id is null or not v_customer.is_active then
     perform app.fail('invalid_customer', 'Customer not found or inactive');
   end if;
@@ -300,7 +341,7 @@ begin
    where organization_id = v_org and customer_id = p_customer_id and is_active;
   if v_card.id is null then
     if p_card_no is not null then
-      if btrim(p_card_no) !~ '^[0-9]{6,16}$'
+      if btrim(p_card_no) !~ '^[0-9]{8,16}$'
          or app.luhn_check_digit(left(btrim(p_card_no), -1)) <> right(btrim(p_card_no), 1)::integer then
         perform app.fail('invalid_card_no', 'Card number is not valid');
       end if;
@@ -312,28 +353,36 @@ begin
     perform app.fail('card_mismatch', 'This customer already has a different active card');
   end if;
 
+  -- FR-LOY-018: at most one future (not yet started) period per card, so a second early renewal is
+  -- refused. The customer lock above serializes enrolments and renewals for this card.
+  if exists (
+    select 1 from public.loyalty_memberships
+     where card_id = v_card.id and status = 'active' and starts_on > v_today
+  ) then
+    perform app.fail('renewal_pending', 'This card already has a renewal waiting to start');
+  end if;
+
   -- Renewal: start after the latest active membership that has not yet ended.
   select * into v_current from public.loyalty_memberships
    where card_id = v_card.id and status = 'active' and ends_on >= v_today
    order by ends_on desc
    limit 1;
   v_starts := case when v_current.id is null then v_today else v_current.ends_on + 1 end;
+  v_ends := app.membership_end_date(v_starts, v_plan.duration_months);
 
   insert into public.loyalty_memberships (
     organization_id, card_id, customer_id, plan_id, branch_id, starts_on, ends_on, fee_paid_paisa,
     payment_method, discount_bp, max_discount_per_invoice_paisa, points_per_100_taka, point_value_paisa,
     min_redeem_points, renewed_from_id, client_request_id, created_by
   ) values (
-    v_org, v_card.id, p_customer_id, v_plan.id, p_branch_id, v_starts,
-    (v_starts + make_interval(months => v_plan.duration_months))::date - 1,
+    v_org, v_card.id, p_customer_id, v_plan.id, p_branch_id, v_starts, v_ends,
     v_plan.fee_paisa, case when v_plan.fee_paisa > 0 then p_payment_method end,
     v_plan.discount_bp, v_plan.max_discount_per_invoice_paisa, v_plan.points_per_100_taka,
     v_plan.point_value_paisa, v_plan.min_redeem_points, v_current.id, p_client_request_id, auth.uid()
   ) returning id into v_membership;
 
   return jsonb_build_object('membership_id', v_membership, 'card_no', v_card.card_no,
-    'starts_on', v_starts, 'ends_on', (v_starts + make_interval(months => v_plan.duration_months))::date - 1,
-    'fee_paisa', v_plan.fee_paisa, 'replayed', false);
+    'starts_on', v_starts, 'ends_on', v_ends, 'fee_paisa', v_plan.fee_paisa, 'replayed', false);
 end;
 $$;
 
@@ -346,11 +395,16 @@ as $$
 declare
   v_membership public.loyalty_memberships;
 begin
-  select * into v_membership from public.loyalty_memberships where id = p_membership_id for update;
+  select * into v_membership from public.loyalty_memberships where id = p_membership_id for no key update;
   if v_membership.id is null then
     perform app.fail('not_found', 'Membership not found');
   end if;
   perform app.require_permission(v_membership.organization_id, 'loyalty.cancel');
+  -- P-37: a branch-scoped role (Branch Manager) cancels only memberships enrolled in an assigned branch.
+  if app.user_role(v_membership.organization_id) not in ('owner', 'accountant', 'auditor')
+     and not app.has_branch_access(v_membership.branch_id) then
+    perform app.fail('forbidden', 'You do not have access to this branch');
+  end if;
   if v_membership.status = 'cancelled' then
     perform app.fail('already_cancelled', 'Membership is already cancelled');
   end if;
@@ -364,6 +418,8 @@ end;
 $$;
 
 -- Lost/damaged card: deactivate it and issue a new number; memberships and points move with it.
+-- Locks the customer, then the card (same order as enroll_loyalty and the sales functions), so a
+-- renewal or sale running at the same time either completes first or sees the replacement card.
 create or replace function public.replace_loyalty_card(p_card_id uuid, p_reason text, p_new_card_no text default null)
 returns text
 language plpgsql
@@ -375,15 +431,20 @@ declare
   v_new public.loyalty_cards;
   v_points integer;
 begin
-  select * into v_card from public.loyalty_cards where id = p_card_id for update;
-  if v_card.id is null or not v_card.is_active then
+  select * into v_card from public.loyalty_cards where id = p_card_id;
+  if v_card.id is null then
     perform app.fail('not_found', 'Active card not found');
   end if;
   perform app.require_permission(v_card.organization_id, 'loyalty.cancel');
+  perform 1 from public.customers where id = v_card.customer_id for no key update;
+  select * into v_card from public.loyalty_cards where id = p_card_id for no key update;
+  if not v_card.is_active then
+    perform app.fail('not_found', 'Active card not found');
+  end if;
   if coalesce(length(btrim(p_reason)), 0) < 3 then
     perform app.fail('reason_required', 'A reason is required');
   end if;
-  if p_new_card_no is not null and (btrim(p_new_card_no) !~ '^[0-9]{6,16}$'
+  if p_new_card_no is not null and (btrim(p_new_card_no) !~ '^[0-9]{8,16}$'
      or app.luhn_check_digit(left(btrim(p_new_card_no), -1)) <> right(btrim(p_new_card_no), 1)::integer) then
     perform app.fail('invalid_card_no', 'Card number is not valid');
   end if;
@@ -451,6 +512,7 @@ begin
     left join public.loyalty_plans lp on lp.id = lm.plan_id
    where c.organization_id = p_organization_id
      and c.is_active
+     and cu.is_active
      and (c.card_no = v_input or (v_phone is not null and cu.phone = v_phone))
    limit 1;
 end;

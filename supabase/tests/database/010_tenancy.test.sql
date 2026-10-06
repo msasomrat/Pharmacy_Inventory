@@ -12,8 +12,8 @@ select tests.authenticate_as(:'owner_a');
 select public.create_organization('Pharmacy A', 'Mohammadpur', 'mpr') as org_a \gset
 select id as branch_mpr from public.branches where organization_id = :'org_a' \gset
 select public.create_branch(:'org_a', 'DHN', 'Dhanmondi') as branch_dhn \gset
-select public.add_member(:'org_a', 'sales.a@test.local', 'salesman', array[:'branch_mpr']::uuid[]) as m_sales \gset
-select public.add_member(:'org_a', 'manager.a@test.local', 'manager', array[:'branch_dhn']::uuid[]) as m_mgr \gset
+select tests.add_member(:'org_a', 'sales.a@test.local', 'salesman', array[:'branch_mpr']::uuid[]) as m_sales \gset
+select tests.add_member(:'org_a', 'manager.a@test.local', 'manager', array[:'branch_dhn']::uuid[]) as m_mgr \gset
 
 select tests.authenticate_as(:'owner_b');
 select public.create_organization('Pharmacy B', 'Mirpur', 'MIR') as org_b \gset

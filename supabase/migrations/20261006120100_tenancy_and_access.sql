@@ -42,7 +42,7 @@ create table public.organization_settings (
 );
 
 comment on column public.organization_settings.enforce_mfa is
-  'When true, owner and manager permissions require an aal2 (TOTP-verified) session.';
+  'When true, owners, managers, accountants and auditors read and write nothing until their session is aal2 (TOTP-verified) (FR-IAM-005).';
 comment on column public.organization_settings.near_expiry_block_days is
   'Batches expiring within this many days are not sold (0 = only expired batches are blocked).';
 
@@ -101,6 +101,28 @@ create table public.branch_assignments (
 
 create index branch_assignments_user_idx on public.branch_assignments (user_id);
 
+-- People join an organization only by accepting an invitation with their own session (FR-IAM-003).
+-- An invitation grants nothing until it is accepted, so nobody can be placed in an organization, or
+-- have their profile exposed to it, without consent.
+create table public.invitations (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations (id),
+  email text not null check (email = lower(btrim(email)) and length(email) between 3 and 320),
+  role public.org_role not null,
+  branch_ids uuid[] not null default '{}',
+  invited_by uuid not null references auth.users (id),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '72 hours',
+  accepted_at timestamptz,
+  accepted_by uuid references auth.users (id),
+  revoked_at timestamptz,
+  unique (organization_id, id),
+  constraint invitations_accept_fields check ((accepted_at is null) = (accepted_by is null))
+);
+create unique index invitations_one_pending_key on public.invitations (organization_id, email)
+  where accepted_at is null and revoked_at is null;
+create index invitations_email_idx on public.invitations (email) where accepted_at is null and revoked_at is null;
+
 -- Static role -> permission matrix (see docs/security/security-model.md).
 create table app.role_permissions (
   role public.org_role not null,
@@ -132,7 +154,11 @@ select r::public.org_role, p
     ('loyalty.enroll',       array['owner', 'manager', 'salesman']),
     ('loyalty.cancel',       array['owner', 'manager']),
     ('reports.view',         array['owner', 'manager', 'accountant', 'auditor']),
-    ('reports.view_cost',    array['owner', 'accountant', 'auditor']),
+    -- P-45: Branch Managers see cost for their branches (SEC-GAP-02). Every holder of purchases.view
+    -- (whose tables carry supplier prices) therefore also holds reports.view_cost.
+    ('reports.view_cost',    array['owner', 'manager', 'accountant', 'auditor']),
+    -- P-47 / P-48: patient and prescriber data (prescriptions, controlled-drug register).
+    ('controlled.register.view', array['owner', 'manager', 'auditor']),
     ('audit.view',           array['owner', 'auditor']),
     ('data.export',          array['owner', 'accountant'])
   ) as m(p, roles)
@@ -151,6 +177,46 @@ create table app.document_sequences (
 -- -----------------------------------------------------------------------------
 -- Access helper functions (SECURITY DEFINER so policies can read memberships without recursion)
 -- -----------------------------------------------------------------------------
+
+-- FR-IAM-005 / NFR-SEC-004: while the organization enforces MFA, an Owner, Manager, Accountant or
+-- Auditor whose session has not passed TOTP (aal1) holds no membership at all: every helper below
+-- ignores it, so RLS returns no business rows and no permission is granted. Salesmen are exempt.
+-- Internal: not executable by authenticated (see the grant list below).
+create or replace function app.mfa_satisfied(p_organization_id uuid, p_role public.org_role)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select p_role = 'salesman'
+      or coalesce(auth.jwt() ->> 'aal', 'aal1') = 'aal2'
+      or not coalesce((
+           select s.enforce_mfa from public.organization_settings s
+            where s.organization_id = p_organization_id
+         ), true)
+$$;
+
+-- Active membership in an active organization, regardless of MFA (used for tenancy checks and to
+-- tell "sign in with two-factor authentication" apart from "no access").
+create or replace function app.is_member(p_organization_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+      from public.memberships m
+      join public.organizations o on o.id = m.organization_id
+     where m.organization_id = p_organization_id
+       and m.user_id = auth.uid()
+       and m.is_active
+       and o.is_active
+  )
+$$;
+
 create or replace function app.user_org_ids()
 returns setof uuid
 language sql
@@ -164,6 +230,7 @@ as $$
    where m.user_id = auth.uid()
      and m.is_active
      and o.is_active
+     and app.mfa_satisfied(m.organization_id, m.role)
 $$;
 
 create or replace function app.user_role(p_organization_id uuid)
@@ -180,6 +247,7 @@ as $$
      and m.user_id = auth.uid()
      and m.is_active
      and o.is_active
+     and app.mfa_satisfied(m.organization_id, m.role)
 $$;
 
 -- Branches the current user may access: every active branch for owner/accountant/auditor,
@@ -199,6 +267,7 @@ as $$
      and m.is_active
      and o.is_active
      and b.is_active
+     and app.mfa_satisfied(m.organization_id, m.role)
      and (
        m.role in ('owner', 'accountant', 'auditor')
        or exists (
@@ -220,38 +289,44 @@ as $$
   select exists (select 1 from app.user_branch_ids() id where id = p_branch_id)
 $$;
 
--- True when the current user's role grants p_permission in the organization. Owner and manager
--- permissions additionally require an MFA-verified (aal2) session when the org enforces MFA.
+-- True when the current user's role grants p_permission in the organization (MFA rule included,
+-- through app.user_role).
 create or replace function app.has_permission(p_organization_id uuid, p_permission text)
 returns boolean
-language plpgsql
+language sql
 stable
 security definer
 set search_path = ''
 as $$
-declare
-  v_role public.org_role := app.user_role(p_organization_id);
-begin
-  if v_role is null then
-    return false;
-  end if;
-  if not exists (
-    select 1 from app.role_permissions rp where rp.role = v_role and rp.permission = p_permission
-  ) then
-    return false;
-  end if;
-  if v_role in ('owner', 'manager')
-     and coalesce(auth.jwt() ->> 'aal', 'aal1') <> 'aal2'
-     and coalesce((
-       select s.enforce_mfa from public.organization_settings s
-        where s.organization_id = p_organization_id
-     ), true) then
-    return false;
-  end if;
-  return true;
-end;
+  select exists (
+    select 1 from app.role_permissions rp
+     where rp.role = app.user_role(p_organization_id)
+       and rp.permission = p_permission
+  )
 $$;
 
+-- Organizations in which the current user holds p_permission. Set-returning so that policies on large
+-- tables can use `organization_id in (select app.permitted_org_ids('...'))`, which is evaluated once
+-- per statement instead of once per row.
+create or replace function app.permitted_org_ids(p_permission text)
+returns setof uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select m.organization_id
+    from public.memberships m
+    join public.organizations o on o.id = m.organization_id
+    join app.role_permissions rp on rp.role = m.role and rp.permission = p_permission
+   where m.user_id = auth.uid()
+     and m.is_active
+     and o.is_active
+     and app.mfa_satisfied(m.organization_id, m.role)
+$$;
+
+-- Organization of a branch. Signed-in users only get an answer for organizations they belong to;
+-- internal callers without a user (service jobs, migrations) are not restricted.
 create or replace function app.branch_org_id(p_branch_id uuid)
 returns uuid
 language sql
@@ -259,7 +334,10 @@ stable
 security definer
 set search_path = ''
 as $$
-  select b.organization_id from public.branches b where b.id = p_branch_id
+  select b.organization_id
+    from public.branches b
+   where b.id = p_branch_id
+     and (auth.uid() is null or app.is_member(b.organization_id))
 $$;
 
 create or replace function app.can(p_branch_id uuid, p_permission text)
@@ -271,6 +349,22 @@ set search_path = ''
 as $$
   select app.has_branch_access(p_branch_id)
      and app.has_permission(app.branch_org_id(p_branch_id), p_permission)
+$$;
+
+-- Raises mfa_required when the caller is a member whose role needs a TOTP-verified session.
+create or replace function app.require_mfa(p_organization_id uuid)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if app.is_member(p_organization_id) and app.user_role(p_organization_id) is null then
+    perform app.fail('mfa_required', 'Two-factor authentication is required',
+      'Sign in with your authenticator app to continue');
+  end if;
+end;
 $$;
 
 create or replace function app.require_permission(p_organization_id uuid, p_permission text)
@@ -285,8 +379,9 @@ begin
     perform app.fail('not_authenticated', 'You must be signed in');
   end if;
   if not app.has_permission(p_organization_id, p_permission) then
+    perform app.require_mfa(p_organization_id);
     perform app.fail('forbidden', format('Permission denied: %s', p_permission),
-      'Ask the owner for access, or sign in with two-factor authentication');
+      'Ask the owner for access');
   end if;
 end;
 $$;
@@ -300,12 +395,16 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_org uuid := app.branch_org_id(p_branch_id);
+  v_org uuid;
 begin
   if auth.uid() is null then
     perform app.fail('not_authenticated', 'You must be signed in');
   end if;
+  select b.organization_id into v_org from public.branches b where b.id = p_branch_id;
   if v_org is null or not app.has_branch_access(p_branch_id) then
+    if v_org is not null then
+      perform app.require_mfa(v_org);
+    end if;
     perform app.fail('forbidden', 'You do not have access to this branch');
   end if;
   perform app.require_permission(v_org, p_permission);
@@ -330,6 +429,8 @@ as $$
   where s.organization_id = p_organization_id
 $$;
 
+-- Business date in the organization's time zone. Like app.branch_org_id, it answers a signed-in user
+-- only for an organization they belong to.
 create or replace function app.business_date(p_organization_id uuid, p_at timestamptz default now())
 returns date
 language sql
@@ -337,7 +438,10 @@ stable
 security definer
 set search_path = ''
 as $$
-  select (p_at at time zone o.timezone)::date from public.organizations o where o.id = p_organization_id
+  select (p_at at time zone o.timezone)::date
+    from public.organizations o
+   where o.id = p_organization_id
+     and (auth.uid() is null or app.is_member(o.id))
 $$;
 
 create or replace function app.next_number(p_scope_id uuid, p_doc_type text, p_period text default '')
@@ -378,12 +482,16 @@ begin
 end;
 $$;
 
+-- app.mfa_satisfied is deliberately NOT granted: it reads organization_settings.enforce_mfa as definer for
+-- any organization id, so a direct call would reveal another tenant's MFA setting. It is only called from
+-- the SECURITY DEFINER helpers below, which run as the owner.
 grant execute on function
   app.user_org_ids(),
   app.user_role(uuid),
   app.user_branch_ids(),
   app.has_branch_access(uuid),
   app.has_permission(uuid, text),
+  app.permitted_org_ids(text),
   app.can(uuid, text)
 to authenticated;
 
@@ -442,6 +550,7 @@ call app.enable_audit('public.organization_settings');
 call app.enable_audit('public.branches');
 call app.enable_audit('public.memberships');
 call app.enable_audit('public.branch_assignments');
+call app.enable_audit('public.invitations');
 
 -- -----------------------------------------------------------------------------
 -- Row level security
@@ -452,6 +561,7 @@ alter table public.branches enable row level security;
 alter table public.profiles enable row level security;
 alter table public.memberships enable row level security;
 alter table public.branch_assignments enable row level security;
+alter table public.invitations enable row level security;
 alter table app.role_permissions enable row level security;
 alter table app.document_sequences enable row level security;
 
@@ -492,11 +602,15 @@ create policy memberships_select on public.memberships for select to authenticat
 create policy branch_assignments_select on public.branch_assignments for select to authenticated
   using (organization_id in (select app.user_org_ids()));
 
+-- Owners see their organization's invitations; invitees list theirs through public.my_invitations().
+create policy invitations_select on public.invitations for select to authenticated
+  using (organization_id in (select app.permitted_org_ids('users.manage')));
+
 -- -----------------------------------------------------------------------------
 -- Grants (deny by default; column-level update grants restrict what can be edited)
 -- -----------------------------------------------------------------------------
 grant select on public.organizations, public.organization_settings, public.branches,
-  public.profiles, public.memberships, public.branch_assignments to authenticated;
+  public.profiles, public.memberships, public.branch_assignments, public.invitations to authenticated;
 grant update (name) on public.organizations to authenticated;
 grant update (vat_bp, salesman_max_discount_bp, manager_max_discount_bp, cash_rounding,
   fiscal_year_start_month, return_window_days, void_window_hours, near_expiry_block_days,
@@ -508,6 +622,7 @@ grant update (full_name, phone, preferred_language) on public.profiles to authen
 -- -----------------------------------------------------------------------------
 -- RPC: organization bootstrap and membership management
 -- -----------------------------------------------------------------------------
+
 
 -- Creates an organization with the caller as owner and its first branch.
 create or replace function public.create_organization(
@@ -528,7 +643,8 @@ begin
   if v_user is null then
     perform app.fail('not_authenticated', 'You must be signed in');
   end if;
-  if (select count(*) from public.memberships m where m.user_id = v_user and m.role = 'owner') >= 5 then
+  -- Counted on organizations the caller created, so memberships granted by others never use it up.
+  if (select count(*) from public.organizations o where o.created_by = v_user) >= 5 then
     perform app.fail('limit_reached', 'A user can own at most 5 organizations');
   end if;
   if not exists (select 1 from pg_catalog.pg_timezone_names tz where tz.name = p_timezone) then
@@ -584,17 +700,39 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_ids uuid[] := array(select distinct unnest(coalesce(p_branch_ids, '{}')));
+  v_ids uuid[] := array(select distinct x.branch_id from unnest(coalesce(p_branch_ids, '{}'::uuid[])) as x(branch_id));
 begin
   if exists (
-    select 1 from unnest(v_ids) id
-     where not exists (
-       select 1 from public.branches b where b.id = id and b.organization_id = p_organization_id
-     )
+    select 1
+      from unnest(v_ids) as v(branch_id)
+     where v.branch_id is null
+        or not exists (
+          select 1 from public.branches b
+           where b.id = v.branch_id and b.organization_id = p_organization_id
+        )
   ) then
     perform app.fail('invalid_branch', 'One or more branches do not belong to this organization');
   end if;
   return v_ids;
+end;
+$$;
+
+-- Serializes every change that could remove an owner (update_member, leave_organization): all owner
+-- memberships of the organization are locked in id order BEFORE the target membership, so two owners
+-- stepping down at the same time cannot both pass the last-owner check (write skew).
+create or replace function app.lock_owner_memberships(p_organization_id uuid)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+begin
+  perform 1
+     from public.memberships m
+    where m.organization_id = p_organization_id and m.role = 'owner'
+    order by m.id
+      for no key update;
 end;
 $$;
 
@@ -620,7 +758,11 @@ begin
 end;
 $$;
 
--- Adds an existing auth user (invited through Supabase Auth) to the organization.
+-- Invites a person by email (FR-IAM-003). Nothing is granted until the invitee accepts with their
+-- own session (public.accept_invitation). The response is the same whether or not an account exists
+-- for the email, so the function cannot be used to discover accounts. Re-inviting the same email
+-- refreshes the pending invitation. Returns the invitation id.
+-- (Name kept for API compatibility; the Edge Function sends the invitation email.)
 create or replace function public.add_member(
   p_organization_id uuid,
   p_email text,
@@ -633,33 +775,120 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_user uuid;
-  v_membership uuid;
+  v_email text := lower(btrim(p_email));
   v_branches uuid[];
-  v_branch uuid;
+  v_invitation uuid;
 begin
   perform app.require_permission(p_organization_id, 'users.manage');
 
-  select u.id into v_user from auth.users u where lower(u.email) = lower(btrim(p_email));
-  if v_user is null then
-    perform app.fail('user_not_found', 'No account exists for this email. Send an invitation first.');
+  if v_email is null or length(v_email) > 320 or v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+    perform app.fail('invalid_email', 'Enter a valid email address');
   end if;
-
+  if p_role is null then
+    perform app.fail('invalid_role', 'Choose a role');
+  end if;
   v_branches := app.validated_branch_ids(p_organization_id, p_branch_ids);
 
-  insert into public.memberships (organization_id, user_id, role, created_by, updated_by)
-  values (p_organization_id, v_user, p_role, auth.uid(), auth.uid())
-  on conflict (organization_id, user_id) do nothing
-  returning id into v_membership;
-  if v_membership is null then
+  -- Only reveals what the owner can already see: who belongs to their own organization.
+  if exists (
+    select 1
+      from public.memberships m
+      join auth.users u on u.id = m.user_id
+     where m.organization_id = p_organization_id
+       and lower(u.email) = v_email
+  ) then
     perform app.fail('already_member', 'This user is already a member of the organization');
   end if;
 
-  foreach v_branch in array v_branches loop
+  update public.invitations i
+     set role = p_role, branch_ids = v_branches, invited_by = auth.uid(),
+         expires_at = now() + interval '72 hours'
+   where i.organization_id = p_organization_id
+     and i.email = v_email
+     and i.accepted_at is null
+     and i.revoked_at is null
+  returning i.id into v_invitation;
+
+  if v_invitation is null then
+    insert into public.invitations (organization_id, email, role, branch_ids, invited_by)
+    values (p_organization_id, v_email, p_role, v_branches, auth.uid())
+    returning id into v_invitation;
+  end if;
+
+  return v_invitation;
+end;
+$$;
+
+-- Pending invitations addressed to the signed-in user's email.
+create or replace function public.my_invitations()
+returns table (
+  invitation_id uuid,
+  organization_id uuid,
+  organization_name text,
+  role public.org_role,
+  expires_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select i.id, i.organization_id, o.name, i.role, i.expires_at
+    from public.invitations i
+    join public.organizations o on o.id = i.organization_id
+   where i.email = (select lower(u.email) from auth.users u where u.id = auth.uid())
+     and i.accepted_at is null
+     and i.revoked_at is null
+     and i.expires_at > now()
+     and o.is_active
+   order by i.created_at
+$$;
+
+-- The invitee accepts an invitation addressed to their own email; only now is the membership created.
+create or replace function public.accept_invitation(p_invitation_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_user uuid := auth.uid();
+  v_invitation public.invitations;
+  v_membership uuid;
+  v_branch uuid;
+begin
+  if v_user is null then
+    perform app.fail('not_authenticated', 'You must be signed in');
+  end if;
+  select i.* into v_invitation
+    from public.invitations i
+   where i.id = p_invitation_id
+     and i.email = (select lower(u.email) from auth.users u where u.id = v_user)
+     for update;
+  if v_invitation.id is null
+     or v_invitation.accepted_at is not null
+     or v_invitation.revoked_at is not null
+     or v_invitation.expires_at <= now()
+     or not exists (
+       select 1 from public.organizations o where o.id = v_invitation.organization_id and o.is_active
+     ) then
+    perform app.fail('invalid_invitation', 'This invitation is not valid or has expired');
+  end if;
+
+  insert into public.memberships (organization_id, user_id, role, created_by, updated_by)
+  values (v_invitation.organization_id, v_user, v_invitation.role, v_invitation.invited_by, v_user)
+  on conflict (organization_id, user_id) do nothing
+  returning id into v_membership;
+  if v_membership is null then
+    perform app.fail('already_member', 'You are already a member of this organization');
+  end if;
+
+  foreach v_branch in array app.validated_branch_ids(v_invitation.organization_id, v_invitation.branch_ids) loop
     insert into public.branch_assignments (organization_id, branch_id, user_id, created_by)
-    values (p_organization_id, v_branch, v_user, auth.uid());
+    values (v_invitation.organization_id, v_branch, v_user, v_invitation.invited_by);
   end loop;
 
+  update public.invitations set accepted_at = now(), accepted_by = v_user where id = v_invitation.id;
   return v_membership;
 end;
 $$;
@@ -676,14 +905,18 @@ security definer
 set search_path = ''
 as $$
 declare
+  v_org uuid;
   v_member public.memberships;
   v_branches uuid[];
 begin
-  select * into v_member from public.memberships where id = p_membership_id for update;
-  if v_member.id is null then
+  select m.organization_id into v_org from public.memberships m where m.id = p_membership_id;
+  if v_org is null then
     perform app.fail('not_found', 'Membership not found');
   end if;
-  perform app.require_permission(v_member.organization_id, 'users.manage');
+  perform app.require_permission(v_org, 'users.manage');
+
+  perform app.lock_owner_memberships(v_org);
+  select * into v_member from public.memberships where id = p_membership_id for no key update;
 
   if v_member.role = 'owner' and (p_role <> 'owner' or not p_is_active) then
     perform app.assert_not_last_owner(p_membership_id);
@@ -707,11 +940,44 @@ begin
 end;
 $$;
 
+-- A member leaves an organization (their membership is deactivated). The last active owner cannot.
+create or replace function public.leave_organization(p_organization_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_member public.memberships;
+begin
+  if auth.uid() is null then
+    perform app.fail('not_authenticated', 'You must be signed in');
+  end if;
+  if not app.is_member(p_organization_id) then
+    perform app.fail('not_found', 'You are not a member of this organization');
+  end if;
+  perform app.require_mfa(p_organization_id);
+
+  perform app.lock_owner_memberships(p_organization_id);
+  select * into v_member from public.memberships m
+   where m.organization_id = p_organization_id and m.user_id = auth.uid()
+     for no key update;
+  perform app.assert_not_last_owner(v_member.id);
+
+  update public.memberships set is_active = false, updated_by = auth.uid() where id = v_member.id;
+  delete from public.branch_assignments ba
+   where ba.organization_id = p_organization_id and ba.user_id = v_member.user_id;
+end;
+$$;
+
 grant execute on function
   public.create_organization(text, text, text, text),
   public.create_branch(uuid, text, text, text, text),
   public.add_member(uuid, text, public.org_role, uuid[]),
-  public.update_member(uuid, public.org_role, boolean, uuid[])
+  public.my_invitations(),
+  public.accept_invitation(uuid),
+  public.update_member(uuid, public.org_role, boolean, uuid[]),
+  public.leave_organization(uuid)
 to authenticated;
 
 call app.harden_privileges();

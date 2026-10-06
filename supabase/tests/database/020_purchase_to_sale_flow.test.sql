@@ -15,8 +15,8 @@ select public.create_organization('Flow Pharmacy', 'Mohammadpur', 'MPR') as org 
 select id as branch from public.branches where organization_id = :'org' \gset
 -- Business dates are in Asia/Dhaka, which can differ from the server's UTC date.
 select app.business_date(:'org') as today \gset
-select public.add_member(:'org', 'manager@flow.test', 'manager', array[:'branch']::uuid[]);
-select public.add_member(:'org', 'sales@flow.test', 'salesman', array[:'branch']::uuid[]);
+select tests.add_member(:'org', 'manager@flow.test', 'manager', array[:'branch']::uuid[]);
+select tests.add_member(:'org', 'sales@flow.test', 'salesman', array[:'branch']::uuid[]);
 
 insert into public.manufacturers (organization_id, name) values (:'org', 'Beximco') returning id as mfr \gset
 insert into public.generics (organization_id, name) values (:'org', 'Paracetamol') returning id as gen \gset
@@ -161,9 +161,9 @@ select public.create_sale(:'branch',
 select is((:'sale_credit'::jsonb ->> 'due_paisa')::bigint, 1000::bigint, 'unpaid amount becomes customer due');
 select is((select balance_paisa from public.customer_balances where customer_id = :'customer'), 1000::bigint,
   'customer balance reflects the due');
-select is(public.record_customer_payment(:'customer', :'branch', 400, 'bkash', 'TRX123'), 600::bigint,
+select is(public.record_customer_payment(:'customer', :'branch', 400, 'bkash', gen_random_uuid(), 'TRX123'), 600::bigint,
   'collecting part of the due reduces the balance');
-select throws_ok(format($$ select public.record_customer_payment(%L, %L, 999999, 'cash') $$, :'customer', :'branch'),
+select throws_ok(format($$ select public.record_customer_payment(%L, %L, 999999, 'cash', gen_random_uuid()) $$, :'customer', :'branch'),
   'P0001', 'Payment is larger than the outstanding due', 'overpayment of dues is refused');
 
 -- ---------------------------------------------------------------------------
@@ -177,7 +177,12 @@ update public.loyalty_plans
 
 select tests.authenticate_as(:'sales', 'aal1');
 select public.enroll_loyalty(:'customer', :'plan3', :'branch', gen_random_uuid(), 'cash') as enrol \gset
-select is((:'enrol'::jsonb ->> 'ends_on')::date, (:'today'::date + interval '3 months')::date - 1,
+-- Ends the day before the same day-of-month three months later; when that month is shorter (start on
+-- the 31st), it ends on that month's last day instead.
+select is((:'enrol'::jsonb ->> 'ends_on')::date,
+  case when extract(day from :'today'::date + interval '3 months') < extract(day from :'today'::date)
+       then (:'today'::date + interval '3 months')::date
+       else (:'today'::date + interval '3 months')::date - 1 end,
   '3-month membership ends the day before the same date three months later');
 select ok(app.luhn_check_digit(left(:'enrol'::jsonb ->> 'card_no', -1)) = right(:'enrol'::jsonb ->> 'card_no', 1)::int,
   'generated card number carries a valid Luhn check digit');
@@ -228,8 +233,8 @@ select is((select quantity_on_hand from public.batches where batch_no = 'NA-LATE
 -- ---------------------------------------------------------------------------
 select is((select sum(sales_count)::int from public.report_sales_summary(:'org', :'today', :'today')), 3,
   'report counts completed sales (voided sale excluded)');
-select ok((select bool_and(cost_paisa is null) from public.report_sales_summary(:'org', :'today', :'today')),
-  'managers do not see cost in reports');
+select ok((select bool_and(cost_paisa is not null) from public.report_sales_summary(:'org', :'today', :'today')),
+  'branch managers see cost for their branches (security model P-45)');
 select tests.authenticate_as(:'owner');
 select ok((select bool_and(gross_profit_paisa is not null) from public.report_sales_summary(:'org', :'today', :'today')),
   'owners see gross profit');

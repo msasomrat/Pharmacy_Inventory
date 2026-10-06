@@ -94,13 +94,14 @@ begin
     from public.batches b
     join public.medicines m on m.id = b.medicine_id
    where b.branch_id = p_branch_id
-     and b.quantity_on_hand > 0
+     and not b.is_depleted
      and b.expiry_date <= v_today + v_days
    order by b.expiry_date, m.brand_name;
 end;
 $$;
 
--- Medicines at or below their reorder level in a branch.
+-- Medicines at or below their reorder level in a branch. Sellable stock uses the same rule as the
+-- POS (create_sale, search_medicines): lots inside the near-expiry block do not count.
 create or replace function public.report_low_stock(p_branch_id uuid)
 returns table (
   medicine_id uuid,
@@ -118,24 +119,28 @@ as $$
 declare
   v_org uuid := app.require_branch_permission(p_branch_id, 'reports.view');
   v_today date := app.business_date(v_org);
+  v_block integer;
 begin
+  select st.near_expiry_block_days into v_block
+    from public.organization_settings st where st.organization_id = v_org;
   return query
-  select m.id, m.brand_name, g.name, s.reorder_level,
-         coalesce((
-           select sum(b.quantity_on_hand) from public.batches b
-            where b.branch_id = p_branch_id and b.medicine_id = m.id and b.expiry_date > v_today
-         ), 0)::bigint as sellable,
-         s.rack_location
+  select m.id, m.brand_name, g.name, s.reorder_level, stock.qty, s.rack_location
     from public.branch_medicine_settings s
-    join public.medicines m on m.id = s.medicine_id
-    left join public.generics g on g.id = m.generic_id
+    join public.medicines m on m.id = s.medicine_id and m.organization_id = v_org
+    left join public.generics g on g.id = m.generic_id and g.organization_id = v_org
+   cross join lateral (
+     select coalesce(sum(b.quantity_on_hand), 0)::bigint as qty
+       from public.batches b
+      where b.branch_id = p_branch_id
+        and b.medicine_id = m.id
+        and not b.is_depleted
+        and b.expiry_date > v_today + v_block
+   ) stock
    where s.branch_id = p_branch_id
+     and s.organization_id = v_org
      and m.is_active
      and s.reorder_level > 0
-     and coalesce((
-           select sum(b.quantity_on_hand) from public.batches b
-            where b.branch_id = p_branch_id and b.medicine_id = m.id and b.expiry_date > v_today
-         ), 0) <= s.reorder_level
+     and stock.qty <= s.reorder_level
    order by m.brand_name;
 end;
 $$;
@@ -169,7 +174,7 @@ begin
          case when v_show_cost then coalesce(sum(b.quantity_on_hand::bigint * b.cost_paisa), 0)::bigint end,
          coalesce(sum(b.quantity_on_hand) filter (where b.expiry_date <= v_today), 0)::bigint
     from public.branches br
-    left join public.batches b on b.branch_id = br.id and b.quantity_on_hand > 0
+    left join public.batches b on b.branch_id = br.id and not b.is_depleted
    where br.organization_id = p_organization_id
      and br.id in (select app.user_branch_ids())
    group by br.id, br.name
