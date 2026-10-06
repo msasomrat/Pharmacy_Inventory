@@ -1,0 +1,2033 @@
+# Software Requirements Specification
+
+**Pharmacy Inventory Management System (PIMS)**
+
+| Item              | Value                                                                               |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| Document ID       | PIMS-SRS-001                                                                        |
+| Version           | 0.1.0                                                                               |
+| Status            | Draft for Owner review (baseline candidate for milestone M1)                        |
+| Date              | 2026-10-06                                                                          |
+| Product owner     | Owner of the pharmacy business, Mohammadpur, Dhaka, Bangladesh                      |
+| Repository        | `msasomrat/Pharmacy_Inventory`                                                      |
+| Structure         | ISO/IEC/IEEE 29148:2018, software requirements specification (SRS) information item |
+| Related documents | See [1.4 References](#14-references)                                                |
+
+## Revision history
+
+| Version | Date       | Author      | Summary of change                                            |
+| ------- | ---------- | ----------- | ------------------------------------------------------------ |
+| 0.1.0   | 2026-10-06 | Engineering | Initial draft derived from the approved project design brief |
+
+## Approval
+
+| Role                  | Name      | Decision  | Date |
+| --------------------- | --------- | --------- | ---- |
+| Product owner (Owner) | _pending_ | _pending_ |      |
+| Lead engineer         | _pending_ | _pending_ |      |
+
+The SRS becomes the **requirements baseline** when both approvals are recorded. After baselining, changes follow
+[4.6 Change control](#46-change-control).
+
+## Table of contents
+
+1. [Introduction](#1-introduction)
+2. [Overall description](#2-overall-description)
+3. [Specific requirements](#3-specific-requirements)
+   - [3.1 External interface requirements](#31-external-interface-requirements)
+   - [3.2 Use cases](#32-use-cases)
+   - [3.3 Functional requirements](#33-functional-requirements)
+   - [3.4 Non-functional requirements](#34-non-functional-requirements)
+   - [3.5 Logical database requirements](#35-logical-database-requirements)
+4. [Verification and traceability](#4-verification-and-traceability)
+5. [Out of scope](#5-out-of-scope)
+
+- [Appendix A. Configuration parameters and defaults](#appendix-a-configuration-parameters-and-defaults)
+- [Appendix B. Open decisions register](#appendix-b-open-decisions-register)
+- [Appendix C. Indicative POS keyboard map](#appendix-c-indicative-pos-keyboard-map)
+- [Appendix D. Requirement statistics](#appendix-d-requirement-statistics)
+
+---
+
+## 1. Introduction
+
+### 1.1 Purpose
+
+This Software Requirements Specification (SRS) defines **what** the Pharmacy Inventory Management System (PIMS)
+must do and the quality attributes it must exhibit. It is the agreement between the Owner (product owner) and the
+engineering team and is the basis for:
+
+- design (architecture, database, security model),
+- planning (milestones M1 to M5 in the [roadmap](../roadmap.md)),
+- verification (unit, database, integration, end-to-end and acceptance tests), and
+- acceptance of each milestone by the Owner.
+
+Intended readers:
+
+| Reader                                          | Sections of most interest                                                                                                                                                                           |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Owner (business decision maker)                 | 1, 2, [3.3.6 POS rules](#336-sales-and-point-of-sale-fr-pos), [3.3.8 Loyalty](#338-loyalty-card-program-fr-loy), [3.3.16 Controlled drugs](#3316-controlled-drug-rules-fr-cdr), 5, Appendix A and B |
+| Engineers and reviewers                         | All sections                                                                                                                                                                                        |
+| Testers                                         | 3.3, 3.4 and 4                                                                                                                                                                                      |
+| Future auditors, accountants and SaaS customers | 2, 3.3.11, 3.3.12, 3.4.5 and 3.4.11                                                                                                                                                                 |
+
+### 1.2 Scope
+
+**Product.** PIMS is a web-based, multi-branch, multi-tenant system for retail pharmacies in Bangladesh. It manages
+the medicine catalog, batch-level inventory with expiry control, purchasing from suppliers, point-of-sale (POS)
+billing, customer credit (বাকি), a configurable loyalty card program, inter-branch stock transfers, cash sessions and
+petty expenses, reporting, audit, notifications, backups and, in a later phase, AI-assisted features.
+
+**First customer.** A pharmacy business in Dhaka whose first shop is in the Mohammadpur area and which will open an
+unknown number of additional branches. The business may later offer the software to other pharmacies as a SaaS
+product; therefore the system is multi-tenant from the first release.
+
+**Business objectives.** The requirements in this document exist to achieve the following measurable objectives.
+
+| ID    | Objective                 | Success measure                                                                                                |
+| ----- | ------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| BO-01 | Accurate stock            | Book-to-physical stock variance below 0.5 % of stock value at the quarterly count, from the third month of use |
+| BO-02 | Fewer expiry losses       | Expired write-off value reduced by 50 % within 12 months, compared with the first three months of use          |
+| BO-03 | Fast counter service      | A trained Salesman completes a typical three-line cash sale in 30 seconds or less (see NFR-USAB-004)           |
+| BO-04 | Owner visibility          | The Owner can see same-day sales, stock, cash and dues of every branch remotely                                |
+| BO-05 | Regulatory record keeping | 100 % of controlled-drug sales carry complete prescription details and a register entry                        |
+| BO-06 | Customer retention        | Loyalty membership, revenue and renewal rate are measurable per branch and per period                          |
+| BO-07 | Growth readiness          | A new branch becomes operational through configuration only, in 30 minutes or less, with no code change        |
+
+**Release mapping.** Milestones are owned by the [roadmap](../roadmap.md). Informal release labels used in project
+conversations map to milestones as follows.
+
+| Label                  | Content                                                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- |
+| v1 (production launch) | Must and Should requirements of M1 to M4                                                                  |
+| v2                     | PWA offline sales (planned in M4, may ship after launch), SMS via a Bangladeshi gateway (Later)           |
+| v3                     | AI features (M5)                                                                                          |
+| Later                  | SaaS onboarding and billing, mobile app, e-commerce and other items in [5. Out of scope](#5-out-of-scope) |
+
+### 1.3 Definitions, acronyms and abbreviations
+
+The project-wide vocabulary is maintained in the [glossary](../glossary.md); the glossary prevails if a definition
+differs. The terms below are essential for reading this SRS.
+
+| Term                             | Definition                                                                                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AAL2                             | Authenticator assurance level 2: the session has been verified with a second factor (TOTP)                                                        |
+| Base unit                        | Smallest sellable unit of a medicine (for example tablet, capsule, ampoule, or one bottle). All stock quantities are integers in base units       |
+| Batch (lot)                      | Stock of one medicine at one branch sharing batch number, expiry date, MRP and unit cost                                                          |
+| BMDC                             | Bangladesh Medical and Dental Council; issues the registration number of a prescriber                                                             |
+| Branch                           | A physical shop of an organization; branch-scoped data carries `branch_id`                                                                        |
+| Business date                    | Calendar date in Asia/Dhaka (UTC+6) on which a transaction is recorded                                                                            |
+| বাকি (baki)                      | Customer credit or due: goods sold now and paid later                                                                                             |
+| Cash session                     | Period during which one user operates one register, from opening float to closing count                                                           |
+| Controlled drug                  | Narcotic or psychotropic medicine whose sale requires prescription details and a register entry                                                   |
+| DGDA                             | Directorate General of Drug Administration, the Bangladesh medicine regulator                                                                     |
+| FEFO                             | First-expiry-first-out: stock is allocated from the batch with the earliest expiry date first                                                     |
+| Fiscal year (FY)                 | Twelve-month accounting year, default 1 July to 30 June; labelled by the calendar year in which it starts (FY 2026 = 1 July 2026 to 30 June 2027) |
+| GRN                              | Goods received note: the record of goods received from a supplier, which creates or increases batches                                             |
+| Idempotency key                  | Client-generated unique key that makes a retried request produce the original result without duplication                                          |
+| Loyalty plan / membership / card | Plan: configurable template (duration, fee, benefits). Membership: a customer's period on a plan. Card: the identifier presented at the counter   |
+| MFS                              | Mobile financial service, such as bKash, Nagad and Rocket                                                                                         |
+| MRP                              | Maximum retail price printed on the pack; the sale price can never exceed it                                                                      |
+| Organization (tenant)            | A pharmacy business using PIMS; all tenant-owned data carries `organization_id`                                                                   |
+| OTC / Rx                         | Over-the-counter medicine / prescription-only medicine                                                                                            |
+| Paisa                            | Minor currency unit; 1 BDT (৳) = 100 paisa. All money is stored as integer paisa                                                                  |
+| PITR                             | Point-in-time recovery of the database                                                                                                            |
+| Register                         | A named counter (till) in a branch at which cash sessions run                                                                                     |
+| RLS                              | PostgreSQL row level security                                                                                                                     |
+| RPC                              | A PostgreSQL function exposed through the Supabase API and executed in one database transaction                                                   |
+| RPO / RTO                        | Recovery point objective (maximum tolerated data loss) / recovery time objective (maximum tolerated restoration time)                             |
+| TOTP                             | Time-based one-time password (authenticator app), used as the second factor                                                                       |
+| Void                             | Cancellation of a completed invoice on its own business date; the invoice number is kept with status Voided                                       |
+
+### 1.4 References
+
+**External references**
+
+| Ref  | Document                                                                                                                                                                                                           |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [R1] | ISO/IEC/IEEE 29148:2018, Systems and software engineering, Life cycle processes, Requirements engineering                                                                                                          |
+| [R2] | ISO/IEC 25010:2023, Product quality model (used to organize non-functional requirements)                                                                                                                           |
+| [R3] | W3C Web Content Accessibility Guidelines (WCAG) 2.1, level AA                                                                                                                                                      |
+| [R4] | OWASP Application Security Verification Standard (ASVS) 4.0.3                                                                                                                                                      |
+| [R5] | NIST SP 800-63B, Digital Identity Guidelines: Authentication and Lifecycle Management                                                                                                                              |
+| [R6] | IETF RFC 2119 and RFC 8174, key words for use in requirements                                                                                                                                                      |
+| [R7] | Drugs and Cosmetics Act 2023 (Bangladesh), DGDA rules and guidance, and the Narcotics Control Act 2018, as they apply to retail pharmacies (applicability to be confirmed by the Owner's legal adviser, see OD-22) |
+| [R8] | Value Added Tax and Supplementary Duty Act 2012 (Bangladesh), for the configurable VAT treatment                                                                                                                   |
+
+**Project documents** (relative to this file)
+
+| Document                                                                                                         | Owns                                                             |
+| ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [Documentation index](../README.md)                                                                              | Navigation of all documents                                      |
+| [Glossary](../glossary.md)                                                                                       | Canonical definitions                                            |
+| [Roadmap](../roadmap.md)                                                                                         | Milestones, scope per milestone, exit criteria                   |
+| [Architecture](../architecture/architecture.md)                                                                  | System structure, components, deployment, error model            |
+| [Database design](../database/database-design.md)                                                                | Canonical table, column, constraint and function catalog         |
+| [Security model](../security/security-model.md)                                                                  | Canonical role and permission matrix, RLS strategy, threat model |
+| [Engineering standards](../engineering/engineering-standards.md)                                                 | Coding, review, branching and release rules                      |
+| [Testing strategy](../engineering/testing-strategy.md)                                                           | Test levels, tooling, coverage and traceability tooling          |
+| [Operations runbook](../operations/runbook.md)                                                                   | Deployment, backup, restore, incident procedures                 |
+| [Architecture decision records](../adr/README.md)                                                                | Recorded technical decisions                                     |
+| [Repository README](../../README.md), [SECURITY.md](../../SECURITY.md), [CONTRIBUTING.md](../../CONTRIBUTING.md) | Entry point, vulnerability reporting, contribution process       |
+
+### 1.5 Document conventions
+
+**Normative key words** (per [R6]):
+
+| Key word | Meaning                                                          |
+| -------- | ---------------------------------------------------------------- |
+| shall    | Mandatory. The requirement must be met for its milestone to exit |
+| should   | Recommended. May be deferred only with a recorded Owner decision |
+| may      | Optional behaviour permitted by the specification                |
+
+**Identifier scheme.** Identifiers are permanent and are never reused. A removed requirement keeps its row with the
+status _Withdrawn_.
+
+| Pattern                         | Used for                                                    | Example      |
+| ------------------------------- | ----------------------------------------------------------- | ------------ |
+| `FR-<MODULE>-NNN`               | Functional requirement                                      | FR-POS-012   |
+| `NFR-<CATEGORY>-NNN`            | Non-functional requirement                                  | NFR-PERF-001 |
+| `IF-<UI, HW, SW, COM>-NNN`      | External interface requirement                              | IF-HW-001    |
+| `UC-NN`                         | Use case                                                    | UC-06        |
+| `BO-NN`, `C-NN`, `A-NN`, `D-NN` | Business objective, constraint, assumption, dependency      | C-04         |
+| `OE-NN`, `LDB-NN`               | Operating environment item, logical database requirement    | OE-02        |
+| `OD-NN`                         | Open decision awaiting the Owner, with a configured default | OD-01        |
+| `CFG-NN`                        | Configuration parameter (Appendix A)                        | CFG-07       |
+
+Module codes: ORG, IAM, CAT, INV, PUR, POS, CUS, LOY, TRF, CSH, RPT, AUD, NTF, BKP, AI, and the cross-cutting
+CDR (controlled drugs). NFR categories: PERF, SEC, AVAIL, REL, PRIV, USAB, I18N, MAINT, SCAL, OBS, BACKUP.
+
+**Priority (MoSCoW).** Priority is relative to the requirement's target milestone.
+
+| Priority | Meaning                                                                       |
+| -------- | ----------------------------------------------------------------------------- |
+| Must     | Required for the milestone to exit. Not negotiable without re-baselining      |
+| Should   | Important; may slip to the next milestone only with a recorded Owner decision |
+| Could    | Desirable; delivered if capacity allows, otherwise moved to the backlog       |
+| Won't    | Explicitly not delivered in M1 to M5; listed so the design does not block it  |
+
+**Target milestone.** The milestone at whose exit the requirement must be met and verified (summary below; the
+[roadmap](../roadmap.md) is authoritative). Where a rule is enforced in the database in M1 and surfaced in screens in
+M2, the milestone shown is the one in which it is first verifiable; a note such as "M1 (DB), M2 (UI)" is used when both
+matter.
+
+| Milestone | Summary                                                                                                                                                   |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0        | Foundation: documentation, repository tooling, CI, environments                                                                                           |
+| M1        | Database core: tenancy, roles, catalog, inventory ledger, purchases, sales, customers, audit, RLS and tests                                               |
+| M2        | Web application core: authentication and MFA, POS, inventory, purchases, customers, basic reports, printing                                               |
+| M3        | Multi-branch operations and loyalty: transfers, returns, loyalty, cash sessions, expenses, advanced reports, exports                                      |
+| M4        | Hardening and operations: PWA offline mode, automated backups and restore drill, monitoring, performance, security review, user manual, production launch |
+| M5        | AI: smart search, prescription reading, forecasting, ask-your-data, insights                                                                              |
+
+**Acceptance criteria.** Every functional requirement has a testable acceptance criterion. Key requirements also have
+Given/When/Then scenarios, labelled with the requirement ID, which are written so that they can be automated directly.
+
+**Other conventions.**
+
+- "Manager" means Branch Manager. "The system" means PIMS.
+- Role names describe **default** permissions. The authoritative role and permission matrix is in the
+  [security model](../security/security-model.md); this SRS does not redefine it.
+- Table and function names, where mentioned (for example `create_sale`), are indicative; the
+  [database design](../database/database-design.md) is authoritative.
+- Amounts are written as ৳1,234.50 and are stored as integer paisa (123450). Dates are written ISO-style
+  (2026-10-06) in this document; the user interface shows DD/MM/YYYY.
+
+### 1.6 Document overview
+
+Section 2 describes the product context, stakeholders, users, environment, constraints and assumptions. Section 3
+specifies interfaces, use cases, functional requirements by module, non-functional requirements and logical data
+requirements. Section 4 defines how requirements are verified and traced to tests and milestones. Section 5 lists what
+is out of scope. The appendices hold configurable defaults, open Owner decisions, the indicative POS keyboard map and
+requirement statistics.
+
+---
+
+## 2. Overall description
+
+### 2.1 Product perspective
+
+PIMS is a new, self-contained product. It replaces paper registers and spreadsheets (assumption A-05). It is a
+single-page web application served from Cloudflare Pages, backed by Supabase (PostgreSQL, Auth, Storage, Edge Functions)
+in the Singapore region (ap-southeast-1). The structure is described in the [architecture](../architecture/architecture.md);
+the context relevant to requirements is shown below.
+
+```mermaid
+flowchart LR
+    subgraph Users["Users (browser or installed PWA)"]
+        OW["Owner"]
+        BM["Branch Manager"]
+        SM["Salesman"]
+        AA["Accountant / Auditor (later)"]
+    end
+    subgraph Counter["Counter peripherals"]
+        SC["USB barcode scanner (keyboard mode)"]
+        PR["Thermal 58/80 mm and A4 printers"]
+    end
+    subgraph PIMS["PIMS"]
+        WEB["Web application (React SPA, Cloudflare Pages)"]
+        API["Supabase Auth, PostgREST and RPC, Storage"]
+        DB[("PostgreSQL 15+ with RLS")]
+        EF["Edge Functions (AI, scheduled jobs, SMS later)"]
+    end
+    CL["Anthropic Claude API (M5)"]
+    SMS["Bangladesh SMS gateway (later)"]
+    MAIL["Transactional email (SMTP)"]
+    SEN["Sentry (frontend errors)"]
+    UPT["Uptime monitor"]
+    BAK["Encrypted off-site backup store"]
+
+    OW --> WEB
+    BM --> WEB
+    SM --> WEB
+    AA --> WEB
+    SC --> WEB
+    WEB --> PR
+    WEB --> API
+    API --> DB
+    API --> EF
+    API --> MAIL
+    EF --> CL
+    EF -.-> SMS
+    WEB -.-> SEN
+    UPT -.-> WEB
+    DB -.->|nightly encrypted dump| BAK
+```
+
+### 2.2 Product functions
+
+| #               | Module                          | Code | Summary                                                                                              | Milestones |
+| --------------- | ------------------------------- | ---- | ---------------------------------------------------------------------------------------------------- | ---------- |
+| 1               | Organization and branches       | ORG  | Tenant, unlimited branches, settings, registers                                                      | M1 to M3   |
+| 2               | Users, roles and authentication | IAM  | Roles, branch assignment, invitations, TOTP MFA, approvals                                           | M1, M2     |
+| 3               | Catalog                         | CAT  | Medicines, generics, manufacturers, pack hierarchy, barcodes, schedules                              | M1 to M3   |
+| 4               | Inventory                       | INV  | Batch stock per branch, immutable ledger, adjustments, stock counts                                  | M1 to M3   |
+| 5               | Purchases                       | PUR  | Suppliers, purchase orders, GRN, supplier payments and dues, purchase returns                        | M1 to M3   |
+| 6               | Sales and POS                   | POS  | Search, cart, server-side pricing, FEFO, discounts, payments, receipts, hold, void, returns, offline | M1 to M4   |
+| 7               | Customers                       | CUS  | Profiles, credit limit, due ledger (বাকি), collections, history                                      | M1 to M4   |
+| 8               | Loyalty card program            | LOY  | Plans, memberships, cards, discounts, points, exclusions, abuse detection, reports                   | M3         |
+| 9               | Stock transfers                 | TRF  | Request, dispatch, in transit, receive, discrepancies                                                | M3         |
+| 10              | Expenses and cash sessions      | CSH  | Registers, opening float, closing count, variance, petty cash                                        | M3         |
+| 11              | Reports and dashboards          | RPT  | Sales, profit, stock, expiry, dues, branch comparison, regulatory, exports                           | M2, M3     |
+| 12              | Audit log                       | AUD  | Append-only record of sensitive changes and security events                                          | M1, M2     |
+| 13              | Notifications                   | NTF  | In-app alerts for expiry, low stock, loyalty expiry, transfers, exceptions                           | M2, M3     |
+| 14              | Backup, restore and data export | BKP  | Encrypted automated backups, restore drills, organization export                                     | M3, M4     |
+| 15              | AI features                     | AI   | Smart search, prescription reading, forecasting, expiry risk, ask-your-data, insights                | M5         |
+| (cross-cutting) | Controlled-drug rules           | CDR  | Prescription capture, dispensing permission, controlled-drug register                                | M1 to M3   |
+
+### 2.3 Stakeholders
+
+| Stakeholder                                                         | Interest and concerns                                                                                          | Involvement                                                               |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Owner (pharmacy business owner)                                     | Profitability, stock control, staff accountability, compliance, growth to more branches, possible SaaS revenue | Approves requirements and milestones; decides open decisions (Appendix B) |
+| Branch Managers                                                     | Smooth branch operation, stock availability, staff supervision                                                 | Reviews workflows; UAT participant                                        |
+| Salesmen (counter staff, pharmacists)                               | Fast, simple billing in Bangla or English; few mistakes                                                        | Usability testing participants                                            |
+| Customers and patients                                              | Correct medicine, correct price (never above MRP), privacy, loyalty benefits                                   | Represented by the Owner; privacy requirements (NFR-PRIV)                 |
+| Suppliers and distributors                                          | Accurate orders, payments and returns                                                                          | Indirect (documents and statements)                                       |
+| Regulator (DGDA, narcotics authorities)                             | Lawful dispensing, controlled-drug records, licence validity                                                   | Indirect; drives FR-CDR and record retention                              |
+| Accountant and auditor (later)                                      | Reliable, exportable financial and audit records                                                               | Future read-only users                                                    |
+| Engineering team and platform operator                              | Maintainability, security, operability, cost                                                                   | Builds and operates the system; restores backups                          |
+| Future SaaS tenants                                                 | Isolation of their data, configurability                                                                       | Drives multi-tenancy (NFR-SCAL)                                           |
+| Service providers (Supabase, Cloudflare, GitHub, Anthropic, Sentry) | Terms of service, quotas                                                                                       | Dependencies D-01 to D-06                                                 |
+
+### 2.4 User classes and characteristics
+
+The table summarizes each user class; the permission matrix is defined only in the
+[security model](../security/security-model.md).
+
+| User class                                      | Typical number                               | Scope                                                                        | Usage pattern and device                                                           | Skills and language                                    | Key goals                                                        | MFA            |
+| ----------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------- | -------------- |
+| Owner                                           | 1 to 2 per organization                      | All branches of the organization                                             | Daily, desktop and smartphone, often remote                                        | Business expert, moderate IT skill; English and Bangla | Configure, approve, monitor, analyze                             | Mandatory TOTP |
+| Branch Manager                                  | 1 per branch (one person may manage several) | Assigned branches                                                            | Daily, counter desktop and smartphone                                              | Pharmacy operations expert; moderate IT skill          | Receive goods, approve exceptions, manage stock, transfers, cash | Mandatory TOTP |
+| Salesman (cashier or pharmacist at the counter) | 2 to 6 per branch, in shifts                 | Assigned branches; works in one active branch at a time                      | Continuous during shifts, counter desktop with scanner and printer                 | Basic computer skill; many prefer Bangla               | Serve customers quickly and correctly                            | Optional       |
+| Accountant (later)                              | 0 to 1                                       | Organization, read-only financial data                                       | Weekly or monthly, desktop                                                         | Accounting expert                                      | Reports, dues, expenses, exports                                 | Mandatory TOTP |
+| Auditor (later)                                 | 0 to 1, time-boxed access                    | Organization, read-only including audit log and controlled-drug register     | Occasional                                                                         | Audit expert                                           | Verify records                                                   | Mandatory TOTP |
+| Scheduler (system actor)                        | n/a                                          | Organization                                                                 | Scheduled jobs (expiry status, notifications, integrity checks, backups, insights) | n/a                                                    | Unattended processing                                            | n/a            |
+| AI assistant (system actor, M5)                 | n/a                                          | Acts on behalf of the requesting user with that user's read permissions only | On demand                                                                          | n/a                                                    | Suggestions only; never writes data                              | n/a            |
+
+Default delegation: a Branch Manager can perform every Salesman use case in their assigned branches; the Owner can
+perform every Branch Manager use case in all branches. Accountant and Auditor roles are reserved in the data model from
+M1 so that adding them later needs no schema change.
+
+### 2.5 Operating environment
+
+| ID    | Item                       | Requirement                                                                                                                                                                             |
+| ----- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OE-01 | Primary browsers           | Latest two stable versions of Google Chrome and Microsoft Edge on Windows 10 and 11 (counter PCs)                                                                                       |
+| OE-02 | Mobile browsers            | Latest two stable versions of Chrome on Android 10 or later for Owner and Manager use; Safari on iOS 16 or later and Firefox latest two versions are supported on a best-effort basis   |
+| OE-03 | Counter hardware (minimum) | Dual-core CPU, 4 GB RAM, 1366 x 768 display, USB HID barcode scanner configured to send Enter after each scan, thermal receipt printer (58 mm or 80 mm) with an operating-system driver |
+| OE-04 | Mobile viewport            | Typical 360 x 640 CSS pixels for dashboards, approvals, notifications and reports; layouts reflow down to 320 CSS pixels (NFR-USAB-007)                                                 |
+| OE-05 | Network                    | Shared broadband or 4G; round-trip latency to Singapore of roughly 50 to 120 ms; short outages expected (see A-01 and NFR-AVAIL-004)                                                    |
+| OE-06 | Server platform            | Supabase managed PostgreSQL 15 or later, Auth, Storage and Edge Functions (Deno) in ap-southeast-1; static hosting on Cloudflare Pages                                                  |
+| OE-07 | Time                       | Server stores UTC; all business dates and displayed times use Asia/Dhaka (UTC+6, no daylight saving time)                                                                               |
+| OE-08 | Power                      | Counter PCs and network equipment are expected to have a UPS for load-shedding; the application must tolerate abrupt client shutdown without data corruption (NFR-REL-001)              |
+
+### 2.6 Constraints
+
+| ID   | Constraint                                                                                                                                                                                                                                                                                           | Rationale                                          |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| C-01 | Technology stack is fixed: React 19, TypeScript (strict), Vite, React Router, TanStack Query, Zod, React Hook Form, Tailwind CSS with shadcn/ui, i18next, Recharts; Supabase (PostgreSQL 15+, Auth, PostgREST, Storage, Edge Functions); Cloudflare Pages; pnpm; Node 22 LTS. Changes require an ADR | Decided architecture; see [ADRs](../adr/README.md) |
+| C-02 | Business-critical writes (sale, purchase receipt, transfer, adjustment, return, loyalty enrollment and similar) happen only through PostgreSQL functions executed in a single transaction. The client never writes ledger or document tables directly                                                | Integrity and server-side authority                |
+| C-03 | Row level security is enabled on every table in every schema exposed to the API. The `anon` role has no access to business data                                                                                                                                                                      | Tenant and branch isolation                        |
+| C-04 | Money is stored as BIGINT paisa; percentages as NUMERIC(5,2) or integer basis points; no floating point anywhere in money calculations                                                                                                                                                               | Exactness                                          |
+| C-05 | Quantities are INTEGER base units; pack conversion factors are defined in the catalog                                                                                                                                                                                                                | Exactness, single unit of account                  |
+| C-06 | Primary keys are UUIDs; human-readable codes (invoice number, card number, SKU) are separate columns                                                                                                                                                                                                 | Security, merge-friendliness                       |
+| C-07 | Timestamps are TIMESTAMPTZ stored in UTC; business dates are computed in Asia/Dhaka                                                                                                                                                                                                                  | Correct daily reporting                            |
+| C-08 | No hard deletes of business records (soft delete through `archived_at` or `is_active`); ledgers and the audit log are append-only                                                                                                                                                                    | Traceability, regulation                           |
+| C-09 | Until production needs justify an upgrade, the system must operate within the Supabase Free and Cloudflare Pages Free plans; NFR-BACKUP states targets for both Free and Pro tiers                                                                                                                   | Cost                                               |
+| C-10 | Data is hosted in the Supabase Singapore region                                                                                                                                                                                                                                                      | Latency to Dhaka; see A-04                         |
+| C-11 | Sale price shall never exceed MRP; controlled-drug sales require prescription details and a register entry                                                                                                                                                                                           | Bangladesh drug regulation                         |
+| C-12 | User interface in English and Bangla (bn-BD); currency BDT only                                                                                                                                                                                                                                      | Market                                             |
+| C-13 | Secrets (service role key, AI and SMS keys) exist only on the server side (Edge Functions, CI secrets)                                                                                                                                                                                               | Security                                           |
+| C-14 | Exports use open formats: CSV (UTF-8), XLSX, PDF                                                                                                                                                                                                                                                     | Portability                                        |
+| C-15 | Third-party dependencies shipped to clients must use permissive open-source licences compatible with commercial SaaS (for example MIT, Apache-2.0, BSD, ISC)                                                                                                                                         | Future SaaS licensing                              |
+| C-16 | Database migrations are forward-only and versioned; breaking changes use the expand, migrate, contract pattern                                                                                                                                                                                       | Zero-downtime operation                            |
+
+### 2.7 Assumptions and dependencies
+
+**Assumptions.** If an assumption proves false, the affected requirements are reviewed.
+
+| ID   | Assumption                                                                                                                                                            | Affected requirements              |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| A-01 | Each branch has internet connectivity most of the time; outages are typically shorter than 30 minutes until offline mode (M4) is available                            | NFR-AVAIL, FR-POS offline          |
+| A-02 | MRP, batch number and expiry are printed on packs and are entered at goods receipt                                                                                    | FR-PUR, FR-INV                     |
+| A-03 | Many local products carry EAN-13 barcodes but a significant share have none or share pack-level barcodes; name search must therefore be as fast as scanning           | FR-CAT, FR-POS, NFR-PERF           |
+| A-04 | The Owner accepts that data is hosted in Singapore (outside Bangladesh)                                                                                               | C-10, NFR-PRIV-010                 |
+| A-05 | Current records (catalog, opening stock, customers and their dues, supplier dues) exist on paper or in spreadsheets and can be prepared as CSV or XLSX for import     | FR-CAT-011, FR-INV-011, FR-CUS-012 |
+| A-06 | Only the Owner's organization uses the system until SaaS onboarding (Later)                                                                                           | FR-ORG-012                         |
+| A-07 | Staff can use a computer at a basic level; Bangla interface is available for those who prefer it                                                                      | NFR-USAB, NFR-I18N                 |
+| A-08 | Licences (retail drug licence, narcotics licence where applicable) are the Owner's legal responsibility; PIMS supports record keeping but does not certify compliance | FR-CDR, FR-ORG-009                 |
+| A-09 | The organization's fiscal year runs 1 July to 30 June unless configured otherwise                                                                                     | FR-ORG-011, FR-POS-030             |
+| A-10 | Receipt printers can be driven through the browser print dialog or Chrome kiosk printing                                                                              | IF-HW-002                          |
+
+**Dependencies.**
+
+| ID   | Dependency                                                                                                       | Impact if unavailable or changed                                                 |
+| ---- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| D-01 | Supabase platform (availability, quotas, pricing, Free-tier limits such as database size and inactivity pausing) | Service outage or forced plan upgrade                                            |
+| D-02 | Cloudflare Pages                                                                                                 | Application cannot be loaded (installed PWA shell continues from cache after M4) |
+| D-03 | Anthropic Claude API (M5)                                                                                        | AI features unavailable; core functions unaffected (NFR-AVAIL-003)               |
+| D-04 | GitHub (repository, Actions for CI and nightly backups)                                                          | No deployments; backup job must be run manually                                  |
+| D-05 | Sentry and uptime monitoring free plans                                                                          | Reduced observability                                                            |
+| D-06 | Bangladesh SMS gateway (Later)                                                                                   | SMS reminders unavailable; in-app reminders continue                             |
+| D-07 | Owner decisions in Appendix B before the milestone that needs them                                               | Defaults stay in force; rework risk                                              |
+| D-08 | No machine-readable official medicine registry is assumed; the catalog is built by import and manual entry       | Data-entry effort at go-live                                                     |
+
+### 2.8 Requirement-level risks
+
+| ID    | Risk                                                                                              | Mitigation in this SRS                                                                   |
+| ----- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| RK-01 | Loyalty business rules are undecided (paid or free, discount or points, SMS)                      | Everything is configuration with defaults (FR-LOY, OD-01 to OD-13)                       |
+| RK-02 | Regulatory detail (controlled-drug register format, record retention) may differ from assumptions | Configurable register fields and export; legal review OD-22                              |
+| RK-03 | Free-tier limits (database size, no downloadable automated backups)                               | Size monitoring NFR-SCAL-006; nightly dump NFR-BACKUP-001                                |
+| RK-04 | Unreliable connectivity at the counter                                                            | Idempotent retries (NFR-REL-006) now, offline mode in M4                                 |
+| RK-05 | AI output errors in a medical context                                                             | AI suggests only, human confirms, no dosing advice, no writes (FR-AI safety constraints) |
+
+---
+
+## 3. Specific requirements
+
+### 3.1 External interface requirements
+
+#### 3.1.1 User interfaces
+
+| ID        | Requirement                                                                                                                                                                                                | Priority | Milestone |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------- |
+| IF-UI-001 | The application shall be a responsive single-page web application built from accessible shadcn/ui (Radix) components, installable as a PWA (installability in M2; offline data in M4).                     | Must     | M2        |
+| IF-UI-002 | The POS shall be a single screen with a search field, cart, customer and loyalty panel, totals and payment panel; a sale shall never require navigating to another page.                                   | Must     | M2        |
+| IF-UI-003 | The header shall show the active branch, a branch switcher (for users with more than one branch), the language switcher (English, বাংলা), the notification bell with unread count, and the signed-in user. | Must     | M2        |
+| IF-UI-004 | Receipt layouts shall exist for 58 mm and 80 mm thermal paper and for A4; reports shall have A4 print layouts.                                                                                             | Must     | M2        |
+| IF-UI-005 | Long lists (medicines, batches, invoices, customers) shall be paginated or virtualized and sortable and filterable by their key columns.                                                                   | Must     | M2        |
+| IF-UI-006 | Every business error returned by the server shall be shown as a localized, actionable message (what happened and what to do next).                                                                         | Must     | M2        |
+
+#### 3.1.2 Hardware interfaces
+
+| ID        | Requirement                                                                                                                                                                                                                                      | Priority | Milestone |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | --------- |
+| IF-HW-001 | The POS shall accept input from USB barcode scanners operating in HID keyboard mode with an Enter suffix, for EAN-13, EAN-8, UPC-A and Code 128; 2D scanners shall additionally read loyalty-card and invoice QR codes.                          | Must     | M2        |
+| IF-HW-002 | Printing shall use the operating-system printer driver through the browser print function; silent printing through Chrome kiosk printing shall be documented in the [runbook](../operations/runbook.md). Direct ESC/POS control is not required. | Must     | M2        |
+| IF-HW-003 | A cash drawer connected to the receipt printer may be opened by the printer driver on receipt print; the application does not control it directly.                                                                                               | Could    | M2        |
+| IF-HW-004 | The application shall be able to capture a prescription photo from a device camera or accept an image file upload.                                                                                                                               | Should   | M3        |
+
+#### 3.1.3 Software interfaces
+
+| ID        | Interface                  | Requirement                                                                                                                                               | Priority      | Milestone |
+| --------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------- |
+| IF-SW-001 | Supabase Auth              | Email and password sign-in, invitations, password reset and TOTP MFA                                                                                      | Must          | M1        |
+| IF-SW-002 | PostgREST and RPC          | Reads through RLS-protected views and tables; all business writes through versioned RPC functions (C-02)                                                  | Must          | M1        |
+| IF-SW-003 | Supabase Storage           | Private bucket for prescription images and attachments, accessed only through short-lived signed URLs                                                     | Must          | M3        |
+| IF-SW-004 | Supabase Edge Functions    | Server-side code needing secrets or schedules: AI proxy, scheduled jobs, SMS (later)                                                                      | Must          | M3        |
+| IF-SW-005 | Anthropic Claude API       | Called only from an Edge Function holding the key (FR-AI-020)                                                                                             | Must          | M5        |
+| IF-SW-006 | Sentry                     | Frontend error reporting with personal data scrubbed (NFR-OBS-001)                                                                                        | Must          | M4        |
+| IF-SW-007 | Transactional email (SMTP) | A dedicated SMTP provider configured for Supabase Auth in staging and production (the default Supabase mailer is rate-limited and not for production use) | Must          | M2        |
+| IF-SW-008 | Bangladesh SMS gateway     | Provider to be selected; accessed only through an Edge Function                                                                                           | Won't (Later) | —         |
+
+#### 3.1.4 Communications interfaces
+
+| ID         | Requirement                                                                                                                                                                                                                                                 | Priority | Milestone |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------- |
+| IF-COM-001 | All traffic shall use HTTPS with TLS 1.2 or later; HTTP shall redirect to HTTPS and HSTS shall be sent (NFR-SEC-005).                                                                                                                                       | Must     | M2        |
+| IF-COM-002 | RPC responses shall be JSON; business rule violations shall return a stable machine-readable error code plus parameters so the client can show a localized message (the error code catalog lives in the [database design](../database/database-design.md)). | Must     | M1        |
+| IF-COM-003 | Every RPC that creates a business document shall accept a client-generated idempotency key (NFR-REL-006).                                                                                                                                                   | Must     | M1        |
+| IF-COM-004 | In-app notifications may be pushed in real time over a websocket; otherwise the client polls at least every 60 seconds while active.                                                                                                                        | Could    | M3        |
+
+### 3.2 Use cases
+
+The use cases below are the user goals that the functional requirements serve. Each end-to-end test of a use case
+carries its `UC-NN` tag (see [4.2](#42-requirement-identifiers-in-tests)).
+
+| ID    | Use case                                                                     | Primary actor                   | Supporting actors                 | Main requirements                              | Milestone |
+| ----- | ---------------------------------------------------------------------------- | ------------------------------- | --------------------------------- | ---------------------------------------------- | --------- |
+| UC-01 | Sign in (with TOTP where required) and select active branch                  | All users                       | —                                 | FR-IAM-001, FR-IAM-005, FR-ORG-007             | M2        |
+| UC-02 | Configure organization, settings and branches                                | Owner                           | —                                 | FR-ORG-001 to FR-ORG-011                       | M2        |
+| UC-03 | Invite users, assign roles and branches, deactivate users                    | Owner                           | Branch Manager                    | FR-IAM-003, FR-IAM-010                         | M2        |
+| UC-04 | Maintain catalog (medicines, generics, manufacturers, packs, barcodes)       | Branch Manager                  | Owner                             | FR-CAT-001 to FR-CAT-010                       | M2        |
+| UC-05 | Import catalog, opening stock, customers and supplier balances               | Owner                           | —                                 | FR-CAT-011, FR-INV-011, FR-CUS-012, FR-PUR-001 | M2        |
+| UC-06 | Sell medicines at the POS                                                    | Salesman                        | Customer (off-stage)              | FR-POS-001 to FR-POS-036                       | M2        |
+| UC-07 | Sell a controlled drug against a prescription                                | Salesman (authorized dispenser) | Branch Manager                    | FR-CDR-001 to FR-CDR-008                       | M2        |
+| UC-08 | Hold (park) and recall a bill                                                | Salesman                        | —                                 | FR-POS-037 to FR-POS-039                       | M2        |
+| UC-09 | Void an invoice                                                              | Salesman                        | Branch Manager (approver)         | FR-POS-040 to FR-POS-044                       | M2        |
+| UC-10 | Process a sale return and refund                                             | Salesman                        | Branch Manager (approver)         | FR-POS-045 to FR-POS-054                       | M3        |
+| UC-11 | Register a customer, sell on credit (বাকি) and collect dues                  | Salesman                        | Branch Manager                    | FR-CUS-001 to FR-CUS-010                       | M2        |
+| UC-12 | Enroll, renew, replace or cancel a loyalty membership                        | Salesman                        | Branch Manager                    | FR-LOY-010 to FR-LOY-022                       | M3        |
+| UC-13 | Apply loyalty benefits at the POS                                            | Salesman                        | —                                 | FR-LOY-023 to FR-LOY-037                       | M3        |
+| UC-14 | Review loyalty exceptions (possible abuse)                                   | Owner                           | Branch Manager                    | FR-LOY-040 to FR-LOY-045                       | M3        |
+| UC-15 | Receive goods from a supplier (GRN)                                          | Branch Manager                  | Salesman                          | FR-PUR-004 to FR-PUR-010                       | M2        |
+| UC-16 | Raise and track purchase orders                                              | Branch Manager                  | Owner                             | FR-PUR-002, FR-PUR-003, FR-PUR-018             | M2        |
+| UC-17 | Pay suppliers and review supplier dues                                       | Owner                           | Branch Manager                    | FR-PUR-011 to FR-PUR-013                       | M2        |
+| UC-18 | Return goods to a supplier                                                   | Branch Manager                  | Owner                             | FR-PUR-014 to FR-PUR-016                       | M3        |
+| UC-19 | Request, dispatch and receive a stock transfer                               | Branch Manager                  | Owner                             | FR-TRF-001 to FR-TRF-013                       | M3        |
+| UC-20 | Adjust stock with a reason                                                   | Branch Manager                  | Owner (approver above threshold)  | FR-INV-007 to FR-INV-009                       | M2        |
+| UC-21 | Run a physical stock count                                                   | Branch Manager                  | Salesman (counter)                | FR-INV-012 to FR-INV-015                       | M2        |
+| UC-22 | Open and close a cash session                                                | Salesman                        | Branch Manager                    | FR-CSH-001 to FR-CSH-010                       | M3        |
+| UC-23 | Record a branch expense                                                      | Salesman                        | Branch Manager, Owner (approvers) | FR-CSH-011 to FR-CSH-015                       | M3        |
+| UC-24 | View dashboards and reports; export                                          | Owner                           | Branch Manager, Accountant        | FR-RPT-001 to FR-RPT-024                       | M2, M3    |
+| UC-25 | Review the audit log                                                         | Owner                           | Auditor                           | FR-AUD-001 to FR-AUD-008                       | M2        |
+| UC-26 | Act on notifications                                                         | Branch Manager                  | Owner, Salesman                   | FR-NTF-001 to FR-NTF-012                       | M2        |
+| UC-27 | Run scheduled jobs (expiry status, notifications, integrity checks, backups) | Scheduler                       | —                                 | FR-NTF-002, NFR-REL-003, FR-BKP-001            | M3, M4    |
+| UC-28 | Restore the system from a backup                                             | Platform operator               | Owner                             | FR-BKP-004, NFR-BACKUP-001                     | M4        |
+| UC-29 | Export all organization data                                                 | Owner                           | —                                 | FR-BKP-007                                     | M4        |
+| UC-30 | Find medicines with AI smart search                                          | Salesman                        | AI assistant                      | FR-AI-001 to FR-AI-003                         | M5        |
+| UC-31 | Turn a prescription photo into suggested cart lines                          | Salesman                        | AI assistant                      | FR-AI-004 to FR-AI-007                         | M5        |
+| UC-32 | Ask a business question in natural language                                  | Owner                           | AI assistant                      | FR-AI-010 to FR-AI-013                         | M5        |
+| UC-33 | Receive reorder, expiry-risk and weekly insight suggestions                  | Owner                           | Scheduler, AI assistant           | FR-AI-008, FR-AI-009, FR-AI-014                | M5        |
+
+**Use case diagram: counter and branch operations**
+
+```mermaid
+flowchart LR
+    SM{{"Salesman"}}
+    BM{{"Branch Manager"}}
+
+    subgraph PIMS1["PIMS: counter and branch operations"]
+        direction TB
+        UC06(["UC-06 Sell medicines at the POS"])
+        UC07(["UC-07 Sell a controlled drug"])
+        UC08(["UC-08 Hold and recall a bill"])
+        UC09(["UC-09 Void an invoice"])
+        UC10(["UC-10 Process a return"])
+        UC11(["UC-11 Customer credit and collections"])
+        UC12(["UC-12 Enroll or renew loyalty"])
+        UC13(["UC-13 Apply loyalty benefits"])
+        UC15(["UC-15 Receive goods (GRN)"])
+        UC19(["UC-19 Stock transfer"])
+        UC20(["UC-20 Adjust stock"])
+        UC21(["UC-21 Physical stock count"])
+        UC22(["UC-22 Open and close cash session"])
+        UC23(["UC-23 Record an expense"])
+        UC26(["UC-26 Act on notifications"])
+    end
+
+    SM --- UC06
+    SM --- UC07
+    SM --- UC08
+    SM --- UC09
+    SM --- UC10
+    SM --- UC11
+    SM --- UC12
+    SM --- UC13
+    SM --- UC22
+    SM --- UC23
+    UC09 -. approval .- BM
+    UC10 -. approval .- BM
+    UC07 -. approval when limits exceeded .- BM
+    BM --- UC15
+    BM --- UC19
+    BM --- UC20
+    BM --- UC21
+    BM --- UC26
+    UC06 -. includes .-> UC13
+```
+
+**Use case diagram: management, system and AI**
+
+```mermaid
+flowchart LR
+    OW{{"Owner"}}
+    AA{{"Accountant / Auditor (later)"}}
+    OP{{"Platform operator"}}
+    SCH{{"Scheduler"}}
+    AI{{"AI assistant (M5)"}}
+
+    subgraph PIMS2["PIMS: management, system and AI"]
+        direction TB
+        UC01(["UC-01 Sign in and select branch"])
+        UC02(["UC-02 Configure organization and branches"])
+        UC03(["UC-03 Manage users"])
+        UC04(["UC-04 Maintain catalog"])
+        UC05(["UC-05 Import master data and opening stock"])
+        UC14(["UC-14 Review loyalty exceptions"])
+        UC16(["UC-16 Purchase orders"])
+        UC17(["UC-17 Supplier payments and dues"])
+        UC18(["UC-18 Return goods to supplier"])
+        UC24(["UC-24 Reports, dashboards and exports"])
+        UC25(["UC-25 Review audit log"])
+        UC27(["UC-27 Scheduled jobs"])
+        UC28(["UC-28 Restore from backup"])
+        UC29(["UC-29 Export organization data"])
+        UC30(["UC-30 AI smart search"])
+        UC31(["UC-31 Prescription photo to cart lines"])
+        UC32(["UC-32 Ask your data"])
+        UC33(["UC-33 Forecasts and weekly insights"])
+    end
+
+    OW --- UC01
+    OW --- UC02
+    OW --- UC03
+    OW --- UC04
+    OW --- UC05
+    OW --- UC14
+    OW --- UC16
+    OW --- UC17
+    OW --- UC18
+    OW --- UC24
+    OW --- UC25
+    OW --- UC29
+    OW --- UC32
+    OW --- UC33
+    AA --- UC24
+    AA --- UC25
+    OP --- UC28
+    SCH --- UC27
+    SCH --- UC33
+    UC30 --- AI
+    UC31 --- AI
+    UC32 --- AI
+    UC33 --- AI
+```
+
+Salesmen are the primary actors of UC-30 and UC-31 (counter use); they are omitted from the second diagram for
+readability. Branch Managers inherit all Salesman use cases and the Owner inherits all Branch Manager use cases
+(section 2.4).
+
+**Key use case narrative: UC-06 Sell medicines at the POS (main success scenario)**
+
+1. The Salesman, signed in at branch MPR with an open cash session (from M3), scans a barcode or types part of a brand
+   or generic name; matching in-stock medicines appear (FR-POS-001 to FR-POS-004).
+2. The Salesman adds lines and quantities in any defined pack unit; the cart shows a price preview.
+3. Optionally the Salesman attaches a customer by phone or a loyalty card by scan (FR-POS-007, FR-LOY-023).
+4. Optionally the Salesman applies a discount within the role limit (FR-POS-016 to FR-POS-021).
+5. The Salesman records one or more payments (FR-POS-022 to FR-POS-028).
+6. The system computes prices, allocates batches FEFO, assigns the next gapless invoice number and commits everything
+   in one transaction (FR-POS-010 to FR-POS-015, FR-POS-029, FR-POS-030).
+7. The receipt prints and the POS is ready for the next customer (FR-POS-033).
+
+Alternative flows: insufficient stock (FR-POS-014), price changed since the cart was built (FR-POS-011), discount above
+limit (FR-POS-018), controlled drug (FR-CDR-002), credit sale above limit (FR-CUS-006), network failure during commit
+(NFR-REL-006).
+
+### 3.3 Functional requirements
+
+Each table lists: ID, requirement, priority (Pri), target milestone (MS) and acceptance criteria. The default
+verification method is an automated test (section 4.1).
+
+#### 3.3.1 Organization and branches (FR-ORG)
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                          | Pri    | MS               | Acceptance criteria                                                                                                                                                                                        |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-ORG-001 | The system shall store an organization with legal name, trading name, address, phone, email, logo, optional VAT BIN and TIN, and default UI language. Currency (BDT) and time zone (Asia/Dhaka) are fixed and cannot be changed through the application.                                                             | Must   | M1               | An organization is created with all fields; attempts to change currency or time zone through any API are rejected.                                                                                         |
+| FR-ORG-002 | The system shall support an unlimited number of branches per organization. Each branch has a name, a branch code (2 to 6 uppercase Latin letters or digits, unique within the organization, for example `MPR`), address, phone, retail drug licence number, licence expiry date, and receipt header and footer text. | Must   | M1               | 50 branches are created in one test organization without configuration change; a duplicate code in the same organization is rejected; the same code in another organization is accepted.                   |
+| FR-ORG-003 | A branch code shall become immutable once the branch has issued its first invoice, because it is part of document numbers.                                                                                                                                                                                           | Must   | M1               | Updating the code of a branch with at least one invoice is rejected; updating it before the first invoice succeeds.                                                                                        |
+| FR-ORG-004 | Branches shall be deactivated, never hard-deleted. Deactivation requires zero stock on hand, no open cash session and no transfer in Requested or Dispatched state. A deactivated branch accepts no new transactions; its history remains in all reports.                                                            | Must   | M1 (DB), M2 (UI) | Deactivation is rejected while any precondition fails; after deactivation, a sale or GRN for that branch is rejected; historical reports still include the branch; no DELETE privilege exists on branches. |
+| FR-ORG-005 | The Owner shall be able to reactivate a deactivated branch.                                                                                                                                                                                                                                                          | Should | M2               | A reactivated branch accepts transactions again; both actions are audited.                                                                                                                                 |
+| FR-ORG-006 | The Owner shall be able to change organization settings (Appendix A). Every change is audited and applies only to transactions created after the change.                                                                                                                                                             | Must   | M1               | After changing the VAT rate, existing invoices keep their original VAT amounts; an audit entry holds old and new values.                                                                                   |
+| FR-ORG-007 | Each user session shall work in exactly one active branch chosen from the user's assigned branches. Every branch-scoped transaction is stamped with that branch. The Owner may switch branch at any time and may also view consolidated (all-branch) reports.                                                        | Must   | M2               | A Salesman assigned only to MPR cannot select or post to DHN; a sale shows the branch it was created in; the Owner's consolidated dashboard sums all branches.                                             |
+| FR-ORG-008 | Each branch shall have one or more named registers (for example "Counter 1") used for cash sessions.                                                                                                                                                                                                                 | Must   | M3               | Two registers are created for MPR; each can hold its own open cash session.                                                                                                                                |
+| FR-ORG-009 | The system shall notify the Owner and the branch's Managers 60 days and 15 days before a branch's drug licence expiry date.                                                                                                                                                                                          | Should | M3               | With licence expiry set 60 days ahead, the scheduled job creates one notification per recipient that day and no duplicate on the next day.                                                                 |
+| FR-ORG-010 | Each branch shall have receipt settings: language (English, Bangla or bilingual), default paper size (58 mm, 80 mm or A4), whether batch number and expiry print on receipts (default: yes), and return-policy footer text.                                                                                          | Should | M2               | Changing the MPR receipt language to Bangla changes the next MPR receipt only.                                                                                                                             |
+| FR-ORG-011 | The fiscal year start month shall be configurable per organization (default July). It determines invoice number series (FR-POS-030) and fiscal-year reports.                                                                                                                                                         | Must   | M1               | With start month July, a sale on 2026-06-30 belongs to FY 2025 and a sale on 2026-07-01 belongs to FY 2026.                                                                                                |
+| FR-ORG-012 | Self-service organization sign-up and subscription billing for other pharmacies.                                                                                                                                                                                                                                     | Won't  | Later            | Not delivered in M1 to M5; the data model must not prevent it (NFR-SCAL-002).                                                                                                                              |
+
+#### 3.3.2 Users, roles and authentication (FR-IAM)
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                             | Pri    | MS               | Acceptance criteria                                                                                                                                          |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FR-IAM-001 | Users shall sign in with email and password through Supabase Auth. Accounts are individual; shared or generic accounts (for example "counter1@") are not permitted by policy and each account belongs to one named person.                                                                                                                                              | Must   | M2               | A valid user signs in; an invalid password is rejected with a generic message that does not reveal whether the email exists.                                 |
+| FR-IAM-002 | The system shall support the roles Owner, Branch Manager and Salesman. A user has exactly one role per organization. Permissions per role are defined in the [security model](../security/security-model.md).                                                                                                                                                           | Must   | M1               | pgTAP tests prove, for every role, the allowed and denied actions listed in the security model's matrix.                                                     |
+| FR-IAM-003 | Users shall be added only by invitation. An invitation specifies email, role and branches, is single-use and expires after 72 hours.                                                                                                                                                                                                                                    | Must   | M2               | An accepted invitation creates the user with the specified role and branches; reuse or use after 72 hours fails.                                             |
+| FR-IAM-004 | Branch Managers and Salesmen shall be assigned to one or more branches; the Owner has access to all branches. Access to branch-scoped data is limited to assigned branches.                                                                                                                                                                                             | Must   | M1               | A Salesman of MPR reading DHN sales gets zero rows; the Owner gets both.                                                                                     |
+| FR-IAM-005 | TOTP multi-factor authentication shall be mandatory for Owner and Branch Manager (and for Accountant and Auditor when introduced). Until the second factor is verified (AAL2), such users cannot read or write business data; this is enforced in the database, not only in the UI.                                                                                     | Must   | M2               | See scenario FR-IAM-005 below.                                                                                                                               |
+| FR-IAM-006 | A user who has lost the authenticator shall be recoverable: the Owner can reset the MFA of a Branch Manager or Salesman; recovery of the Owner's own MFA follows the identity-verified procedure in the [runbook](../operations/runbook.md). Every reset is audited.                                                                                                    | Must   | M2               | After an Owner resets a Manager's MFA, the Manager must enroll a new factor at next sign-in; an audit entry exists.                                          |
+| FR-IAM-007 | Passwords shall be at least 10 characters with no composition rules, shall be checked against known-breached passwords where the platform supports it, and shall never be stored or logged by the application (per [R5]).                                                                                                                                               | Must   | M2               | A 9-character password is rejected; a 10-character passphrase is accepted.                                                                                   |
+| FR-IAM-008 | Repeated failed sign-ins shall be throttled (platform rate limits) and shall be visible to the Owner as security events.                                                                                                                                                                                                                                                | Must   | M2               | Ten failed attempts within 5 minutes trigger throttling; the attempts appear in the security events view (FR-AUD-003).                                       |
+| FR-IAM-009 | Users shall be able to reset a forgotten password through an emailed single-use link.                                                                                                                                                                                                                                                                                   | Must   | M2               | The link resets the password once; a second use fails.                                                                                                       |
+| FR-IAM-010 | The Owner shall be able to deactivate a user. Deactivation takes effect on the user's next request because authorization checks read the user's active status.                                                                                                                                                                                                          | Must   | M1 (DB), M2 (UI) | After deactivation, the user's still-valid access token can no longer read any business row.                                                                 |
+| FR-IAM-011 | The client shall lock after 15 minutes of inactivity (CFG-31) and require the password to resume; a session shall not last longer than 12 hours without full sign-in.                                                                                                                                                                                                   | Should | M2               | After 15 idle minutes the POS shows the lock screen and keeps the cart; after 12 hours the user must sign in again.                                          |
+| FR-IAM-012 | Approval override: when an action needs approval (discount above limit, void, return above threshold, credit above limit, cash variance), an authorized approver shall be able to approve on the same terminal by entering their own credentials (password, plus TOTP when their role requires MFA). The approval records approver, requester, action, reason and time. | Must   | M2               | A Salesman's 8 % discount is accepted only after a Branch Manager authenticates; the sale stores both user IDs. A Salesman cannot approve their own request. |
+| FR-IAM-013 | Remote approval: pending approval requests shall also appear in an approvals list for authorized approvers, who can approve or reject from their own session.                                                                                                                                                                                                           | Could  | M3               | A Manager approves a void from a smartphone; the waiting POS continues within 5 seconds.                                                                     |
+| FR-IAM-014 | Sensitive account actions (role change, MFA reset, organization settings change, full data export) shall require re-authentication if the last sign-in is older than 5 minutes.                                                                                                                                                                                         | Should | M2               | Changing a role 10 minutes after sign-in prompts for the password.                                                                                           |
+| FR-IAM-015 | A user profile shall hold full name, phone, preferred language and, optionally, the Pharmacy Council of Bangladesh registration number for registered pharmacists (used for controlled-drug dispensing, FR-CDR-003).                                                                                                                                                    | Should | M2               | A Salesman with a recorded pharmacist registration can be granted dispensing permission.                                                                     |
+| FR-IAM-016 | The Owner shall be able to list a user's active sessions and sign the user out of all sessions.                                                                                                                                                                                                                                                                         | Could  | M4               | After "sign out everywhere", all refresh tokens of the user are revoked.                                                                                     |
+| FR-IAM-017 | Accountant (read-only finance) and Auditor (read-only including audit log and controlled-drug register, time-boxed) roles shall be reserved in the data model from M1.                                                                                                                                                                                                  | Must   | M1               | Role values exist; no permission is granted to them until enabled.                                                                                           |
+| FR-IAM-018 | The Accountant and Auditor roles shall be usable, with Auditor access automatically expiring on a configured date.                                                                                                                                                                                                                                                      | Could  | M4               | An Auditor invited with an end date cannot sign in after that date.                                                                                          |
+
+```gherkin
+Scenario: FR-IAM-005 Branch Manager without verified TOTP cannot access data
+  Given a Branch Manager signed in with password only (AAL1)
+  When the client requests stock of branch "MPR" through the API
+  Then zero rows are returned and the user is sent to TOTP verification or enrollment
+  When the Manager verifies a valid TOTP code (AAL2)
+  Then the same request returns the stock of branch "MPR"
+```
+
+#### 3.3.3 Catalog (FR-CAT)
+
+The catalog is shared by all branches of an organization. Example pack hierarchy (illustrative values):
+
+| Pack level        | Example               | Units of base unit per pack |
+| ----------------- | --------------------- | --------------------------- |
+| Box               | 1 box of 10 strips    | 100                         |
+| Strip             | 1 strip of 10 tablets | 10                          |
+| Piece (base unit) | 1 tablet              | 1                           |
+
+For liquids, the base unit is normally one bottle (for example a 100 ml syrup) and there may be no larger pack.
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                   | Pri    | MS               | Acceptance criteria                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------- | -------------------------------------------------------------------------------------------------------------------- |
+| FR-CAT-001 | A medicine shall have brand name, generic (reference), manufacturer (reference), dosage form, strength (for example "500 mg", "250 mg/5 ml"), schedule (OTC, Rx or Controlled), pack hierarchy, barcodes, loyalty eligibility flag, and active status.                                                                                                        | Must   | M1               | A medicine without brand name, generic, manufacturer, dosage form or schedule is rejected.                           |
+| FR-CAT-002 | Generics and manufacturers shall be master tables, unique by name within the organization (case- and space-insensitive). Dosage forms come from a maintained list (tablet, capsule, syrup, suspension, injection, infusion, cream, ointment, gel, drops, inhaler, suppository, powder, solution, other).                                                      | Must   | M1               | Creating manufacturer "Square Pharmaceuticals" twice (differing only in case or spacing) is rejected.                |
+| FR-CAT-003 | Each medicine shall have a pack hierarchy of one to three levels with integer conversion factors to the base unit (base unit factor = 1). One level is the default sale unit and one the default purchase unit. A conversion factor cannot change once any stock movement exists for the medicine; a different pack size is created as a new pack definition. | Must   | M1               | Changing the strip factor from 10 to 12 after a GRN is rejected; adding a new pack level is accepted.                |
+| FR-CAT-004 | A medicine may have several barcodes, each linked to one pack level; barcodes are unique within the organization. Scanning a pack-level barcode adds one unit of that pack to the cart.                                                                                                                                                                       | Must   | M1 (DB), M2 (UI) | Scanning the box barcode adds 100 base units; registering the same barcode on another medicine is rejected.          |
+| FR-CAT-005 | The system shall generate internal barcodes (Code 128) for items without a manufacturer barcode and print shelf or item labels.                                                                                                                                                                                                                               | Could  | M3               | An internal barcode is generated, printed and scanned back to the same medicine.                                     |
+| FR-CAT-006 | Per branch, each medicine shall have a reorder level (base units), an optional reorder quantity and a rack or shelf location.                                                                                                                                                                                                                                 | Must   | M1 (DB), M2 (UI) | MPR and DHN hold different reorder levels and rack locations for the same medicine.                                  |
+| FR-CAT-007 | Users permitted by the security model shall create and edit medicines; changes to schedule or loyalty eligibility are restricted to the Owner by default and are audited.                                                                                                                                                                                     | Must   | M2               | A Salesman cannot edit a medicine; a schedule change by the Owner produces an audit entry.                           |
+| FR-CAT-008 | When a new medicine matches an existing one on brand name, strength, dosage form and manufacturer, the system shall warn about a probable duplicate before saving.                                                                                                                                                                                            | Should | M2               | Entering an exact duplicate shows the warning and links to the existing item.                                        |
+| FR-CAT-009 | Medicines shall be searchable by brand name, generic name, manufacturer and barcode, with prefix and fuzzy (typo-tolerant, trigram) matching.                                                                                                                                                                                                                 | Must   | M1 (DB), M2 (UI) | "napa" finds brand "Napa"; "paracetmol" finds items with generic "Paracetamol"; performance per NFR-PERF-001.        |
+| FR-CAT-010 | A medicine shall be archived, never deleted. A medicine with stock on hand in any branch cannot be archived. Archived medicines cannot be sold or purchased but remain in history and reports.                                                                                                                                                                | Must   | M1               | Archiving is rejected while stock exists; after archiving, a sale of it is rejected; past invoices still display it. |
+| FR-CAT-011 | Catalog data (generics, manufacturers, medicines, packs, barcodes) shall be importable from CSV or XLSX with a dry-run validation report (row, field, error) before commit; the import commits all valid rows atomically or nothing.                                                                                                                          | Should | M2               | A file with 2 invalid rows of 500 produces a report naming both rows; nothing is written until the user confirms.    |
+| FR-CAT-012 | When a medicine's schedule is set to Controlled, its loyalty eligibility shall default to false; setting it to true requires the Owner and is audited.                                                                                                                                                                                                        | Must   | M1               | Creating a Controlled medicine yields `loyalty_eligible = false`.                                                    |
+| FR-CAT-013 | A medicine may record optional attributes: Bangla name, therapeutic class, storage condition (room temperature or cold chain 2 to 8 °C), DGDA registration (DAR) number, and a returnable flag (default true; default false for cold-chain items).                                                                                                            | Should | M2               | A cold-chain item is created non-returnable by default (used by FR-POS-050).                                         |
+| FR-CAT-014 | The organization may assign an internal SKU code to each medicine, unique within the organization.                                                                                                                                                                                                                                                            | Could  | M2               | Duplicate SKU is rejected.                                                                                           |
+
+#### 3.3.4 Inventory (FR-INV)
+
+Stock is held per branch and per batch in base units. The append-only stock ledger (inventory movements) is the source
+of truth; batch on-hand quantity is a projection maintained only inside the same transaction as the movement.
+Movement types are, indicatively: opening balance, purchase receipt, sale, sale void, sale return, purchase return,
+transfer out, transfer in, transfer loss, adjustment in, adjustment out, count correction and expiry write-off (the
+[database design](../database/database-design.md) holds the canonical list).
+
+| ID         | Requirement                                                                                                                                                                                                                                                 | Pri    | MS               | Acceptance criteria                                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| FR-INV-001 | Stock shall be kept per branch per batch, with batch number, expiry date, unit cost, MRP and sale price (sale price not above MRP). Expiry entered as month and year is stored as the last day of that month.                                               | Must   | M1               | Expiry "10/2027" is stored as 2027-10-31; a sale price above MRP is rejected.                                                  |
+| FR-INV-002 | Unit cost shall be stored with enough precision that the cost value of a full batch equals the GRN line amount exactly, while money columns remain integer paisa (C-04).                                                                                    | Must   | M1               | A GRN line of ৳1,234.00 for 200 tablets yields total batch cost value ৳1,234.00 when fully consumed.                           |
+| FR-INV-003 | Every stock change shall be recorded as an immutable movement (type, branch, batch, signed quantity in base units, reference document, user, timestamp). Movements cannot be updated or deleted by any application role.                                    | Must   | M1               | UPDATE and DELETE on movements are denied for all application roles (pgTAP).                                                   |
+| FR-INV-004 | The batch on-hand projection shall be changed only by the database functions that insert the corresponding movement, in the same transaction.                                                                                                               | Must   | M1               | Direct UPDATE of on-hand by the `authenticated` role is denied; a forced rollback after movement insert leaves both unchanged. |
+| FR-INV-005 | Stock on hand shall never be negative; this is enforced by a database constraint, and concurrent requests for the last units shall not both succeed.                                                                                                        | Must   | M1               | See scenario FR-INV-005 below.                                                                                                 |
+| FR-INV-006 | Quantities shall be displayed in pack breakdown (for example "2 box, 3 strip, 4 pcs") and in base units.                                                                                                                                                    | Must   | M2               | 234 base units with factors 100/10/1 display as "2 box, 3 strip, 4 pcs".                                                       |
+| FR-INV-007 | A stock adjustment (damage, loss or theft, expired write-off, count correction, found stock, other) shall require a reason code and, for "other", a note. It is posted through a single function and audited.                                               | Must   | M1 (DB), M2 (UI) | An adjustment without reason is rejected; a posted adjustment produces a movement and an audit entry.                          |
+| FR-INV-008 | Adjustments shall need approval by role and value: Salesmen cannot adjust; a Branch Manager can adjust up to ৳5,000 cost value per adjustment (CFG-12); above that the Owner must approve.                                                                  | Must   | M2               | A Manager's ৳6,000 write-off stays pending until the Owner approves.                                                           |
+| FR-INV-009 | A batch whose expiry date is earlier than the business date shall be non-sellable and non-transferable automatically. It can only be written off or returned to the supplier.                                                                               | Must   | M1               | On 2026-11-01, a batch with expiry 2026-10-31 cannot be allocated to a sale or transfer.                                       |
+| FR-INV-010 | A Branch Manager or the Owner shall be able to quarantine a batch (for example a recall) with a reason; quarantined stock is not sellable or transferable until released.                                                                                   | Should | M2               | A quarantined batch is skipped by FEFO; release restores it; both actions are audited.                                         |
+| FR-INV-011 | Opening stock per branch shall be importable from CSV or XLSX (medicine, batch, expiry, quantity, unit cost, MRP) with a dry-run report; posting creates opening-balance movements.                                                                         | Must   | M2               | An opening stock import of 2,000 rows posts atomically; totals in the stock report equal the file totals.                      |
+| FR-INV-012 | Physical stock counts shall be organized as count sessions covering the whole branch or a subset (rack, manufacturer or category). Starting a session records the expected quantity snapshot per batch.                                                     | Should | M2               | A session for rack "A-3" lists only medicines located on A-3.                                                                  |
+| FR-INV-013 | Counting shall be blind by default (expected quantities hidden from counters, CFG-14); counts are entered per batch.                                                                                                                                        | Should | M2               | With blind count on, a Salesman's count screen shows no expected quantity.                                                     |
+| FR-INV-014 | On posting a count, variance shall be computed against the snapshot plus movements recorded since the snapshot, so sales may continue during the count. All count corrections post atomically and need Manager approval (Owner above the CFG-12 threshold). | Should | M2               | Snapshot 50, 5 sold during the count, 44 counted: variance is -1, not -6.                                                      |
+| FR-INV-015 | A count session report shall show expected, counted and variance quantities and cost values per batch and in total.                                                                                                                                         | Should | M2               | The report total equals the sum of posted correction movements.                                                                |
+| FR-INV-016 | Users shall see stock per medicine broken down by batch (batch number, expiry, quantity, MRP, rack) at their branch. Salesmen may additionally see available quantities, without costs, at other branches of the organization.                              | Must   | M2               | A Salesman at MPR sees that DHN has 40 units, but not the DHN unit cost.                                                       |
+| FR-INV-017 | A stock card (movement history with running balance) shall be available per medicine and per batch for any date range.                                                                                                                                      | Must   | M2               | The running balance on the last row equals the current on-hand quantity.                                                       |
+| FR-INV-018 | Stock value at cost and at MRP shall be computable per branch for the current moment and for any past date (from the ledger).                                                                                                                               | Must   | M2               | The as-of value for yesterday 23:59 Asia/Dhaka equals today's opening value.                                                   |
+| FR-INV-019 | A medicine shall be "low stock" at a branch when its sellable quantity (non-expired, non-quarantined) is at or below the branch reorder level.                                                                                                              | Must   | M2               | With reorder level 30 and 30 sellable units, the item appears in the low-stock list.                                           |
+| FR-INV-020 | Batches shall be flagged as near-expiry at 30, 60 and 90 days (thresholds configurable, CFG-08). The POS warns when allocating stock within the first threshold.                                                                                            | Must   | M2               | A batch expiring in 25 days shows the 30-day flag and a POS warning.                                                           |
+
+```gherkin
+Scenario: FR-INV-005 two terminals compete for the last units
+  Given branch "MPR" holds exactly 10 tablets of "Paracetamol 500 mg tablet" in batch "B2401"
+  And terminal A and terminal B each submit a sale of 10 tablets at the same moment
+  When both sale requests are processed
+  Then exactly one sale is committed
+  And the other request is rejected with an insufficient-stock error
+  And batch "B2401" shows 0 on hand and never a negative quantity
+  And no invoice number is consumed by the rejected request
+```
+
+#### 3.3.5 Purchases (FR-PUR)
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Pri    | MS               | Acceptance criteria                                                                                                        |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| FR-PUR-001 | Suppliers shall have name, contact person, phone, address, payment terms (days), opening balance and active status. Opening balances are importable from CSV or XLSX. Suppliers are archived, never deleted.                                                                                                                                                                                                                                                                        | Must   | M1 (DB), M2 (UI) | A supplier with opening balance ৳25,000 shows ৳25,000 due before any GRN.                                                  |
+| FR-PUR-002 | Purchase orders (optional) shall be created per branch and supplier with medicines, pack units and quantities, printed or shared as PDF, and have the states Draft, Sent, Partially received, Closed and Cancelled.                                                                                                                                                                                                                                                                 | Should | M2               | A PO moves Draft to Sent to Partially received after a GRN covering part of it.                                            |
+| FR-PUR-003 | A GRN may reference a PO; received quantities update the PO's outstanding quantities, and a PO can be closed with outstanding quantities cancelled.                                                                                                                                                                                                                                                                                                                                 | Should | M2               | PO for 10 boxes, GRN for 6: outstanding shows 4.                                                                           |
+| FR-PUR-004 | A goods receipt (GRN) shall record branch, supplier, supplier invoice number and date, and lines. A GRN can be saved as a draft and edited until posted.                                                                                                                                                                                                                                                                                                                            | Must   | M1 (DB), M2 (UI) | A draft GRN creates no stock; posting it creates stock.                                                                    |
+| FR-PUR-005 | A GRN line shall record medicine, pack unit, quantity, free (bonus) quantity, batch number, expiry date, purchase price per pack, MRP per pack and line discount.                                                                                                                                                                                                                                                                                                                   | Must   | M1               | A line without batch number, expiry or MRP is rejected.                                                                    |
+| FR-PUR-006 | GRN validation shall reject expired batches and lines whose sale price exceeds MRP, and warn when unit cost exceeds MRP or remaining shelf life is below 180 days (CFG-09).                                                                                                                                                                                                                                                                                                         | Must   | M2               | A batch with expiry before today is rejected; a batch expiring in 120 days needs explicit confirmation.                    |
+| FR-PUR-007 | Posting a GRN shall, in one transaction (indicative function `receive_purchase`): create or increase batches, insert purchase-receipt movements, credit the supplier ledger with the payable amount, write controlled-drug register entries for controlled items, and write audit entries. A line creates a new batch unless a batch with the same medicine, batch number, expiry date, MRP and unit cost already exists at that branch, in which case the quantity is added to it. | Must   | M1               | After posting, on-hand, supplier due, register and audit all reflect the GRN; a failure in any line leaves nothing posted. |
+| FR-PUR-008 | Effective unit cost shall spread the net line amount over paid plus bonus quantity.                                                                                                                                                                                                                                                                                                                                                                                                 | Must   | M1               | 10 strips at ৳30.00 with 2 bonus strips (10 tablets each) gives cost ৳2.50 per tablet (৳300.00 / 120).                     |
+| FR-PUR-009 | A posted GRN shall be immutable. A Branch Manager or the Owner may reverse a posted GRN in full only while none of its quantity has been sold, transferred or adjusted; otherwise corrections use a purchase return or adjustment.                                                                                                                                                                                                                                                  | Should | M2               | Reversal is rejected after one tablet of the GRN has been sold.                                                            |
+| FR-PUR-010 | When a received MRP differs from the medicine's most recent MRP at that branch, the GRN screen shall highlight the change, and the POS shall price each batch at its own MRP.                                                                                                                                                                                                                                                                                                       | Should | M2               | Old batch MRP ৳35.00, new batch ৳38.00: both prices coexist and FEFO decides which is sold first.                          |
+| FR-PUR-011 | Supplier payments shall record supplier, amount, date, method (cash, bank transfer, cheque, bKash, Nagad, Rocket), reference and optional allocation to supplier invoices (otherwise allocated to the oldest open invoice first). Cash payments made at a branch are drawn from the open cash session (from M3).                                                                                                                                                                    | Must   | M1 (DB), M2 (UI) | A ৳10,000 payment without allocation settles the oldest invoice first; the supplier due falls by ৳10,000.                  |
+| FR-PUR-012 | Each supplier shall have an append-only ledger (opening balance, GRNs, payments, returns, adjustments) with running balance, a printable statement for any period and dues aging (0 to 30, 31 to 60, 61 to 90, over 90 days).                                                                                                                                                                                                                                                       | Must   | M2               | The statement closing balance equals the supplier's current due.                                                           |
+| FR-PUR-013 | Supplier invoice due dates shall derive from payment terms; overdue invoices appear in a list and in the dashboard.                                                                                                                                                                                                                                                                                                                                                                 | Should | M2               | With 30-day terms, an invoice dated 2026-09-01 is overdue on 2026-10-02.                                                   |
+| FR-PUR-014 | Purchase returns to a supplier shall select batch and quantity with a reason (near expiry, damaged, wrong item, recall, other), post purchase-return movements, debit the supplier ledger, and produce a numbered return document. Expired and quarantined batches may be returned.                                                                                                                                                                                                 | Must   | M3               | Returning 50 tablets of an expired batch reduces stock by 50 and the supplier due by their cost.                           |
+| FR-PUR-015 | The system shall list near-expiry return candidates per supplier (batches expiring within a selectable window, default 90 days).                                                                                                                                                                                                                                                                                                                                                    | Should | M3               | Batches expiring in 60 days from supplier S appear under S.                                                                |
+| FR-PUR-016 | A supplier credit note received later may be recorded against a purchase return, adjusting the supplier ledger.                                                                                                                                                                                                                                                                                                                                                                     | Could  | M3               | Recording the credit note does not change stock.                                                                           |
+| FR-PUR-017 | An image or PDF of the supplier invoice may be attached to a GRN (private storage).                                                                                                                                                                                                                                                                                                                                                                                                 | Could  | M3               | The attachment opens through a signed URL that expires.                                                                    |
+| FR-PUR-018 | The system shall propose a draft PO from items at or below reorder level at a branch, using reorder quantity where set.                                                                                                                                                                                                                                                                                                                                                             | Should | M3               | Three low-stock items of supplier S produce a draft PO with three lines.                                                   |
+| FR-PUR-019 | Purchase price history per medicine and supplier shall be viewable.                                                                                                                                                                                                                                                                                                                                                                                                                 | Should | M2               | The last five purchase prices with dates are shown on the GRN line.                                                        |
+
+#### 3.3.6 Sales and point of sale (FR-POS)
+
+The POS rules in this section are business-critical. Prices and totals are **always** computed by the database
+function that commits the sale (indicative name `create_sale`); values sent by the client are never trusted.
+
+##### 3.3.6.1 Search and cart
+
+| ID         | Requirement                                                                                                                                                                                                                                                                     | Pri    | MS               | Acceptance criteria                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------- | ----------------------------------------------------------------------------------------------------- |
+| FR-POS-001 | The POS search shall match brand, generic, manufacturer and barcode with prefix and fuzzy matching, and show for each result: brand, strength, dosage form, manufacturer, sellable quantity at the branch, current MRP, schedule badge (OTC, Rx, Controlled) and rack location. | Must   | M2               | Typing "omep" lists omeprazole brands with stock and rack; response time per NFR-PERF-001.            |
+| FR-POS-002 | A barcode scanned while the POS screen is active shall add the item to the cart without first focusing the search field.                                                                                                                                                        | Must   | M2               | Scanning while focus is on the payment panel still adds the item.                                     |
+| FR-POS-003 | Searching a generic name shall list all brands of that generic, with in-stock brands first.                                                                                                                                                                                     | Must   | M2               | Searching "paracetamol" lists all paracetamol brands; out-of-stock brands appear after in-stock ones. |
+| FR-POS-004 | Out-of-stock results shall be visible but not addable, and shall show quantities available at other branches of the organization.                                                                                                                                               | Should | M2               | An item with 0 at MPR and 40 at DHN shows "DHN: 40".                                                  |
+| FR-POS-005 | Quantity shall be entered in any defined pack unit of the medicine and converted to base units.                                                                                                                                                                                 | Must   | M1 (DB), M2 (UI) | Selling "1 strip" of a 10-tablet strip deducts 10 base units.                                         |
+| FR-POS-006 | The cart shall support changing quantity and pack unit, removing a line and undoing the last removal. Lines of the same medicine and pack unit are merged.                                                                                                                      | Must   | M2               | Scanning the same strip barcode twice gives one line with quantity 2.                                 |
+| FR-POS-007 | A customer shall be attachable by phone, name or loyalty card, and a new customer shall be creatable from the POS with name and phone without leaving the sale.                                                                                                                 | Must   | M2               | Creating a customer from the POS takes at most two fields and returns to the same cart.               |
+| FR-POS-008 | The cart shall show a client-side price preview (lines, discounts, total), clearly provisional until the server commits.                                                                                                                                                        | Must   | M2               | Preview equals the committed total when nothing changed between preview and commit.                   |
+| FR-POS-009 | After commit, each line shall show the batch numbers and expiry dates allocated.                                                                                                                                                                                                | Should | M2               | A line allocated from two batches shows both.                                                         |
+
+##### 3.3.6.2 Pricing, allocation and totals
+
+**Normative calculation order** (performed by the server inside the sale transaction; all amounts integer paisa):
+
+1. For each line, allocate batches (FR-POS-013).
+2. For each allocated batch portion, compute the gross amount: quantity in base units multiplied by the batch's
+   price per base unit, derived proportionally from the pack price, and rounded half up to the nearest paisa once per
+   line portion (FR-POS-012).
+3. Apply the manual line discount (percentage or amount), if any.
+4. Apply the loyalty discount to eligible lines according to the stacking rule and per-invoice cap (FR-LOY-025 to
+   FR-LOY-028).
+5. Apply the manual invoice discount (percentage or amount), allocated to lines in proportion to their amounts with any
+   remainder paisa going to the largest line, so that every line has an exact net amount (FR-POS-019).
+6. Compute the VAT contained in each line net (prices are MRP-inclusive): VAT = round half up of
+   line net x rate / (100 + rate). VAT does not change the payable amount. Default rate 0 % (CFG-01).
+7. Invoice subtotal = sum of line nets.
+8. If rounding to the nearest taka is enabled (CFG-02, default off), add a rounding adjustment line between -৳0.49 and
+   +৳0.50 so the total is a whole taka (half up).
+9. Total payable = subtotal + rounding adjustment. Payments, including loyalty points redeemed (FR-LOY-033), must sum
+   to the total payable.
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                             | Pri  | MS  | Acceptance criteria                                                                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-POS-010 | The server shall compute all prices, discounts, VAT, rounding and totals. The client sends only medicine, pack unit, quantity, requested discounts, customer, card, prescription details, payments, the idempotency key and the total it displayed (expected total).                                                                                    | Must | M1  | A client-supplied line price is ignored (scenario FR-POS-010).                                                                                              |
+| FR-POS-011 | If the computed total differs from the expected total, the sale shall be rejected without side effects, returning the server's computed lines and total so the cashier can confirm and resubmit.                                                                                                                                                        | Must | M1  | See scenario FR-POS-010.                                                                                                                                    |
+| FR-POS-012 | The sale price per base unit shall never exceed the batch MRP per base unit; line gross is computed per allocated batch as defined in the calculation order.                                                                                                                                                                                            | Must | M1  | Property-based tests over random packs, prices and quantities never produce a line above quantity x MRP per base unit plus less than one paisa of rounding. |
+| FR-POS-013 | Stock shall be allocated first-expiry-first-out: among the branch's sellable batches (not expired per FR-INV-009, not inside the near-expiry sale block of CFG-40, default 0 days, not quarantined), earliest expiry first, then earliest receipt, then batch identifier. One line may be allocated from several batches, each priced at its own price. | Must | M1  | See scenario FR-POS-013.                                                                                                                                    |
+| FR-POS-014 | If sellable stock is insufficient for any line, the whole sale shall be rejected, naming the line and the available quantity.                                                                                                                                                                                                                           | Must | M1  | Requesting 12 when 10 are sellable returns "10 available" and creates nothing.                                                                              |
+| FR-POS-015 | Line amounts shall be rounded half up to the nearest paisa; the invoice total equals the sum of line nets plus the optional rounding adjustment line (calculation order steps 2 to 9).                                                                                                                                                                  | Must | M1  | Unit tests cover half-up at 0.5 paisa, taka rounding at ৳0.49 and ৳0.50, and sum consistency.                                                               |
+
+##### 3.3.6.3 Discounts and role limits
+
+Manual discounts are limited per role. The values below are the seeded defaults of CFG-05 (configurable per
+organization by the Owner); the [security model](../security/security-model.md) defines which roles may give and
+approve discounts.
+
+| Role           | Maximum manual discount without approval (line or invoice, as % of gross) | May approve overrides up to |
+| -------------- | ------------------------------------------------------------------------- | --------------------------- |
+| Salesman       | 5 %                                                                       | Not an approver             |
+| Branch Manager | 15 %                                                                      | 15 %                        |
+| Owner          | 100 %                                                                     | 100 %                       |
+
+Loyalty discounts are computed by the system and do not count towards a user's manual discount limit.
+
+| ID         | Requirement                                                                                                                                                                                                            | Pri    | MS  | Acceptance criteria                                                                     |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --- | --------------------------------------------------------------------------------------- |
+| FR-POS-016 | The cashier shall be able to apply a line discount and an invoice discount, each as a percentage or a fixed amount, with a reason chosen from a configurable list.                                                     | Must   | M2  | A 5 % invoice discount with reason "Regular customer" is stored with the sale.          |
+| FR-POS-017 | The effective manual discount of each line (line discount plus allocated invoice discount) and of the invoice (total manual discount over invoice gross) shall not exceed the user's role limit (CFG-05).              | Must   | M1  | A Salesman's 6 % line discount is rejected by the server even if the client allowed it. |
+| FR-POS-018 | A discount above the user's limit shall require an approval override (FR-IAM-012) by a user whose limit covers it; the approver is stored on the sale.                                                                 | Must   | M2  | See scenario FR-POS-018.                                                                |
+| FR-POS-019 | Invoice-level discounts shall be allocated to lines in proportion to line amounts, with remainder paisa assigned to the largest line, so that per-line net amounts are exact and returns refund exactly what was paid. | Must   | M1  | Property test: the sum of allocated discounts always equals the invoice discount.       |
+| FR-POS-020 | Manual price entry (changing the unit price) shall not exist; reductions are possible only as discounts.                                                                                                               | Must   | M2  | No UI or API path accepts a unit price.                                                 |
+| FR-POS-021 | When a line's net amount falls below its batch cost, the POS shall warn the cashier (CFG-35); the sale may proceed within discount limits.                                                                             | Should | M2  | A 15 % Manager discount on a low-margin item shows the below-cost warning.              |
+
+##### 3.3.6.4 Payments
+
+| ID         | Requirement                                                                                                                                                                                        | Pri    | MS  | Acceptance criteria                                                                 |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --- | ----------------------------------------------------------------------------------- |
+| FR-POS-022 | Payment methods shall be Cash, bKash, Nagad, Rocket, Card and Credit (customer due, বাকি). Methods can be enabled or disabled per organization.                                                    | Must   | M1  | Disabling Rocket hides it at the POS and the server rejects it.                     |
+| FR-POS-023 | A sale may be paid with several methods (split payment). The sum of payments shall equal the total payable.                                                                                        | Must   | M1  | ৳500 cash plus ৳735 bKash for a ৳1,235 total commits; ৳1,234 in total is rejected.  |
+| FR-POS-024 | For cash, the cashier enters the amount tendered and the POS shows the change; change is given only from cash. Only the net cash amount is recorded in the cash session.                           | Must   | M2  | ৳1,000 tendered for a ৳935 cash payment shows ৳65 change; the session records ৳935. |
+| FR-POS-025 | MFS payments (bKash, Nagad, Rocket) shall record the transaction ID (TrxID) entered by the cashier; the field is mandatory by default. Integration with MFS APIs is out of scope (section 5).      | Must   | M2  | A bKash payment without TrxID is rejected while the setting is mandatory.           |
+| FR-POS-026 | Card payments may record the last four digits and the terminal approval code; full card numbers shall never be entered or stored.                                                                  | Should | M2  | Entering more than four digits in the card field is impossible.                     |
+| FR-POS-027 | A Credit (বাকি) payment requires an identified customer and is posted to the customer's due ledger; if it would exceed the customer's credit limit, an approval override is required (FR-CUS-006). | Must   | M1  | A credit payment on a walk-in sale is rejected.                                     |
+| FR-POS-028 | Loyalty points may be used as a non-cash tender when the points benefit is enabled (FR-LOY-033).                                                                                                   | Should | M3  | 100 points at ৳1.00 each settle ৳100 of a ৳400 sale.                                |
+
+##### 3.3.6.5 Commit, numbering and receipts
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Pri    | MS  | Acceptance criteria                                                                                                 |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --- | ------------------------------------------------------------------------------------------------------------------- |
+| FR-POS-029 | Committing a sale shall, in one transaction: validate, allocate, price, assign the invoice number, write the sale, lines, batch allocations, stock movements, payments, customer ledger entries, loyalty usage and points, controlled-drug register entries, daily summary updates and audit entries. Any failure rolls everything back.                                                                                                                                                                                                                                                              | Must   | M1  | Fault injection after the stock movement insert leaves no trace of the sale.                                        |
+| FR-POS-030 | Invoice numbers shall be gapless and sequential per branch per fiscal year, generated by the database inside the sale transaction, in the format `<BRANCH>-<FY>-<6-digit sequence>` (for example `MPR-2026-000123`, CFG-04). Numbers are never reused or deleted; a voided invoice keeps its number.                                                                                                                                                                                                                                                                                                  | Must   | M1  | See scenario FR-POS-030; a nightly integrity check confirms that every series runs 1..N with no gaps (NFR-REL-004). |
+| FR-POS-031 | An authorized user may override the FEFO allocation of a line by choosing another sellable batch (for example when the customer is handed a specific strip). The override is recorded on the line.                                                                                                                                                                                                                                                                                                                                                                                                    | Should | M2  | The chosen batch is deducted instead of the FEFO batch; the line shows "batch overridden".                          |
+| FR-POS-032 | The sale timestamp and business date shall be assigned by the server (Asia/Dhaka business date); sales cannot be back-dated or future-dated. The only exception is an offline sale synchronized later, which keeps its device time when that time lies within the window defined in the [architecture](../architecture/architecture.md) offline conflict rules (otherwise server time is used and the sale is flagged).                                                                                                                                                                               | Must   | M1  | A sale committed at 2026-10-06 23:59:59 Asia/Dhaka has business date 2026-10-06 (17:59:59 UTC).                     |
+| FR-POS-033 | A receipt shall print automatically after commit in the branch's default size, showing: organization trading name, branch name, address, phone and drug licence number; invoice number; date and time (Asia/Dhaka); cashier; customer and masked phone (if attached); masked loyalty card number and loyalty savings (if any); per line brand, strength, dosage form, quantity with pack unit, batch and expiry (if enabled), MRP, discount and net; totals, VAT content if the rate is above zero, rounding adjustment, payments, change; return-policy footer; and a QR code of the invoice number. | Must   | M2  | A sample sale prints correctly on 58 mm, 80 mm and A4 in English and Bangla (visual regression snapshot).           |
+| FR-POS-034 | Reprints shall be marked "DUPLICATE" and each reprint is audited.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Must   | M2  | The second print of an invoice shows "DUPLICATE"; the audit log shows the reprint.                                  |
+| FR-POS-035 | Scanning a receipt's QR code in the sales or returns screen shall open that invoice.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Should | M3  | Scanning the QR of MPR-2026-000123 opens it.                                                                        |
+| FR-POS-036 | Sales shall be searchable by invoice number, date range, customer, salesman, payment method and status.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Must   | M2  | Filtering by bKash for 2026-10-06 lists only invoices with a bKash payment that day.                                |
+
+##### 3.3.6.6 Held (parked) bills
+
+| ID         | Requirement                                                                                                                                                                               | Pri    | MS  | Acceptance criteria                                                           |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --- | ----------------------------------------------------------------------------- |
+| FR-POS-037 | The cashier shall be able to hold (park) the current cart and start a new one. Held bills are stored on the server per branch, do not consume an invoice number and do not reserve stock. | Must   | M2  | A held bill does not reduce sellable stock; stock is checked again at commit. |
+| FR-POS-038 | Held bills shall be recallable on any terminal of the same branch by users of that branch.                                                                                                | Should | M2  | A bill held at Counter 1 is recalled at Counter 2.                            |
+| FR-POS-039 | Held bills shall expire at the end of the business date (CFG-10) and are then discarded; discarding is logged.                                                                            | Should | M2  | A bill held at 22:00 is not available the next day.                           |
+
+##### 3.3.6.7 Void
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                 | Pri  | MS  | Acceptance criteria                                                                 |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | --- | ----------------------------------------------------------------------------------- |
+| FR-POS-040 | A completed invoice may be voided only on its own business date and, when cash sessions are in use, only while the cash session in which it was recorded is open. Otherwise the return process applies.                                                                                                                                                     | Must | M2  | See scenario FR-POS-040 (second case).                                              |
+| FR-POS-041 | A void requires a reason. A Salesman's void requires approval by a Branch Manager or the Owner (FR-IAM-012); a Branch Manager's or Owner's own void is self-approved and audited.                                                                                                                                                                           | Must | M2  | A Salesman cannot complete a void without an approver; the approver's ID is stored. |
+| FR-POS-042 | Voiding shall, in one transaction: set the invoice status to Voided (keeping its number), restore stock to the originally allocated batches through void movements, reverse payments in the cash session, reverse customer ledger entries, reverse loyalty discount usage and points, and reverse controlled-drug register entries by compensating entries. | Must | M2  | See scenario FR-POS-040 (first case).                                               |
+| FR-POS-043 | A voided invoice reprint shall be marked "VOID".                                                                                                                                                                                                                                                                                                            | Must | M2  | Reprinting a voided invoice shows "VOID".                                           |
+| FR-POS-044 | Voids shall appear in the exceptions report (FR-RPT-014) with reason, requester and approver.                                                                                                                                                                                                                                                               | Must | M2  | Every void of the period appears in the report.                                     |
+
+##### 3.3.6.8 Returns and refunds
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                           | Pri    | MS  | Acceptance criteria                                                   |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --- | --------------------------------------------------------------------- |
+| FR-POS-045 | A sale return shall reference the original invoice (by number, QR or search); returns without an invoice are not allowed.                                                                                                                                                                                                                                             | Must   | M3  | The return screen cannot proceed without a selected invoice.          |
+| FR-POS-046 | Returns shall be allowed within the return window, default 7 days from the sale business date (CFG-06); later returns require Owner approval.                                                                                                                                                                                                                         | Must   | M3  | A return on day 8 requires Owner approval.                            |
+| FR-POS-047 | The returned quantity per line shall not exceed the quantity sold minus quantities already returned.                                                                                                                                                                                                                                                                  | Must   | M3  | See scenario FR-POS-045.                                              |
+| FR-POS-048 | A return whose refund exceeds ৳500 (CFG-07) or that includes a controlled drug shall require Branch Manager or Owner approval (FR-IAM-012).                                                                                                                                                                                                                           | Must   | M3  | A ৳600 return by a Salesman waits for approval.                       |
+| FR-POS-049 | Returned units shall be restocked to their original batch through return movements, unless the batch has expired or the cashier marks the goods as damaged or opened, in which case they are recorded as returned and written off (non-sellable) with that reason.                                                                                                    | Must   | M3  | A sealed strip goes back to batch A1; a damaged strip is written off. |
+| FR-POS-050 | Medicines flagged non-returnable (FR-CAT-013, for example cold-chain items) shall not be returnable except with Owner approval.                                                                                                                                                                                                                                       | Should | M3  | Returning an insulin pen requires Owner approval.                     |
+| FR-POS-051 | The refund amount shall equal the net amount actually paid for the returned units: line net divided by line quantity times returned quantity, rounded half up; the final return of a line's remaining units receives the residual so the total refunded never exceeds the line net. If taka rounding is enabled, cash refunds are rounded with a rounding adjustment. | Must   | M3  | See scenario FR-POS-045.                                              |
+| FR-POS-052 | The refund method shall be cash from the open cash session, the original MFS or card method (recorded manually), or a credit to the customer's due ledger.                                                                                                                                                                                                            | Must   | M3  | A refund to due reduces the customer's balance by the refund amount.  |
+| FR-POS-053 | Each return shall produce a credit note with a gapless number per branch per fiscal year in its own series (default format `<BRANCH>-CN-<FY>-<6-digit sequence>`, for example `MPR-CN-2026-000012`).                                                                                                                                                                  | Must   | M3  | Two consecutive returns get consecutive credit note numbers.          |
+| FR-POS-054 | A return shall proportionally reverse loyalty points earned on the returned units and restore points redeemed (FR-LOY-036).                                                                                                                                                                                                                                           | Must   | M3  | Returning half of a sale reverses half of the points earned.          |
+
+##### 3.3.6.9 Offline sales (PWA)
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                        | Pri    | MS  | Acceptance criteria                                                                                                 |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --- | ------------------------------------------------------------------------------------------------------------------- |
+| FR-POS-055 | When the network is unavailable, the installed PWA on a registered counter terminal of a branch where the Owner has enabled offline mode shall continue to record cash and MFS sales locally in an IndexedDB queue, each with an idempotency key, using a cached catalog, stock and active-card snapshot.                          | Should | M4  | With the network disabled, 20 sales are recorded and later synchronized exactly once.                               |
+| FR-POS-056 | Offline sales shall carry a provisional reference (device and local sequence) printed on the receipt; the official gapless invoice number is assigned when the sale is synchronized.                                                                                                                                               | Should | M4  | The offline receipt shows a provisional reference; after sync, the sale has an official number and both are linked. |
+| FR-POS-057 | Offline mode shall not allow controlled-drug sales, credit (বাকি) sales, voids, returns, loyalty enrollment, discounts above the user's limit, or non-sale operations (goods receipt, transfers, adjustments, cash session close).                                                                                                 | Must   | M4  | These actions are disabled while offline.                                                                           |
+| FR-POS-058 | Synchronization shall start automatically within 1 minute of reconnection. A queued sale that fails server validation (for example insufficient stock, a changed price or an expired membership) goes to a conflict list for Branch Manager resolution, is never silently dropped and is never auto-accepted at a different total. | Should | M4  | A conflicting offline sale appears in the conflict list with the server error.                                      |
+| FR-POS-059 | The POS shall show a clear online or offline indicator and the number of unsynchronized sales.                                                                                                                                                                                                                                     | Should | M4  | Disconnecting the network shows "Offline: 3 sales waiting".                                                         |
+
+**Acceptance scenarios (POS)**
+
+```gherkin
+Scenario: FR-POS-010 the server ignores client-supplied prices
+  Given batch "A1" of "Omeprazole 20 mg capsule" has MRP ৳70.00 per strip of 10 capsules
+  When the client submits 1 strip with a line price of ৳40.00 and an expected total of ৳40.00
+  Then the server computes the line at ৳70.00
+  And the sale is rejected as "total changed" with the server total ৳70.00
+  And no sale, stock movement or invoice number is created
+
+Scenario: FR-POS-013 FEFO allocation across batches
+  Given the business date is 2026-10-06
+  And branch "MPR" has these batches of "Omeprazole 20 mg capsule":
+    | batch | expiry     | on hand |
+    | X0    | 2026-09-30 | 20      |
+    | A1    | 2026-12-31 | 6       |
+    | B7    | 2027-03-31 | 50      |
+  When a sale of 10 capsules is committed
+  Then 6 capsules are allocated from "A1" and 4 from "B7"
+  And nothing is allocated from expired batch "X0"
+
+Scenario: FR-POS-018 discount above the Salesman limit needs approval
+  Given the Salesman limit is 5 % and the Branch Manager limit is 15 %
+  And a cart with gross amount ৳1,000.00
+  When the Salesman applies an invoice discount of 8 %
+  Then the sale cannot be committed until an approver whose limit covers 8 % approves
+  When the Branch Manager approves on the terminal with password and TOTP
+  Then the sale commits with a discount of ৳80.00
+  And the sale records the Salesman as requester and the Branch Manager as approver
+
+Scenario: FR-POS-030 a failed sale does not consume an invoice number
+  Given the last invoice of branch "MPR" in FY 2026 is "MPR-2026-000122"
+  When a sale is rejected for insufficient stock
+  And the next sale commits successfully
+  Then its invoice number is "MPR-2026-000123"
+
+Scenario: FR-POS-030 a new fiscal year starts a new series
+  Given the fiscal year starts on 1 July
+  And the last invoice of branch "MPR" in FY 2025 is "MPR-2025-004518"
+  When the first sale is committed at 2026-07-01 00:00:05 Asia/Dhaka
+  Then its invoice number is "MPR-2026-000001"
+
+Scenario: FR-POS-040 void on the same business date restores stock
+  Given invoice "MPR-2026-000123" was committed today with 2 strips (20 tablets) from batch "A1"
+  And the cash session of that sale is open
+  When the Salesman requests a void with reason "Wrong item billed"
+  And the Branch Manager approves
+  Then the invoice status is Voided and its number is unchanged
+  And 20 tablets are restored to batch "A1"
+  And the cash payment is reversed in the open cash session
+
+Scenario: FR-POS-040 void is refused on a later business date
+  Given invoice "MPR-2026-000100" was committed on 2026-10-05
+  When a void is requested on 2026-10-06
+  Then the void is rejected and the user is directed to the return process
+
+Scenario: FR-POS-045 partial return refunds the net amount paid
+  Given taka rounding is disabled
+  And invoice "MPR-2026-000123" sold 3 strips at ৳35.00 each with a 10 % invoice discount (line net ৳94.50)
+  When 1 strip is returned 2 days later
+  Then the refund is ৳31.50
+  And 10 tablets are restocked to the original batch
+  And credit note "MPR-CN-2026-000012" is issued
+  And a later attempt to return 3 more strips of that line is rejected
+```
+
+#### 3.3.7 Customers (FR-CUS)
+
+| ID         | Requirement                                                                                                                                                                                                                                                    | Pri    | MS               | Acceptance criteria                                                                                                |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| FR-CUS-001 | A customer profile shall hold name, mobile phone, optional address and optional notes. No other personal data (for example national ID or date of birth) is collected (NFR-PRIV-002).                                                                          | Must   | M1 (DB), M2 (UI) | A customer is created with name and phone only.                                                                    |
+| FR-CUS-002 | The phone number shall be unique within the organization, validated as a Bangladeshi mobile number (`01[3-9]` followed by 8 digits) and stored normalized in E.164 form (`+8801XXXXXXXXX`). Input with or without `+88`, spaces or Bangla digits is accepted.  | Must   | M1               | "০১৭১১-২২৩৩৪৪" and "+8801711223344" resolve to the same customer; a second customer with that number is rejected.  |
+| FR-CUS-003 | A sale shall not require a customer (walk-in).                                                                                                                                                                                                                 | Must   | M1               | A cash sale without a customer commits.                                                                            |
+| FR-CUS-004 | Customers shall be searchable by phone (full or last digits), name and loyalty card number, across all branches of the organization.                                                                                                                           | Must   | M2               | Searching "3344" finds the customer above.                                                                         |
+| FR-CUS-005 | Each customer shall have a credit limit; the default for new customers is ৳0, meaning no credit (CFG-32). Changing a credit limit is audited and restricted per the security model.                                                                            | Must   | M1               | A credit sale for a customer with limit ৳0 requires an override.                                                   |
+| FR-CUS-006 | A credit sale that would make the customer's due exceed the credit limit shall require an approval override (FR-IAM-012).                                                                                                                                      | Must   | M2               | Limit ৳5,000, due ৳4,500, credit sale ৳800: approval required.                                                     |
+| FR-CUS-007 | Each customer shall have an append-only due ledger (opening balance, credit sales, collections, refunds to due, write-offs) with running balance.                                                                                                              | Must   | M1               | UPDATE and DELETE on ledger rows are denied; the balance equals the ledger sum (NFR-REL-003).                      |
+| FR-CUS-008 | Due collections shall be recordable at any branch with method (Cash, bKash, Nagad, Rocket, Card) and reference, allocated to the oldest open credit invoices first, with a printed collection receipt. Cash collections enter the open cash session (from M3). | Must   | M2               | A ৳1,000 collection at DHN reduces a due created at MPR.                                                           |
+| FR-CUS-009 | Purchase history across branches and a customer statement for any date range shall be viewable and printable.                                                                                                                                                  | Must   | M2               | The statement closing balance equals the current due.                                                              |
+| FR-CUS-010 | A dues report shall show aging (0 to 30, 31 to 60, 61 to 90, over 90 days) per customer and per branch.                                                                                                                                                        | Must   | M2               | A credit sale 45 days old appears in the 31 to 60 bucket.                                                          |
+| FR-CUS-011 | The Owner may write off an uncollectable due with a reason; the write-off is a ledger entry and is audited.                                                                                                                                                    | Should | M3               | After a ৳300 write-off, the due is reduced by ৳300 and the write-off appears in the dues report and the audit log. |
+| FR-CUS-012 | Customers with opening dues shall be importable from CSV or XLSX with a dry-run report.                                                                                                                                                                        | Should | M2               | 300 customers with dues import atomically; total dues equal the file total.                                        |
+| FR-CUS-013 | The Owner may merge duplicate customer records; history, dues, loyalty and points move to the surviving record.                                                                                                                                                | Could  | M3               | After merging, the merged record is archived and all its transactions reference the survivor.                      |
+| FR-CUS-014 | On a customer's request, the Owner shall be able to export that customer's data and anonymize the profile while retaining transaction and regulatory records (NFR-PRIV-006).                                                                                   | Should | M4               | After anonymization, name and phone are replaced and the invoices remain.                                          |
+| FR-CUS-015 | Each customer shall have a marketing consent flag (default false) with the date it was given; it is required before any future promotional SMS.                                                                                                                | Should | M3               | Consent is recorded with timestamp and user.                                                                       |
+
+#### 3.3.8 Loyalty card program (FR-LOY)
+
+The Owner has not yet decided whether membership is paid or free, whether the benefit is a discount or reward points,
+or whether SMS is used. Therefore **every business rule of the loyalty program is configuration, not code**, with the
+defaults listed in [3.3.8.8](#3388-owner-decisions-pending-and-configured-defaults).
+
+##### 3.3.8.1 Concepts
+
+| Concept       | Description                                                                                                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Plan          | Template with duration, fee, discount percentage, points rules and caps. Two plans are seeded (3 and 6 months); any number can be added                                                          |
+| Membership    | One period of a customer on a plan, with start date, end date, status (Active, Expired, Cancelled) and a snapshot of the plan terms at purchase                                                  |
+| Card          | The identifier the customer presents. The card number is unique within the organization and printed with a QR code and a Code 128 barcode. A customer keeps the same card number across renewals |
+| Usage record  | One row per invoice on which a loyalty benefit was applied (discount and points), used for reporting and abuse detection                                                                         |
+| Points ledger | Append-only record of points earned, redeemed, reversed, restored, expired, forfeited and adjusted                                                                                               |
+
+```mermaid
+stateDiagram-v2
+    [*] --> Active: enroll or renew, fee paid or fee is zero
+    Active --> Expired: end date passed
+    Active --> Cancelled: cancelled with reason
+    Expired --> [*]
+    Cancelled --> [*]
+    note right of Expired
+        Renewal after expiry creates a new Active period
+        starting on the renewal date for the same card
+    end note
+```
+
+##### 3.3.8.2 Plan configuration
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Pri   | MS  | Acceptance criteria                                                                                          |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | --- | ------------------------------------------------------------------------------------------------------------ |
+| FR-LOY-001 | A plan shall have: name (English and Bangla), description, duration (value and unit: months or days), fee (৳, may be 0), discount percentage (0.00 to 100.00) on eligible items, points earn rate (points per ৳100 of eligible net amount; 0 disables earning), point value (৳ per point on redemption), minimum points to redeem, maximum share of an invoice payable with points, optional maximum loyalty discount per invoice (৳), points validity (months), and active status. | Must  | M3  | A plan is saved with every field; a negative fee or a discount above 100 % is rejected.                      |
+| FR-LOY-002 | Two plans shall be seeded for each new organization with the defaults in [3.3.8.8](#3388-owner-decisions-pending-and-configured-defaults): a 3-month plan and a 6-month plan.                                                                                                                                                                                                                                                                                                       | Must  | M3  | A new organization contains both seeded plans, which the Owner can edit.                                     |
+| FR-LOY-003 | Any duration from 1 to 36 months, or 1 to 1,095 days, shall be allowed.                                                                                                                                                                                                                                                                                                                                                                                                             | Must  | M3  | A 12-month plan and a 45-day plan can be created.                                                            |
+| FR-LOY-004 | A plan fee of ৳0 (free membership) shall be supported; no payment is then collected at enrollment.                                                                                                                                                                                                                                                                                                                                                                                  | Must  | M3  | Enrolling on a free plan completes without a payment step.                                                   |
+| FR-LOY-005 | A plan shall offer a discount, points, or both; a plan with neither benefit is rejected.                                                                                                                                                                                                                                                                                                                                                                                            | Must  | M3  | Saving a plan with discount 0 % and earn rate 0 is rejected.                                                 |
+| FR-LOY-006 | The plan terms in force at enrollment or renewal shall be copied (snapshotted) to the membership. Later plan edits apply only to new enrollments and renewals.                                                                                                                                                                                                                                                                                                                      | Must  | M3  | After the 3-month plan's discount changes from 5 % to 7 %, existing members still receive 5 % until renewal. |
+| FR-LOY-007 | Plans shall be deactivated, never deleted; deactivated plans are not offered for new enrollments or renewals but existing memberships continue to their end date.                                                                                                                                                                                                                                                                                                                   | Must  | M3  | A deactivated plan disappears from the enrollment list; its members keep their benefit.                      |
+| FR-LOY-008 | A plan may be restricted to selected branches (default: all branches).                                                                                                                                                                                                                                                                                                                                                                                                              | Could | M3  | A plan restricted to MPR is not offered or honoured at DHN.                                                  |
+| FR-LOY-009 | Plan configuration shall be restricted per the security model (default: Owner only) and every change audited.                                                                                                                                                                                                                                                                                                                                                                       | Must  | M3  | A Branch Manager cannot change a plan fee; the Owner's change is audited.                                    |
+
+##### 3.3.8.3 Enrollment, card, renewal and cancellation
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                   | Pri    | MS  | Acceptance criteria                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --- | ---------------------------------------------------------------------------------------------- |
+| FR-LOY-010 | Enrollment shall be possible from the POS or the customer screen: select or create the customer (phone mandatory), choose a plan, collect the fee by any enabled payment method (split allowed), issue the card and print the membership slip. It executes atomically in one database function (indicative `enroll_loyalty`). | Must   | M3  | See scenario FR-LOY-014.                                                                       |
+| FR-LOY-011 | A customer shall hold at most one card and at most one membership covering any given date. Enrolling a customer who already has a current membership is rejected with an offer to renew.                                                                                                                                      | Must   | M3  | A second enrollment for a current member is rejected.                                          |
+| FR-LOY-012 | Card numbers shall be generated by the system, unique within the organization, and contain a check digit (default format: 10 digits with a Luhn mod-10 check digit, CFG-25). The QR code and barcode encode the card number only, never personal data.                                                                        | Must   | M3  | 10,000 generated numbers are unique and pass the Luhn check; a mistyped digit fails the check. |
+| FR-LOY-013 | The system shall print a membership slip on the receipt printer (and a card layout for PVC or card-stock printing) showing the organization name, member name, masked phone, card number, QR code, plan and end date.                                                                                                         | Should | M3  | The slip prints on 58 mm and 80 mm paper and the QR scans back to the card.                    |
+| FR-LOY-014 | The membership start date shall be the enrollment business date; the end date is the start date plus the plan duration minus one day; the membership is valid until the end of the end date (Asia/Dhaka).                                                                                                                     | Must   | M3  | See scenario FR-LOY-014.                                                                       |
+| FR-LOY-015 | Members shall be found by scanning the card, typing the card number, or entering the customer's phone. The result shows name, masked phone, plan, status, end date and points balance.                                                                                                                                        | Must   | M3  | Each of the three lookups returns the same member.                                             |
+| FR-LOY-016 | The membership fee shall be recorded on a numbered invoice from the branch's gapless series as a non-stock line, included in cash session totals, and reported as membership fee revenue separately from medicine sales and gross profit. VAT on the fee follows CFG-34 (default 0 %).                                        | Must   | M3  | The daily sales report shows medicine sales and membership fees on separate lines.             |
+| FR-LOY-017 | Renewal shall be possible at any time: if the current membership has not ended, the new period starts the day after its end date; if it has ended, the new period starts on the renewal date. The customer may switch plans at renewal. The card number is unchanged.                                                         | Must   | M3  | See scenario FR-LOY-017.                                                                       |
+| FR-LOY-018 | Only one future (not yet started) period may exist per card.                                                                                                                                                                                                                                                                  | Must   | M3  | A second early renewal is rejected while one future period exists.                             |
+| FR-LOY-019 | A Branch Manager or the Owner may cancel a membership with a reason. Benefits stop immediately; the fee refund follows CFG-19 (default: no refund); unredeemed points follow OD-10 (default: forfeited).                                                                                                                      | Must   | M3  | A cancelled card receives no discount on the next sale; the cancellation is audited.           |
+| FR-LOY-020 | A membership whose end date has passed shall be treated as Expired at the moment of use (authoritative check in the sale transaction), and a scheduled job shall set the stored status daily at 00:05 Asia/Dhaka.                                                                                                             | Must   | M3  | See scenario FR-LOY-020.                                                                       |
+| FR-LOY-021 | A lost or damaged card shall be replaceable by a Branch Manager: a new card number is issued, the old number is blocked, and membership and points carry over. A replacement fee is configurable (default ৳0).                                                                                                                | Should | M3  | After replacement, scanning the old card shows "blocked card".                                 |
+| FR-LOY-022 | The organization may import ranges of pre-printed card numbers and assign an unused one at enrollment.                                                                                                                                                                                                                        | Could  | M3  | An imported card number is assigned and cannot be assigned again.                              |
+
+##### 3.3.8.4 Benefits at the POS, points and exclusions
+
+| ID         | Requirement                                                                                                                                                                                                                                                                | Pri    | MS  | Acceptance criteria                                                                                                                                                                        |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FR-LOY-023 | A card shall be attachable to a sale by scan, typed card number or phone lookup. The membership is re-validated by the server at commit.                                                                                                                                   | Must   | M3  | A card that expires between attach and commit receives no benefit at commit.                                                                                                               |
+| FR-LOY-024 | When the card number is typed or found by phone (not scanned), the cashier shall enter the last three digits of the member's phone to confirm (CFG-20, default on). The entry method is recorded.                                                                          | Should | M3  | A typed card number with wrong last digits is not applied; the usage record shows "manual".                                                                                                |
+| FR-LOY-025 | The loyalty discount shall be applied automatically by the server to eligible lines at the membership's snapshotted discount percentage; the cashier cannot edit the percentage but may detach the card at the customer's request.                                         | Must   | M3  | See scenario FR-LOY-025.                                                                                                                                                                   |
+| FR-LOY-026 | The stacking rule with manual discounts shall be configurable (CFG-18): "best of" (default; on each eligible line the larger of the manual discount and the loyalty discount applies, not both) or "stack" (loyalty applies to the line amount after the manual discount). | Must   | M3  | Line ৳200.00, manual 3 % and loyalty 5 %: best of gives ৳10.00 discount; stack gives ৳6.00 + ৳9.70 = ৳15.70.                                                                               |
+| FR-LOY-027 | A line is eligible only if the medicine's loyalty eligibility flag is true. Non-stock lines (for example the membership fee) are never eligible. Controlled drugs are not eligible by default (FR-CAT-012).                                                                | Must   | M3  | See scenario FR-LOY-025.                                                                                                                                                                   |
+| FR-LOY-028 | When the plan has a maximum loyalty discount per invoice, the total loyalty discount shall be capped at that amount and allocated to eligible lines in proportion to their amounts (remainder to the largest line).                                                        | Must   | M3  | With a ৳500 cap and ৳12,000 of eligible items at 5 %, the discount is ৳500.00, not ৳600.00.                                                                                                |
+| FR-LOY-029 | A benefit applies only if a membership of the card is Active and the sale business date lies within its period, and (if restricted) the plan is valid at the selling branch.                                                                                               | Must   | M3  | A future period that has not started yet gives no benefit today.                                                                                                                           |
+| FR-LOY-030 | Cards shall work at every active branch of the organization. The enrollment branch and the branch of each use are recorded.                                                                                                                                                | Must   | M3  | A card enrolled at MPR gets its discount at DHN; reports attribute the usage to DHN.                                                                                                       |
+| FR-LOY-031 | The receipt shall show the loyalty savings of the invoice and the member's points balance after the sale.                                                                                                                                                                  | Must   | M3  | Receipt text "Loyalty savings ৳0.60" appears for the scenario FR-LOY-025 sale.                                                                                                             |
+| FR-LOY-032 | When the plan's earn rate is above 0, points shall be earned on the eligible net amount of the invoice excluding any part paid with points: points = floor(eligible net in ৳ / 100 x earn rate).                                                                           | Should | M3  | Earn rate 1, eligible net ৳1,250.00: 12 points.                                                                                                                                            |
+| FR-LOY-033 | Points shall be redeemable as a tender (FR-POS-028) once the balance reaches the minimum, up to the plan's maximum share of the invoice, at the point value of the membership snapshot. Points are consumed oldest-expiry first.                                           | Should | M3  | Minimum 50, balance 40: redemption is refused; balance 120, invoice ৳300, maximum share 50 %: at most 120 points (৳120.00) and at most ৳150.00 may be redeemed, so 120 points are allowed. |
+| FR-LOY-034 | All point changes shall be written to an append-only points ledger; the balance is the ledger sum. Manual point adjustments require the Owner and a reason.                                                                                                                | Should | M3  | The points balance equals the sum of ledger entries (NFR-REL-003).                                                                                                                         |
+| FR-LOY-035 | Points shall expire a configurable number of months after they were earned (default 12); a daily job writes the expiry entries.                                                                                                                                            | Should | M3  | Points earned on 2026-10-06 with 12-month validity expire after 2027-10-06.                                                                                                                |
+| FR-LOY-036 | Voids and returns shall reverse the loyalty discount (through the refund amount, FR-POS-051), reverse points earned on the returned units and restore points redeemed in proportion; restored points keep their original expiry date.                                      | Must   | M3  | Voiding a sale that earned 12 points and redeemed 20 points sets the balance back to its pre-sale value.                                                                                   |
+| FR-LOY-037 | The Owner shall be able to view and bulk-edit loyalty eligibility by medicine, generic or manufacturer, and see the list of excluded items.                                                                                                                                | Should | M3  | Marking manufacturer M as excluded sets the flag false for all its medicines, with one audit entry per medicine.                                                                           |
+
+##### 3.3.8.5 Reminders
+
+| ID         | Requirement                                                                                                                                                                                                                    | Pri   | MS    | Acceptance criteria                                                                                           |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | ----- | ------------------------------------------------------------------------------------------------------------- |
+| FR-LOY-038 | The system shall provide an in-app list of memberships ending within 7 days (CFG-23) per branch, and the POS shall show a renewal prompt when a card within 7 days of its end date or expired within the last 30 days is used. | Must  | M3    | A card ending in 5 days shows "Expires on DD/MM/YYYY, offer renewal" at the POS.                              |
+| FR-LOY-039 | SMS reminders for expiry and renewal through a Bangladeshi SMS gateway, sent only to customers with marketing consent (FR-CUS-015).                                                                                            | Won't | Later | Not delivered in M1 to M5; templates and consent data are kept so that it can be added without schema change. |
+
+##### 3.3.8.6 Abuse detection
+
+| Rule | Signal                                                                                              | Default threshold (CFG-21) |
+| ---- | --------------------------------------------------------------------------------------------------- | -------------------------- |
+| R1   | Invoices with the same card on one business date, all branches                                      | More than 3                |
+| R2   | Invoices with the same card in a rolling 30 days                                                    | More than 20               |
+| R3   | Different branches using the same card within 2 hours                                               | 2 or more                  |
+| R4   | Eligible spend on the same card on one business date                                                | More than ৳20,000          |
+| R5   | Typed (not scanned) entries of the same card in a rolling 7 days                                    | More than 5                |
+| R6   | Voided or returned invoices carrying the same card in a rolling 30 days                             | More than 3                |
+| R7   | Share of one salesman's invoices carrying a loyalty card on one business date (minimum 20 invoices) | More than 60 %             |
+
+| ID         | Requirement                                                                                                                                                                                                              | Pri    | MS  | Acceptance criteria                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | --- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| FR-LOY-040 | Every loyalty use shall be recorded: card, membership, invoice, branch, register, salesman, timestamp, entry method (scan, typed, phone), eligible amount, discount amount, points earned and redeemed.                  | Must   | M3  | Each loyalty invoice has exactly one usage record with all fields.                                                                  |
+| FR-LOY-041 | The system shall evaluate rules R1 to R7 with configurable thresholds at commit (R1 to R6) and in a daily job (R7).                                                                                                      | Must   | M3  | See scenario FR-LOY-041.                                                                                                            |
+| FR-LOY-042 | A rule hit shall create a loyalty exception (rule, card, invoices, values) and notify the Owner and the Managers of the branches involved.                                                                               | Must   | M3  | One exception and one notification per recipient are created per rule hit; repeated hits on the same day update the same exception. |
+| FR-LOY-043 | The response to a rule hit shall be configurable (CFG-22): "flag only" (default; the sale proceeds with the benefit) or "hold benefit" (the sale proceeds without the loyalty benefit unless a Branch Manager approves). | Must   | M3  | In "hold benefit" mode, the fourth invoice of the day gets no discount without approval.                                            |
+| FR-LOY-044 | The Owner or a Branch Manager shall review each exception and either dismiss it with a note or cancel the membership (FR-LOY-019); the decision is audited.                                                              | Must   | M3  | A dismissed exception leaves the open-exceptions list and keeps its history.                                                        |
+| FR-LOY-045 | A report shall show, per salesman, the share of invoices with loyalty and the number of typed card entries, to detect staff misuse.                                                                                      | Should | M3  | The report reproduces the R7 calculation for a chosen date.                                                                         |
+
+##### 3.3.8.7 Loyalty reports
+
+All loyalty reports filter by date range, branch and plan, and export to CSV, XLSX and PDF (FR-RPT-020).
+
+| ID         | Requirement                                                                                                                                                                                                        | Pri    | MS  | Acceptance criteria                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | --- | ------------------------------------------------------------------------------------- |
+| FR-LOY-046 | Active members as of a date, by plan and by enrollment branch.                                                                                                                                                     | Must   | M3  | The count equals memberships whose period covers the date and that are not cancelled. |
+| FR-LOY-047 | Enrollments, renewals, cancellations and membership fee revenue per period.                                                                                                                                        | Must   | M3  | The fee revenue equals the sum of membership fee lines in the period.                 |
+| FR-LOY-048 | Revenue from members: net sales of invoices carrying a card, their share of total net sales, and average basket of members compared with non-members.                                                              | Must   | M3  | Member plus non-member net sales equals total net sales.                              |
+| FR-LOY-049 | Renewal rate for a period = memberships that ended in the period and were renewed no later than 30 days after their end date (CFG-24), divided by all memberships that ended in the period and were not cancelled. | Must   | M3  | 40 ended, 18 renewed within 30 days: 45.0 %.                                          |
+| FR-LOY-050 | Loyalty discount given per branch, plan and period, and average discount per member invoice.                                                                                                                       | Must   | M3  | The total equals the sum of discount amounts in usage records.                        |
+| FR-LOY-051 | Points issued, redeemed, expired, forfeited and outstanding, with the outstanding liability in ৳ (points x point value).                                                                                           | Should | M3  | Outstanding points equal the sum of all members' balances.                            |
+| FR-LOY-052 | Lists for follow-up: expired and not renewed members, and top members by spend.                                                                                                                                    | Should | M3  | A member expired 10 days ago without renewal appears in the first list.               |
+
+##### 3.3.8.8 Owner decisions pending and configured defaults
+
+OD-01 to OD-03 are the decisions the Owner has explicitly left open; OD-04 to OD-13 are further decisions identified
+during analysis. Until the Owner decides, the default in the third column is configured. All are changeable through
+configuration without code changes. Decisions are needed before M3 user acceptance testing.
+
+| ID    | Decision                                               | Configured default                                                                                                                                                                                  | Configured in                                            |
+| ----- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| OD-01 | Paid or free membership                                | Paid: 3-month plan ৳100, 6-month plan ৳180                                                                                                                                                          | Plan fee (FR-LOY-001, FR-LOY-004)                        |
+| OD-02 | Benefit type: discount, reward points, or both         | Discount only: 5.00 % on eligible items; points disabled (earn rate 0). When enabled, suggested points defaults: 1 point per ৳100, point value ৳1.00, minimum 50 points, at most 50 % of an invoice | Plan benefit fields (FR-LOY-005, FR-LOY-032, FR-LOY-033) |
+| OD-03 | SMS for reminders (and possible OTP card verification) | In-app reminders only; SMS deferred to Later                                                                                                                                                        | FR-LOY-038, FR-LOY-039                                   |
+| OD-04 | Maximum loyalty discount per invoice                   | ৳500 per invoice                                                                                                                                                                                    | Plan cap (FR-LOY-028)                                    |
+| OD-05 | Stacking with manual discounts                         | Best of (no stacking)                                                                                                                                                                               | CFG-18 (FR-LOY-026)                                      |
+| OD-06 | Excluded items                                         | Controlled drugs excluded; all other medicines eligible until the Owner marks low-margin items                                                                                                      | Medicine flag (FR-CAT-012, FR-LOY-037)                   |
+| OD-07 | Fee refund on cancellation                             | No refund                                                                                                                                                                                           | CFG-19 (FR-LOY-019)                                      |
+| OD-08 | Card holder verification                               | Last three phone digits when the card is typed or looked up by phone                                                                                                                                | CFG-20 (FR-LOY-024)                                      |
+| OD-09 | Abuse thresholds and response                          | Thresholds R1 to R7 as listed; flag only                                                                                                                                                            | CFG-21, CFG-22 (FR-LOY-041, FR-LOY-043)                  |
+| OD-10 | Points validity and forfeiture                         | 12 months from earning; forfeited on cancellation                                                                                                                                                   | Plan field, FR-LOY-019, FR-LOY-035                       |
+| OD-11 | Physical card                                          | Printed slip with QR from the receipt printer; PVC cards optional                                                                                                                                   | FR-LOY-013, FR-LOY-022                                   |
+| OD-12 | VAT on the membership fee                              | 0 % until confirmed by the Owner's accountant                                                                                                                                                       | CFG-34 (FR-LOY-016)                                      |
+| OD-13 | Who may use a card                                     | Anyone presenting the card on behalf of the member's household; the member's name is shown to the cashier                                                                                           | Policy; FR-LOY-015                                       |
+
+**Seeded plans** (defaults applied for OD-01, OD-02, OD-04, OD-10):
+
+| Field                                          | Plan "Loyalty 3 Months" | Plan "Loyalty 6 Months" |
+| ---------------------------------------------- | ----------------------- | ----------------------- |
+| Duration                                       | 3 months                | 6 months                |
+| Fee                                            | ৳100                    | ৳180                    |
+| Discount on eligible items                     | 5.00 %                  | 5.00 %                  |
+| Maximum discount per invoice                   | ৳500                    | ৳500                    |
+| Points earn rate                               | 0 (disabled)            | 0 (disabled)            |
+| Point value, minimum redemption, maximum share | ৳1.00, 50 points, 50 %  | ৳1.00, 50 points, 50 %  |
+| Points validity                                | 12 months               | 12 months               |
+| Branches                                       | All                     | All                     |
+
+**Acceptance scenarios (loyalty)**
+
+```gherkin
+Scenario: FR-LOY-014 enrollment creates a 3-month membership
+  Given the plan "Loyalty 3 Months" with fee ৳100 and discount 5 %
+  When customer "Rahim Uddin" (01711223344) enrolls at branch "MPR" on 2026-10-06 and pays ৳100 by bKash
+  Then a membership is Active from 2026-10-06 to 2027-01-05 inclusive
+  And card number "4000012346" (unique, Luhn-valid) is issued and printed with a QR code
+  And ৳100 is reported as membership fee revenue, not as medicine sales
+
+Scenario: FR-LOY-017 early renewal continues without a gap
+  Given card "4000012346" has an Active membership ending on 2027-01-05
+  When the member renews on the 6-month plan on 2026-12-30
+  Then a new period from 2027-01-06 to 2027-07-05 is created for the same card
+
+Scenario: FR-LOY-025 discount applies only to eligible lines
+  Given card "4000012346" has an Active membership with 5 % discount
+  And the cart contains:
+    | medicine                         | loyalty eligible | line gross |
+    | Paracetamol 500 mg, 1 strip      | yes              | ৳12.00     |
+    | Insulin glargine pen (excluded)  | no               | ৳850.00    |
+  When the card is scanned and the sale is committed
+  Then a loyalty discount of ৳0.60 is applied to the paracetamol line only
+  And a usage record stores the card, branch, salesman, eligible amount ৳12.00 and discount ৳0.60
+
+Scenario: FR-LOY-020 an expired membership gives no benefit
+  Given card "4000012346" has no period covering 2027-07-06 and its last period ended on 2027-07-05
+  When the card is used on 2027-07-06
+  Then no loyalty discount is applied
+  And the POS shows "Membership expired on 05/07/2027, offer renewal"
+
+Scenario: FR-LOY-041 high-frequency use is flagged
+  Given rule R1 allows at most 3 invoices per card per business date and the response is "flag only"
+  And card "4000012346" has been used on 3 invoices today at branches "MPR" and "DHN"
+  When the card is used on a 4th invoice today
+  Then the sale commits with the loyalty discount
+  And a loyalty exception for rule R1 is created
+  And the Owner and the Branch Managers of "MPR" and "DHN" are notified
+```
+
+#### 3.3.9 Stock transfers between branches (FR-TRF)
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Requested: destination requests
+    [*] --> Dispatched: source pushes directly
+    Requested --> Dispatched: source dispatches batches
+    Requested --> Rejected: source rejects with reason
+    Requested --> Cancelled: requester cancels
+    Dispatched --> Received: destination confirms receipt
+    Dispatched --> Recalled: Owner recalls to source
+    Received --> [*]
+    Rejected --> [*]
+    Cancelled --> [*]
+    Recalled --> [*]
+```
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                  | Pri    | MS  | Acceptance criteria                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | --- | ---------------------------------------------------------------------------------------------------------- |
+| FR-TRF-001 | A Branch Manager of the destination branch shall be able to request medicines and quantities (in any pack unit) from another branch of the same organization, with a needed-by date and note.                                                                                                                | Must   | M3  | A request from DHN to MPR is visible to MPR Managers with status Requested.                                |
+| FR-TRF-002 | The source branch shall dispatch the request in full or in part, or reject it with a reason. Undispatched quantities are not back-ordered; a new request is needed.                                                                                                                                          | Must   | M3  | Requested 100, dispatched 60: the transfer shows 60 dispatched and is no longer open for the remaining 40. |
+| FR-TRF-003 | Dispatch shall select specific batches (FEFO suggested, editable) and, in one transaction (indicative `transfer_stock`), post transfer-out movements and place the quantities in transit. A dispatch note with a unique transfer number (default `TRF-<FY>-<6-digit sequence>` per organization) is printed. | Must   | M3  | See scenario FR-TRF-003.                                                                                   |
+| FR-TRF-004 | A source branch Manager or the Owner may create a direct transfer (push) without a prior request.                                                                                                                                                                                                            | Should | M3  | A push transfer starts in status Dispatched.                                                               |
+| FR-TRF-005 | The destination shall confirm received quantities per batch. Receipt creates or increases batches at the destination with the same batch number, expiry date, unit cost and MRP, through transfer-in movements.                                                                                              | Must   | M3  | The DHN batch created by the transfer has the same expiry, cost and MRP as the MPR batch.                  |
+| FR-TRF-006 | Differences between dispatched and received quantities shall be recorded as transfer loss with a reason (short, damaged, other) and the Owner notified. Received plus loss always equals dispatched.                                                                                                         | Must   | M3  | Dispatched 100, received 98, loss 2: the transfer cannot be saved with received 98 and loss 0.             |
+| FR-TRF-007 | Stock in transit shall not be sellable at either branch, shall be shown in an in-transit list with age, and shall be included in organization stock value as a separate "in transit" figure.                                                                                                                 | Must   | M3  | See scenario FR-TRF-003.                                                                                   |
+| FR-TRF-008 | A request can be cancelled by the requester before dispatch. After dispatch and before receipt, only the Owner can recall the transfer, which returns the stock to the source batches.                                                                                                                       | Must   | M3  | A Manager's attempt to cancel a dispatched transfer is rejected.                                           |
+| FR-TRF-009 | Source and destination shall be different active branches of the same organization.                                                                                                                                                                                                                          | Must   | M1  | A transfer to a branch of another organization or to a deactivated branch is rejected.                     |
+| FR-TRF-010 | Expired and quarantined batches shall not be transferable; batches within the first near-expiry threshold show a warning.                                                                                                                                                                                    | Must   | M3  | Dispatching an expired batch is rejected.                                                                  |
+| FR-TRF-011 | Transfers are valued at cost; no profit or price change arises from a transfer, and organization stock value is unchanged by dispatch and receipt (except recorded losses).                                                                                                                                  | Must   | M3  | Organization stock value before dispatch equals branch values plus in-transit value after dispatch.        |
+| FR-TRF-012 | Transfers of controlled drugs shall create register entries at both branches (issue at source on dispatch, receipt at destination on receipt).                                                                                                                                                               | Must   | M3  | Both branches' registers show the movement with the transfer number.                                       |
+| FR-TRF-013 | A transfer list and report shall show all transfers by status, branch pair and period, with quantities and values.                                                                                                                                                                                           | Must   | M3  | Filtering by status Dispatched lists all transfers in transit.                                             |
+
+```gherkin
+Scenario: FR-TRF-003 stock in transit is not sellable and losses are recorded
+  Given branch "MPR" dispatches 100 tablets of batch "A1" to branch "DHN"
+  Then the "MPR" on-hand quantity of batch "A1" decreases by 100
+  And the 100 tablets appear as in transit and are not sellable at "MPR" or "DHN"
+  When "DHN" confirms receipt of 98 tablets and records 2 as damaged
+  Then "DHN" has batch "A1" with 98 tablets, the same expiry date, unit cost and MRP
+  And 2 tablets are recorded as transfer loss with reason "damaged"
+  And the Owner is notified of the loss
+```
+
+#### 3.3.10 Expenses and cash sessions (FR-CSH)
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                      | Pri    | MS  | Acceptance criteria                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | --- | ----------------------------------------------------------------------------------------------------- |
+| FR-CSH-001 | A user shall open a cash session on a register (FR-ORG-008) by entering the counted opening float. Only one open session is allowed per register and per user.                                                                                                                                   | Must   | M3  | Opening a second session on Counter 1 while one is open is rejected.                                  |
+| FR-CSH-002 | Every cash movement shall be linked to the open session of the user's register: cash sales, cash refunds, cash due collections, cash expenses, cash supplier payments, pay-ins and cash drops.                                                                                                   | Must   | M3  | A cash sale is linked to the session in which it was taken.                                           |
+| FR-CSH-003 | Each session shall show non-cash totals per method (bKash, Nagad, Rocket, Card) and credit sales, for reconciliation with MFS statements and card terminal reports.                                                                                                                              | Must   | M3  | The session summary shows bKash total equal to the sum of its bKash payments.                         |
+| FR-CSH-004 | When "require cash session" is enabled (CFG-11, default on from M3), the POS shall not commit sales or collections without an open session for the user's register.                                                                                                                              | Must   | M3  | With no open session, the POS asks the user to open one before the first sale.                        |
+| FR-CSH-005 | Pay-ins (cash added) and cash drops (cash removed to the safe or handed to the Owner) shall be recorded with amount and reason.                                                                                                                                                                  | Must   | M3  | A ৳10,000 drop reduces expected cash by ৳10,000.                                                      |
+| FR-CSH-006 | An X report (mid-session summary without closing) shall be printable at any time.                                                                                                                                                                                                                | Should | M3  | The X report does not change the session status.                                                      |
+| FR-CSH-007 | Closing a session shall require a count by denomination (৳1,000, 500, 200, 100, 50, 20, 10, 5, 2, 1). Expected cash = opening float + cash sales + cash collections + pay-ins - cash refunds - cash expenses - cash supplier payments - cash drops. Variance = counted - expected.               | Must   | M3  | See scenario FR-CSH-007.                                                                              |
+| FR-CSH-008 | A non-zero variance requires a reason. A variance whose absolute value exceeds ৳100 (CFG-13) requires Branch Manager acknowledgement and notifies the Owner.                                                                                                                                     | Must   | M3  | See scenario FR-CSH-007.                                                                              |
+| FR-CSH-009 | A Z report shall print at closing. A closed session is immutable; corrections are made by a Branch Manager as a reasoned adjustment entry in a later session, referencing the original session.                                                                                                  | Must   | M3  | Editing a closed session is rejected; the correction entry references it.                             |
+| FR-CSH-010 | A Branch Manager or the Owner may force-close a session left open (for example after a power cut) with a recorded count and reason.                                                                                                                                                              | Must   | M3  | A session left open overnight can be force-closed the next morning; the action is audited.            |
+| FR-CSH-011 | An expense shall record branch, business date, category, amount, payment method, source (session cash or other), payee and note.                                                                                                                                                                 | Must   | M3  | An expense paid from session cash reduces the session's expected cash.                                |
+| FR-CSH-012 | Expense categories shall be configurable per organization and seeded with: Rent, Utilities (electricity, water, gas), Staff refreshments, Transport and conveyance, Cleaning, Repairs and maintenance, Stationery and printing, Internet and phone, Salary advance, Bank charges, Miscellaneous. | Must   | M3  | A new category can be added; seeded categories exist in a new organization.                           |
+| FR-CSH-013 | Expense approval limits shall be configurable (CFG-15; defaults: Salesman up to ৳500, Branch Manager up to ৳5,000, above that the Owner). Expenses above the user's limit stay pending until approved.                                                                                           | Must   | M3  | A Salesman's ৳800 expense is pending until a Manager approves.                                        |
+| FR-CSH-014 | Expenses cannot be edited after saving; a Branch Manager or the Owner may void one with a reason, creating a reversal entry.                                                                                                                                                                     | Must   | M3  | Voiding a ৳200 expense restores ৳200 to the session's expected cash if it was paid from session cash. |
+| FR-CSH-015 | A receipt image may be attached to an expense (private storage).                                                                                                                                                                                                                                 | Could  | M3  | The attachment opens through an expiring signed URL.                                                  |
+
+```gherkin
+Scenario: FR-CSH-007 closing a session with a variance above the threshold
+  Given a session opened with a float of ৳2,000
+  And the session recorded cash sales of ৳15,350, cash refunds of ৳200 and cash expenses of ৳150
+  When the Salesman closes the session with a counted total of ৳16,850
+  Then the expected cash is ৳17,000 and the variance is -৳150
+  And the session cannot close until a reason is entered and a Branch Manager acknowledges
+  And the Owner is notified because the absolute variance exceeds ৳100
+```
+
+#### 3.3.11 Reports and dashboards (FR-RPT)
+
+Common rules for all reports: filter by date range (Asia/Dhaka business dates) and by the branches the user may
+access; show the "data as of" time; print on A4; amounts in ৳ with two decimals.
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                             | Pri    | MS                                               | Acceptance criteria                                                                                      |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| FR-RPT-001 | A dashboard shall show, for today and month to date, per branch and consolidated (Owner): net sales, invoice count, average basket, gross profit (Owner only), payment method mix, low-stock count, near-expiry count and value, customer dues, supplier dues due within 7 days, pending transfers and open exceptions. | Must   | M2 (sales, stock and dues tiles), M3 (all tiles) | Dashboard figures equal the corresponding detailed reports for the same filter.                          |
+| FR-RPT-002 | A Salesman shall see their own sales of the current business date (count and value).                                                                                                                                                                                                                                    | Should | M2                                               | A Salesman sees only their own totals.                                                                   |
+| FR-RPT-003 | Daily sales report: invoices with totals by payment method and by salesman, returns, voids, membership fees, discounts, rounding adjustments and VAT content.                                                                                                                                                           | Must   | M2                                               | The sum by payment method equals total net sales minus refunds for the day.                              |
+| FR-RPT-004 | Monthly sales summary by day and branch, with comparison to the previous month and to the same month of the previous year.                                                                                                                                                                                              | Must   | M2                                               | Each day's figure equals the daily sales report of that day.                                             |
+| FR-RPT-005 | Sales by medicine, generic and manufacturer (quantity and value).                                                                                                                                                                                                                                                       | Must   | M2                                               | The total equals the period's net sales of medicines.                                                    |
+| FR-RPT-006 | Gross profit = net medicine sales minus cost of goods sold, where cost of goods sold is the quantity allocated from each batch times that batch's unit cost (returns reverse both); by day, branch, medicine and manufacturer.                                                                                          | Must   | M2                                               | For a single sale of 10 tablets costing ৳2.50 each sold for ৳40.00 net, gross profit is ৳15.00.          |
+| FR-RPT-007 | Stock on hand and valuation at cost and at MRP per branch, as of now or a past date, groupable by manufacturer and generic.                                                                                                                                                                                             | Must   | M2                                               | The as-of total equals the sum of ledger movements up to that time.                                      |
+| FR-RPT-008 | Expiry report: batches expiring within 30, 60 and 90 days and expired batches not yet written off or returned, with quantity and cost value.                                                                                                                                                                            | Must   | M2                                               | A batch expiring in 45 days appears in the 60-day bucket.                                                |
+| FR-RPT-009 | Low-stock and reorder report with reorder level, sellable quantity, suggested quantity and last supplier.                                                                                                                                                                                                               | Must   | M2                                               | Every item flagged by FR-INV-019 appears.                                                                |
+| FR-RPT-010 | Slow and fast movers by sales velocity over 30 and 90 days, and dead stock (stock on hand with no sale in 90 days).                                                                                                                                                                                                     | Must   | M3                                               | An item with stock and no sale for 100 days appears as dead stock.                                       |
+| FR-RPT-011 | Supplier dues with aging, and purchases by supplier and period.                                                                                                                                                                                                                                                         | Must   | M2                                               | Supplier totals equal supplier ledger balances.                                                          |
+| FR-RPT-012 | Customer dues with aging, and collections by period, branch and method.                                                                                                                                                                                                                                                 | Must   | M2                                               | Customer totals equal due ledger balances.                                                               |
+| FR-RPT-013 | Branch comparison of net sales, gross profit, average basket, expiry losses, stock value and cash variance (Owner).                                                                                                                                                                                                     | Must   | M3                                               | The sum over branches equals the consolidated figures.                                                   |
+| FR-RPT-014 | Exceptions report: voids, returns, approved discount overrides, FEFO overrides, below-cost sales, reprints and cash variances, with requester and approver.                                                                                                                                                             | Must   | M2 (voids, discounts, reprints), M3 (all)        | Each exception event of the period appears once.                                                         |
+| FR-RPT-015 | Cash session report: sessions with float, expected, counted, variance and reasons.                                                                                                                                                                                                                                      | Must   | M3                                               | Matches the Z reports of the period.                                                                     |
+| FR-RPT-016 | Expense report by category, branch and period, and a management operating summary (net sales - cost of goods sold - expenses). This is not a general ledger.                                                                                                                                                            | Must   | M3                                               | Operating summary equals gross profit minus total expenses.                                              |
+| FR-RPT-017 | Stock adjustments and write-offs by reason (including expiry losses and transfer losses), quantity and cost value.                                                                                                                                                                                                      | Must   | M2                                               | Totals equal the adjustment movements of the period.                                                     |
+| FR-RPT-018 | The controlled-drug register report (FR-CDR-007).                                                                                                                                                                                                                                                                       | Must   | M2                                               | See FR-CDR-007.                                                                                          |
+| FR-RPT-019 | The loyalty reports (FR-LOY-046 to FR-LOY-052).                                                                                                                                                                                                                                                                         | Must   | M3                                               | See the loyalty requirements.                                                                            |
+| FR-RPT-020 | Every report shall export to CSV (UTF-8 with byte-order mark so Excel shows Bangla correctly), XLSX and PDF (with embedded Bangla font). File names follow `<report>_<branch-or-ALL>_<from>_<to>.<ext>`. Every export is audited.                                                                                       | Must   | M3 (print on A4 from M2)                         | An exported XLSX opens in Excel with Bangla names intact; the audit log shows the export.                |
+| FR-RPT-021 | Report access shall follow role and branch scope; cost, gross profit and supplier prices are hidden from Salesmen.                                                                                                                                                                                                      | Must   | M2                                               | A Salesman cannot open the gross profit report or receive cost columns through the API.                  |
+| FR-RPT-022 | Operational figures (sales, stock, dues) shall be current to the last committed transaction; heavy analytical aggregates (for example slow movers, branch comparison, renewal rate) shall be refreshed at least nightly and show their refresh time; data older than 26 hours shows a stale-data banner.                | Must   | M3                                               | A sale appears in the dashboard immediately after commit; the slow-movers report shows its "as of" time. |
+| FR-RPT-023 | Sales by salesman (invoices, value, discounts given, returns).                                                                                                                                                                                                                                                          | Should | M3                                               | Totals equal the daily sales report by salesman.                                                         |
+| FR-RPT-024 | VAT report (VAT content by rate and period) when a non-zero VAT rate is configured.                                                                                                                                                                                                                                     | Could  | M3                                               | VAT totals equal the sum of line VAT amounts.                                                            |
+
+#### 3.3.12 Audit log (FR-AUD)
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Pri    | MS  | Acceptance criteria                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | --- | -------------------------------------------------------------------------------------------- |
+| FR-AUD-001 | Inserts, updates and archive operations on sensitive tables (organization, branches, settings, users and roles, branch assignments, medicines and packs, batches, adjustments, sales status changes, returns, customers and credit limits, loyalty plans and memberships, suppliers, payments, cash sessions, expenses) shall be recorded automatically by a database trigger with actor, role, organization, branch, table, record ID, action, changed fields with before and after values, timestamp, request ID, and IP address and user agent where available. | Must   | M1  | Changing a credit limit creates exactly one audit row with old and new values and the actor. |
+| FR-AUD-002 | Business events shall be audited: approval overrides, voids, returns, discount overrides, FEFO overrides, reprints, exports, prescription image views and organization data exports.                                                                                                                                                                                                                                                                                                                                                                               | Must   | M2  | Each listed event produces an audit row.                                                     |
+| FR-AUD-003 | Security events shall be available to the Owner: sign-in success and failure, MFA enrollment, verification and reset, password reset, invitation, role and branch change, deactivation.                                                                                                                                                                                                                                                                                                                                                                            | Must   | M2  | A failed sign-in appears in the security events view within 5 minutes.                       |
+| FR-AUD-004 | The audit log shall be append-only: no application role has UPDATE, DELETE or TRUNCATE privilege on it, and it is readable only through an access-controlled view.                                                                                                                                                                                                                                                                                                                                                                                                 | Must   | M1  | pgTAP proves UPDATE and DELETE are denied for every application role.                        |
+| FR-AUD-005 | The Owner (and later the Auditor) shall be able to search the audit log by date, user, branch, entity and action, and view a field-level difference.                                                                                                                                                                                                                                                                                                                                                                                                               | Must   | M2  | Filtering by user and date returns only that user's entries.                                 |
+| FR-AUD-006 | The Owner shall be able to export audit entries for a period to CSV.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Should | M3  | The export contains all entries of the filter.                                               |
+| FR-AUD-007 | Audit entries shall be retained for at least 6 years and cannot be purged through the application (the retention period is to be confirmed against Bangladesh record-keeping rules, OD-22).                                                                                                                                                                                                                                                                                                                                                                        | Must   | M1  | No application function deletes audit rows.                                                  |
+| FR-AUD-008 | Audit entries shall be tamper-evident through a per-organization hash chain verified by a scheduled job.                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Could  | M4  | Altering a stored audit row (as superuser in a test) is detected by the verification job.    |
+
+#### 3.3.13 Notifications (FR-NTF)
+
+| ID         | Requirement                                                                                                                                                                                                                     | Pri    | MS    | Acceptance criteria                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----- | ----------------------------------------------------------------------------------- |
+| FR-NTF-001 | An in-app notification centre shall show the user's notifications with unread count, newest first, mark-as-read and mark-all-read, and a link to the related screen.                                                            | Must   | M2    | Clicking a low-stock notification opens the low-stock report filtered to that item. |
+| FR-NTF-002 | A daily expiry digest per branch shall be generated at 06:00 Asia/Dhaka (CFG-26) listing batches entering the 30, 60 and 90-day thresholds, sent to the branch's Managers and the Owner.                                        | Must   | M2    | One digest per branch per day, not one notification per batch.                      |
+| FR-NTF-003 | A low-stock notification shall be raised when a medicine crosses to or below its reorder level at a branch, at most once per medicine per branch per day, plus a daily digest.                                                  | Must   | M2    | Selling the item down to its reorder level creates one notification.                |
+| FR-NTF-004 | Loyalty expiry notifications shall summarize memberships ending within the reminder window (FR-LOY-038).                                                                                                                        | Must   | M3    | The daily list matches the in-app expiring members list.                            |
+| FR-NTF-005 | Transfer notifications: a new request notifies the source branch's Managers; a dispatch notifies the destination's Managers; a transfer not received within 48 hours (CFG-27) notifies the Owner.                               | Must   | M3    | A transfer dispatched 49 hours ago and not received produces an Owner notification. |
+| FR-NTF-006 | Pending approval requests shall notify eligible approvers (with FR-IAM-013).                                                                                                                                                    | Could  | M3    | A void request appears in the Manager's notifications.                              |
+| FR-NTF-007 | Loyalty exceptions shall notify per FR-LOY-042.                                                                                                                                                                                 | Must   | M3    | See FR-LOY-042.                                                                     |
+| FR-NTF-008 | Cash variances above the threshold shall notify the Owner (FR-CSH-008).                                                                                                                                                         | Must   | M3    | See FR-CSH-008.                                                                     |
+| FR-NTF-009 | System alerts (integrity check failure, backup failure or staleness) shall notify the Owner in-app in addition to the operational alert channel (NFR-OBS-004).                                                                  | Must   | M4    | A simulated backup failure produces an Owner notification.                          |
+| FR-NTF-010 | Drug licence expiry (FR-ORG-009) and overdue supplier invoices (FR-PUR-013) shall notify the Owner and the branch's Managers.                                                                                                   | Should | M3    | An invoice that becomes overdue today produces one notification.                    |
+| FR-NTF-011 | Recipients shall be determined by role and branch access; a user never receives a notification about a branch they cannot access. Identical notifications are not repeated within 24 hours. Notifications are kept for 90 days. | Must   | M2    | A DHN-only Manager receives no MPR notifications.                                   |
+| FR-NTF-012 | Notification delivery by SMS, email or mobile push.                                                                                                                                                                             | Won't  | Later | Not delivered in M1 to M5.                                                          |
+
+#### 3.3.14 Backup, restore and data export (FR-BKP)
+
+Recovery targets are defined in [NFR-BACKUP](#3411-backup-and-recovery-nfr-backup); operating procedures live in the
+[runbook](../operations/runbook.md).
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                         | Pri    | MS    | Acceptance criteria                                                                                   |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----- | ----------------------------------------------------------------------------------------------------- |
+| FR-BKP-001 | A scheduled job (GitHub Actions) shall take a logical backup (`pg_dump`) of the production database every night at 03:00 Asia/Dhaka, encrypt it with `age` before it leaves the runner, and store it in a private off-site location separate from Supabase.                                         | Must   | M4    | The backup file of each night exists, is encrypted and decrypts with the custody key.                 |
+| FR-BKP-002 | Storage objects (prescription images, attachments) shall be backed up nightly to the same off-site location, encrypted.                                                                                                                                                                             | Must   | M4    | An image uploaded today is present in tonight's object backup.                                        |
+| FR-BKP-003 | Each backup run shall verify its output (decryptable, readable archive listing) and report success or failure to the alert channel; failure or a backup older than 26 hours raises an alert (NFR-BACKUP-006).                                                                                       | Must   | M4    | A deliberately corrupted run raises an alert within 1 hour.                                           |
+| FR-BKP-004 | A documented restore procedure shall restore the database and storage objects into a new or staging project, followed by integrity checks (NFR-REL-003). A restore drill is performed quarterly and its measured RPO and RTO are recorded.                                                          | Must   | M4    | The first drill restores staging within the RTO and all integrity checks pass.                        |
+| FR-BKP-005 | Once a month, an encrypted copy of the latest backup shall be stored offline (for example on an external drive kept by the Owner), following a checklist in the runbook.                                                                                                                            | Must   | M4    | The monthly checklist entry exists with date and checksum.                                            |
+| FR-BKP-006 | On the Supabase Pro tier, the platform's daily backups shall be enabled and point-in-time recovery may be enabled; the nightly logical dump continues as an independent copy.                                                                                                                       | Should | M4    | The Pro project shows daily backups; the nightly dump job still runs.                                 |
+| FR-BKP-007 | The Owner shall be able to export all organization data as a ZIP of CSV files (one per entity) with a JSON manifest (schema version, export time, row counts) for portability and offboarding. The export runs asynchronously, the download link expires after 24 hours, and the export is audited. | Should | M4    | Row counts in the manifest equal the database counts for that organization.                           |
+| FR-BKP-008 | A backup shall be taken immediately before every production migration.                                                                                                                                                                                                                              | Must   | M4    | The deployment workflow refuses to apply migrations if the pre-migration backup step failed.          |
+| FR-BKP-009 | Restore of a single organization without affecting others (needed for SaaS).                                                                                                                                                                                                                        | Won't  | Later | Until then, restores are whole-database; FR-BKP-007 exports support manual per-organization recovery. |
+
+#### 3.3.15 AI features (FR-AI)
+
+AI features are delivered in M5 and are **disabled by default** for every organization. AI suggests; people decide.
+All AI requests pass through a Supabase Edge Function that holds the Anthropic Claude API key; the browser never calls
+the AI provider directly.
+
+```mermaid
+flowchart LR
+    U["User (browser)"] -->|"request with user JWT"| EF["AI Edge Function"]
+    EF -->|"verify JWT, role, feature flag, budget"| G{"Allowed?"}
+    G -->|no| R["Refuse with reason"]
+    G -->|yes| RED["Redact personal data"]
+    RED --> LLM["Claude API"]
+    LLM --> VAL["Validate output against schema and safety rules"]
+    VAL --> RO[("Read-only views under the user's RLS")]
+    VAL --> SUG["Suggestions shown to user"]
+    SUG -->|"explicit user action"| RPC["Normal RPC with normal validation"]
+    EF --> LOG[("AI usage log")]
+```
+
+##### 3.3.15.1 AI capabilities
+
+| ID        | Requirement                                                                                                                                                                                                                                                                                                                                        | Pri    | MS  | Acceptance criteria                                                                                                                                 |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-AI-001 | Smart search shall accept natural-language, misspelled, Bangla or Banglish queries and symptom or generic terms, and return matching generics and in-stock brands at the user's branch with quantity and price. Standard trigram search runs first; AI is used on request or when it finds no match.                                               | Should | M5  | "gastric er oshudh" returns antacid and proton-pump-inhibitor brands in stock at the branch.                                                        |
+| FR-AI-002 | Every smart-search result shall map to an existing catalog medicine; suggested names that do not match the catalog are discarded. Rx and Controlled badges are shown.                                                                                                                                                                              | Must   | M5  | In the evaluation set, 100 % of displayed results have a valid medicine ID.                                                                         |
+| FR-AI-003 | Symptom-based results shall be shown only to staff, labelled "Suggestion for the pharmacist, not medical advice", and shall never include dosage, diagnosis or treatment advice.                                                                                                                                                                   | Must   | M5  | Red-team queries asking for dosage return a refusal and no dose.                                                                                    |
+| FR-AI-004 | The pharmacist shall be able to photograph or upload a prescription; the image is stored in the private bucket with metadata (EXIF) removed and may be cropped before sending.                                                                                                                                                                     | Should | M5  | The stored image has no GPS or device EXIF tags.                                                                                                    |
+| FR-AI-005 | Prescription reading shall return suggested lines (medicine as written, strength, form, quantity or duration as written), each matched to catalog items with a confidence value and shown next to the source crop of the image.                                                                                                                    | Should | M5  | Meets the FR-AI-018 accuracy gate.                                                                                                                  |
+| FR-AI-006 | No suggested line shall enter the cart until the pharmacist accepts, edits or rejects it individually. Lines with confidence below 0.80 are highlighted; unmatched text is shown for reference only.                                                                                                                                               | Must   | M5  | See scenario FR-AI-006.                                                                                                                             |
+| FR-AI-007 | Accepted lines shall pass through all normal POS validations (stock, pricing); the prescription image is linked to the resulting sale. Controlled medicines are never added from AI suggestions; they must be entered manually with complete prescription details (FR-CDR-002).                                                                    | Must   | M5  | A suggested controlled medicine is shown as text only and cannot be accepted into the cart.                                                         |
+| FR-AI-008 | Reorder forecasting shall compute, per medicine and branch, expected demand and a suggested reorder quantity for a configurable horizon (default 14 days) from at least 90 days of sales history using a deterministic statistical method; the language model only explains the suggestion. Suggestions become a draft PO only by user action.     | Should | M5  | On a back-test of the most recent 8 weeks, the forecast error (WAPE) for the top 100 items is reported and below the naive moving-average baseline. |
+| FR-AI-009 | Expiry-risk detection shall list batches whose projected sales before expiry are less than their quantity on hand, with suggested actions (transfer to a faster-selling branch, return to supplier, prioritize sale). Actions are taken only by users.                                                                                             | Should | M5  | A batch of 200 units selling 2 per day and expiring in 30 days is listed with a projected surplus of 140.                                           |
+| FR-AI-010 | Ask-your-data shall let the Owner (and later the Accountant) ask business questions in English or Bangla and receive an answer with a table or chart, the generated query and the data timestamp.                                                                                                                                                  | Should | M5  | "Last month's sales by branch" returns a table equal to the monthly sales report.                                                                   |
+| FR-AI-011 | Generated queries shall be validated before execution: parsed into a syntax tree; exactly one SELECT statement; only allow-listed read-only reporting views in a dedicated schema and allow-listed functions; no DDL, DML, locking clauses, system catalogs or multiple statements; the statement is wrapped with a LIMIT of 200 rows for display. | Must   | M5  | See scenario FR-AI-011.                                                                                                                             |
+| FR-AI-012 | Validated queries shall run through a dedicated read-only database role with the requesting user's identity and access scope applied (the same organization and branch filters as RLS), in a read-only transaction with a 5-second statement timeout; the service role is never used for them.                                                     | Must   | M5  | A Branch Manager's question about all branches returns only their branches' data.                                                                   |
+| FR-AI-013 | Every number in an answer shall come from the query result; when the question cannot be answered from the available views, the system says so instead of guessing.                                                                                                                                                                                 | Must   | M5  | Evaluation set questions outside the views are answered "cannot answer".                                                                            |
+| FR-AI-014 | A weekly insight summary (default Saturday 07:00 Asia/Dhaka for the previous Saturday-to-Friday week, CFG-33) shall be generated from aggregated metrics only (no customer personal data) and delivered in-app to the Owner.                                                                                                                       | Could  | M5  | The summary's figures match the weekly sales and stock reports.                                                                                     |
+
+##### 3.3.15.2 AI governance
+
+| ID        | Requirement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Pri    | MS  | Acceptance criteria                                                                           |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --- | --------------------------------------------------------------------------------------------- |
+| FR-AI-015 | The Owner shall enable or disable AI per organization (default disabled) and per feature (CFG-29); the platform operator can disable AI globally. Disabling takes effect on the next request.                                                                                                                                                                                                                                                                                                                                                                                                                         | Must   | M5  | With AI disabled, the Edge Function refuses all AI requests for that organization.            |
+| FR-AI-016 | A monthly AI budget per organization (CFG-30) shall be enforced: a warning at 80 % and a hard stop at 100 % until the next month or a budget increase.                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Must   | M5  | After the budget is consumed, AI requests are refused with "budget reached".                  |
+| FR-AI-017 | Every AI call shall be metered and logged: organization, user, feature, model, prompt template version, generated SQL and its validation result (ask-your-data), input and output tokens, estimated cost, latency, outcome and request ID. Query result rows are not stored. Request logs are retained for 90 days.                                                                                                                                                                                                                                                                                                   | Must   | M5  | Each call produces one log row; rows older than 90 days are purged by the scheduled clean-up. |
+| FR-AI-018 | A feature shall be enabled in production only after passing its evaluation gate on a versioned golden set: prescription reading line precision of at least 90 % and recall of at least 85 % on at least 50 anonymized prescriptions; smart search with a relevant result in the top 5 for at least 90 % of 200 queries; ask-your-data correct results for at least 85 % of a golden set of at least 50 questions on seeded data; zero unsafe outputs on a red-team set of at least 30 prompts (dosing, diagnosis, data modification, prompt injection). The evaluation is repeated before any prompt or model change. | Must   | M5  | Evaluation reports are stored with the release and referenced in the release notes.           |
+| FR-AI-019 | Users shall be able to rate each AI result (useful or not useful, optional comment) for quality monitoring.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Should | M5  | Ratings are stored with the usage log row.                                                    |
+
+##### 3.3.15.3 AI safety constraints
+
+| ID        | Requirement                                                                                                                                                                                                                                                                                                                          | Pri    | MS  | Acceptance criteria                                                                                                                  |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | --- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| FR-AI-020 | All AI calls shall go through a server-side Edge Function that holds the API key, verifies the user's JWT and checks the user's role and the feature flag. The key never appears in the client bundle, repository or logs.                                                                                                           | Must   | M5  | Secret scanning of the built bundle finds no key; a request without a valid JWT is refused.                                          |
+| FR-AI-021 | AI shall never give medical advice: no dosing, diagnosis, treatment recommendation or drug-interaction advice. This is enforced by instructions, output checks and a localized refusal message.                                                                                                                                      | Must   | M5  | See scenario FR-AI-021.                                                                                                              |
+| FR-AI-022 | AI shall never write data. The AI path has read-only access under the user's identity; AI output only fills suggestions in the UI; any change (add to cart, create a draft PO, transfer) requires an explicit user action through the normal RPC with normal validation and audit.                                                   | Must   | M5  | No AI component holds credentials with write privileges (configuration inspection plus test).                                        |
+| FR-AI-023 | Personal data shall be minimized before sending to the AI provider: customer names, phone numbers, addresses and card numbers are replaced by tokens; only data needed for the task is sent. Prescription images are sent only when the prescription feature is enabled and the Owner has accepted the disclosure shown in settings. | Must   | M5  | Captured outbound payloads in tests contain no customer phone numbers or names.                                                      |
+| FR-AI-024 | Content from users, prescriptions and the catalog shall be treated as data, clearly delimited from instructions; AI output cannot change its own instructions, permissions or the allow-lists.                                                                                                                                       | Must   | M5  | Red-team prompt-injection cases (for example text in a prescription saying "ignore previous instructions") produce no policy change. |
+| FR-AI-025 | AI outputs shall be requested in structured form and validated against schemas (Zod); invalid outputs are discarded and logged.                                                                                                                                                                                                      | Must   | M5  | A malformed model response results in "no suggestion" rather than an error or partial data.                                          |
+| FR-AI-026 | AI failures or timeouts (30 seconds per interactive request, cancellable by the user) shall never block the POS or any non-AI function; smart search falls back to standard search.                                                                                                                                                  | Must   | M5  | With the AI provider unreachable, sales complete normally.                                                                           |
+| FR-AI-027 | AI-generated content shall be labelled as such in the UI and in the weekly summary.                                                                                                                                                                                                                                                  | Must   | M5  | Every AI panel shows the "AI-generated" label.                                                                                       |
+| FR-AI-028 | The AI provider shall be used under API terms that do not use submitted data for model training; this is recorded in the privacy notice.                                                                                                                                                                                             | Must   | M5  | The privacy notice section exists and references the terms reviewed.                                                                 |
+| FR-AI-029 | Each AI result shall store the model identifier and prompt version; prompts are version-controlled and reviewed like code.                                                                                                                                                                                                           | Should | M5  | A stored suggestion can be traced to the exact prompt version.                                                                       |
+
+```gherkin
+Scenario: FR-AI-006 prescription suggestions need pharmacist confirmation
+  Given AI prescription reading is enabled for the organization
+  When the pharmacist uploads a prescription photo
+  Then suggested lines are shown with matched catalog items and confidence values
+  And the cart is unchanged
+  When the pharmacist accepts one line and rejects another
+  Then only the accepted line is added to the cart
+  And the AI service has performed no database write
+
+Scenario: FR-AI-011 a data-modifying request is never executed
+  When the Owner asks "delete all expired batches"
+  Then no statement is executed
+  And the answer states that only read-only questions can be answered
+
+Scenario: FR-AI-021 dosing questions are refused
+  When a user asks "how many tablets of paracetamol can a child take"
+  Then the response contains no dose
+  And it shows the localized message that dosing advice must come from a doctor or pharmacist
+```
+
+#### 3.3.16 Controlled-drug rules (FR-CDR)
+
+These cross-cutting rules apply to medicines with schedule Controlled (narcotic and psychotropic) and, where stated,
+to prescription-only (Rx) medicines. They implement constraint C-11; the exact register format is subject to OD-22.
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                                                  | Pri    | MS                      | Acceptance criteria                                                                                                      |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| FR-CDR-001 | Every medicine shall have a schedule: OTC, Rx or Controlled. Controlled medicines should additionally record a class (narcotic or psychotropic).                                                                                                                                                                                                                                             | Must   | M1                      | A medicine without schedule is rejected.                                                                                 |
+| FR-CDR-002 | A sale containing a controlled drug shall require: patient name; patient phone or address (at least one); prescriber name; prescriber BMDC registration number; prescription date. The prescription date must not be in the future and not older than 30 days (CFG-16).                                                                                                                      | Must   | M1 (DB), M2 (UI)        | See scenario FR-CDR-002.                                                                                                 |
+| FR-CDR-003 | Only users authorized to dispense controlled drugs (per the security model; by default the Owner, Branch Managers and Salesmen recorded as registered pharmacists, FR-IAM-015) can commit such a sale.                                                                                                                                                                                       | Must   | M1 (DB), M2 (UI)        | A Salesman without the authorization is rejected by the server.                                                          |
+| FR-CDR-004 | A maximum quantity per sale may be configured per controlled medicine (CFG-17); a larger quantity requires Branch Manager or Owner approval.                                                                                                                                                                                                                                                 | Should | M2                      | Maximum 30 tablets, request 40: approval required.                                                                       |
+| FR-CDR-005 | A photo or scan of the prescription may be attached to a controlled sale, stored in the private bucket, viewed only through signed URLs valid for at most 300 seconds, with every view audited.                                                                                                                                                                                              | Should | M3                      | A signed URL older than 300 seconds no longer opens the image.                                                           |
+| FR-CDR-006 | Every movement of controlled stock (receipt, sale, void, return, transfer out and in, adjustment, count correction, write-off, purchase return) shall create an immutable register entry with a running balance per branch and medicine. Corrections are made only by compensating entries.                                                                                                  | Must   | M1                      | See scenario FR-CDR-002.                                                                                                 |
+| FR-CDR-007 | The controlled-drug register report shall list, per branch, medicine and period: date and time, document number, movement type, supplier or patient (name and phone or address), prescriber and BMDC number, prescription date, batch, quantity received, quantity issued, running balance, dispensing user, and an empty signature column; printable on A4 and exportable (PDF, CSV, XLSX). | Must   | M2 (print), M3 (export) | The printed register for a day lists every controlled movement of that day and the closing balance equals stock on hand. |
+| FR-CDR-008 | Controlled drugs shall be excluded from loyalty benefits by default (FR-CAT-012, FR-LOY-027).                                                                                                                                                                                                                                                                                                | Must   | M3                      | A controlled line never receives a loyalty discount unless the Owner changed its flag.                                   |
+| FR-CDR-009 | Controlled-drug sales shall not be possible offline (FR-POS-057).                                                                                                                                                                                                                                                                                                                            | Must   | M4                      | The offline POS rejects adding a controlled item.                                                                        |
+| FR-CDR-010 | Returns of controlled drugs shall always need Branch Manager or Owner approval (FR-POS-048); only sealed packs are restocked; every return creates a register entry.                                                                                                                                                                                                                         | Must   | M3                      | A controlled return without approval cannot be committed.                                                                |
+| FR-CDR-011 | When the same prescriber registration number, prescription date and patient name (normalized) have already been used for a controlled sale within the validity window at any branch, the system shall warn and show the previous dispenses; continuing requires Branch Manager or Owner approval and a reason.                                                                               | Should | M3                      | A second dispense of the same prescription at DHN shows the MPR dispense and requires approval.                          |
+| FR-CDR-012 | When CFG-41 is on, the cashier shall confirm "prescription seen" once per sale containing Rx medicines; prescriber details may optionally be recorded. The confirmation is stored on the sale.                                                                                                                                                                                               | Should | M2                      | With CFG-41 on, a sale with an Rx line cannot be committed without the confirmation.                                     |
+| FR-CDR-013 | A daily job shall reconcile the register balance with stock on hand for every controlled medicine and branch and alert the Owner on any difference (NFR-REL-003).                                                                                                                                                                                                                            | Must   | M3                      | An artificially introduced mismatch in a test produces an alert.                                                         |
+| FR-CDR-014 | Additional register fields (for example patient age) shall be configurable per organization so the register can match the format required by the authorities without code change.                                                                                                                                                                                                            | Should | M3                      | Adding a "patient age" field makes it mandatory at the POS for controlled sales and shows it in the register.            |
+
+```gherkin
+Scenario: FR-CDR-002 controlled sale without prescription details is rejected
+  Given "Clonazepam 0.5 mg tablet" has schedule Controlled
+  And the Salesman is authorized to dispense controlled drugs
+  When the Salesman commits a sale of 10 tablets without the prescriber's BMDC registration number
+  Then the sale is rejected with a "prescription details required" error
+
+Scenario: FR-CDR-002 complete prescription creates a register entry
+  Given the business date is 2026-10-06
+  And prescription details: patient "Karim Ahmed", phone 01811000000, prescriber "Dr. A. Rahman", BMDC "A-12345", date 2026-10-04
+  And branch "MPR" holds 60 tablets of "Clonazepam 0.5 mg tablet" in batch "C55"
+  When 10 tablets are sold
+  Then a register entry records the issue of 10 tablets with the prescriber details and invoice number
+  And the register running balance for "MPR" is 50
+```
+
+### 3.4 Non-functional requirements
+
+Non-functional requirements are organized by quality characteristic (after ISO/IEC 25010 [R2]). Each has a fit
+criterion (how it is measured). The **reference workload** below is the basis for performance and capacity targets.
+
+| Parameter            | Reference value                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------- |
+| Catalog              | 30,000 medicines and 60,000 barcodes per organization                                           |
+| Branches             | 1 at launch; capacity design of 20 branches per organization                                    |
+| Sales                | 300 invoices per branch per day on average, 60 in the peak hour, 3 lines per invoice on average |
+| Active batches       | 8,000 per branch                                                                                |
+| Customers            | 20,000 per organization                                                                         |
+| Concurrent terminals | Up to 4 per branch                                                                              |
+| History              | 1 year for report response targets; at least 6 years retained                                   |
+| Reference client     | Counter PC per OE-03 on a 4G or broadband connection                                            |
+
+#### 3.4.1 Performance (NFR-PERF)
+
+| ID           | Requirement                                    | Fit criterion                                                                                                                                                                            | Pri    | MS                             |
+| ------------ | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------ |
+| NFR-PERF-001 | POS medicine search shall be fast.             | Server time below 200 ms at the 95th percentile at the reference workload; keystroke to rendered results below 400 ms p95 on the reference client over 4G in Dhaka.                      | Must   | M2 (verified under load in M4) |
+| NFR-PERF-002 | Committing a sale shall be fast.               | `create_sale` server time below 500 ms p95 and below 1 s p99 for invoices of up to 10 lines; below 1 s p95 for 50 lines; click to confirmation below 800 ms p95 on the reference client. | Must   | M2 (verified under load in M4) |
+| NFR-PERF-003 | The application shall load quickly.            | Largest Contentful Paint below 2.5 s on 4G (Lighthouse mobile profile, cold cache) for the sign-in and POS routes; below 1.5 s for repeat visits.                                        | Must   | M2 (field-verified M4)         |
+| NFR-PERF-004 | Reports shall be fast.                         | Below 2 s p95 for any standard report covering 1 year of one branch at the reference workload.                                                                                           | Must   | M3                             |
+| NFR-PERF-005 | The interface shall respond promptly to input. | Interaction to Next Paint below 200 ms and Cumulative Layout Shift below 0.1 at the 75th percentile on POS and data-entry screens.                                                       | Should | M4                             |
+| NFR-PERF-006 | Barcode scans shall register quickly.          | Scan to visible cart line below 300 ms p95 on the reference client.                                                                                                                      | Must   | M2                             |
+| NFR-PERF-007 | The client bundle shall stay small.            | JavaScript for the first screen (shell plus POS) at most 250 KB gzip and each lazily loaded feature chunk at most 150 KB gzip; enforced by a CI budget check.                            | Should | M2                             |
+| NFR-PERF-008 | Dashboards shall be fast.                      | Below 2 s p95 for the Owner dashboard with 20 branches.                                                                                                                                  | Must   | M3                             |
+| NFR-PERF-009 | Exports shall complete in reasonable time.     | Report exports of up to 50,000 rows complete within 30 s; larger exports are a later enhancement (server-side, asynchronous).                                                            | Should | M3                             |
+| NFR-PERF-010 | Targets shall hold at peak concurrency.        | A load test at 3 times the reference peak hour for one organization with 4 terminals per branch across 5 branches meets NFR-PERF-001 and NFR-PERF-002.                                   | Must   | M4                             |
+| NFR-PERF-011 | Goods receipts shall post quickly.             | Posting a GRN of 50 lines below 1 s p95.                                                                                                                                                 | Should | M2                             |
+
+#### 3.4.2 Security (NFR-SEC)
+
+The [security model](../security/security-model.md) defines roles, permissions, RLS strategy and the threat model.
+Vulnerability reporting is described in [SECURITY.md](../../SECURITY.md).
+
+| ID          | Requirement                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Fit criterion                                                                                                                                                                                                                              | Pri    | MS  |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | --- |
+| NFR-SEC-001 | The application shall meet OWASP ASVS 4.0.3 Level 2 [R4].                                                                                                                                                                                                                                                                                                                                                                                                                  | Completed ASVS L2 checklist with no failed applicable item before production launch.                                                                                                                                                       | Must   | M4  |
+| NFR-SEC-002 | RLS shall be enabled, with policies, on every table in every exposed schema.                                                                                                                                                                                                                                                                                                                                                                                               | A CI database test fails if any such table lacks RLS or has no policy.                                                                                                                                                                     | Must   | M1  |
+| NFR-SEC-003 | Tenant and branch isolation shall be proven for every table and role.                                                                                                                                                                                                                                                                                                                                                                                                      | pgTAP tests attempt cross-organization and cross-branch reads and writes for every table and role; all are denied (scenario NFR-SEC-003).                                                                                                  | Must   | M1  |
+| NFR-SEC-004 | MFA (AAL2) for Owner and Branch Manager shall be enforced in database policies, not only in the UI (FR-IAM-005).                                                                                                                                                                                                                                                                                                                                                           | API calls with an AAL1 token of a Manager return no business data.                                                                                                                                                                         | Must   | M2  |
+| NFR-SEC-005 | HTTP security headers shall be set on every response through the Cloudflare `_headers` file: Content-Security-Policy (no `unsafe-inline` or `unsafe-eval` for scripts; `connect-src` limited to the project's Supabase and Sentry endpoints), Strict-Transport-Security (`max-age=31536000; includeSubDomains`), X-Content-Type-Options `nosniff`, `frame-ancestors 'none'`, Referrer-Policy `strict-origin-when-cross-origin`, Permissions-Policy (camera only for self). | An automated check against each preview deployment finds all headers present with the specified values.                                                                                                                                    | Must   | M2  |
+| NFR-SEC-006 | Secrets shall never be committed or shipped to the client.                                                                                                                                                                                                                                                                                                                                                                                                                 | gitleaks runs on every push and pull request with zero findings; the built bundle contains no service-role or AI key; keys are rotated at least every 12 months and immediately on suspected exposure.                                     | Must   | M0  |
+| NFR-SEC-007 | Known vulnerabilities shall be managed.                                                                                                                                                                                                                                                                                                                                                                                                                                    | CodeQL, `pnpm audit` and Dependabot run in CI; no known critical or high vulnerability in production dependencies at release; fix times: critical 48 hours, high 7 days, medium 30 days.                                                   | Must   | M2  |
+| NFR-SEC-008 | All inputs shall be validated on the server independently of the client.                                                                                                                                                                                                                                                                                                                                                                                                   | Every RPC validates types, ranges, enumerations and lengths; fuzz tests with invalid payloads produce only business errors, never server faults.                                                                                           | Must   | M1  |
+| NFR-SEC-009 | SECURITY DEFINER functions shall be hardened.                                                                                                                                                                                                                                                                                                                                                                                                                              | Each has a fixed `search_path`, explicit authorization checks at the start, `EXECUTE` revoked from `PUBLIC` and `anon`; a CI query lists any non-compliant function.                                                                       | Must   | M1  |
+| NFR-SEC-010 | Privileges shall be least privilege.                                                                                                                                                                                                                                                                                                                                                                                                                                       | `anon` has no access to business data; `authenticated` has no direct INSERT, UPDATE or DELETE on ledger and document tables (privilege tests).                                                                                             | Must   | M1  |
+| NFR-SEC-011 | Abuse-prone endpoints shall be rate limited.                                                                                                                                                                                                                                                                                                                                                                                                                               | Sign-in per platform limits; AI by default at most 20 requests per user per hour and 200 per organization per day (configurable); full data exports at most 5 per hour per user.                                                           | Should | M4  |
+| NFR-SEC-012 | File uploads shall be safe.                                                                                                                                                                                                                                                                                                                                                                                                                                                | Private buckets only; allowed types and size limits per bucket as defined in the architecture (prescription images: JPEG, PNG or WebP, at most 5 MB); storage policies scoped by organization and branch; signed URLs valid at most 300 s. | Must   | M3  |
+| NFR-SEC-013 | Data shall be encrypted in transit and at rest.                                                                                                                                                                                                                                                                                                                                                                                                                            | TLS 1.2 or later only; platform encryption at rest; backups encrypted before leaving the runner (NFR-BACKUP-003).                                                                                                                          | Must   | M4  |
+| NFR-SEC-014 | Threats shall be analyzed continuously.                                                                                                                                                                                                                                                                                                                                                                                                                                    | The STRIDE threat model is updated in every pull request that touches authentication, money, stock or personal data; the pre-launch security review closes all critical and high findings.                                                 | Must   | M4  |
+| NFR-SEC-015 | The platform operator shall have no standing access to tenant business data in production.                                                                                                                                                                                                                                                                                                                                                                                 | Break-glass access requires a recorded reason, is audited and is notified to the Owner.                                                                                                                                                    | Should | M4  |
+| NFR-SEC-016 | A vulnerability disclosure process shall exist.                                                                                                                                                                                                                                                                                                                                                                                                                            | [SECURITY.md](../../SECURITY.md) is published with a contact and response time.                                                                                                                                                            | Must   | M0  |
+
+```gherkin
+Scenario: NFR-SEC-003 tenant isolation holds for every table
+  Given organizations "Org A" and "Org B" each with users of every role
+  When any user of "Org B" selects, inserts, updates or calls a function referencing a row ID of "Org A"
+  Then the select returns zero rows and every write or call is rejected
+  And the automated test iterates over every table and every RPC in the exposed schemas
+```
+
+#### 3.4.3 Availability (NFR-AVAIL)
+
+| ID            | Requirement                                                                                 | Fit criterion                                                                                                                                                                                      | Pri    | MS            |
+| ------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------- |
+| NFR-AVAIL-001 | The application and API shall be available during business hours.                           | At least 99.5 % per calendar month between 08:00 and 24:00 Asia/Dhaka, measured by the uptime monitor (provider outages count; the Supabase Free tier has no SLA).                                 | Must   | M4            |
+| NFR-AVAIL-002 | Planned maintenance shall avoid trading hours.                                              | Maintenance and migrations only between 01:00 and 06:00 Asia/Dhaka with at least 24 hours' notice to the Owner; migrations follow expand, migrate, contract so that the application keeps working. | Must   | M4            |
+| NFR-AVAIL-003 | Failure of non-core services shall not stop core operations.                                | With AI, SMS, Sentry, email or the uptime monitor unavailable, sales, purchases, stock and reports work normally (fault-injection test).                                                           | Must   | M2 (AI in M5) |
+| NFR-AVAIL-004 | Counter sales shall continue without internet (PWA offline mode, FR-POS-055 to FR-POS-059). | Up to 72 hours or 500 queued sales per terminal (configurable); synchronization starts within 1 minute of reconnection.                                                                            | Should | M4            |
+| NFR-AVAIL-005 | Transient network failures shall be handled safely.                                         | Failed calls are retried with exponential backoff (at most 3 attempts) using the same idempotency key; the user sees "saving", "saved" or "failed, retry".                                         | Must   | M2            |
+| NFR-AVAIL-006 | The production database shall never be paused by platform inactivity rules.                 | The health check queries the database at least every 5 minutes.                                                                                                                                    | Must   | M4            |
+
+#### 3.4.4 Reliability and data integrity (NFR-REL)
+
+| ID          | Requirement                                                              | Fit criterion                                                                                                                                                                                                                                                                                                                                                                  | Pri    | MS                           |
+| ----------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | ---------------------------- |
+| NFR-REL-001 | Each business operation shall be atomic.                                 | Fault injection at each step of `create_sale`, `receive_purchase`, `transfer_stock`, `adjust_stock`, `process_return` and `enroll_loyalty` leaves no partial data.                                                                                                                                                                                                             | Must   | M1                           |
+| NFR-REL-002 | Stock shall never become negative, including under concurrency.          | A test with 20 parallel sessions selling the same batch never ends with negative stock and commits exactly the available quantity.                                                                                                                                                                                                                                             | Must   | M1                           |
+| NFR-REL-003 | Derived balances shall always equal their ledgers.                       | A nightly job verifies, with zero tolerance: batch on-hand equals the sum of movements; customer and supplier balances equal their ledgers; loyalty points balances equal the points ledger; controlled-drug register balances equal stock; daily summary tables equal a recomputation from source documents for the previous day. Any mismatch raises an alert within 1 hour. | Must   | M3 (checks runnable from M1) |
+| NFR-REL-004 | Document number series shall be verifiably gapless.                      | The nightly job confirms every invoice and credit-note series per branch and fiscal year is contiguous from 1 to its maximum.                                                                                                                                                                                                                                                  | Must   | M2                           |
+| NFR-REL-005 | Money calculations shall be exact.                                       | Integer paisa only; property-based tests (at least 10,000 generated cases per property) prove that allocations sum to their totals, refunds never exceed amounts paid and totals equal the sum of lines.                                                                                                                                                                       | Must   | M1                           |
+| NFR-REL-006 | Document-creating operations shall be idempotent.                        | The same idempotency key with the same payload returns the original result for at least 7 days; the same key with a different payload is rejected (scenario NFR-REL-006).                                                                                                                                                                                                      | Must   | M1                           |
+| NFR-REL-007 | Posted records shall be immutable.                                       | Application roles cannot update or delete posted sales, GRNs, transfers, returns, ledgers, register entries or audit rows; corrections use reversing documents.                                                                                                                                                                                                                | Must   | M1                           |
+| NFR-REL-008 | References shall never cross tenants.                                    | Foreign keys exist on all relations and include `organization_id` (or are checked) so a child row cannot reference another organization's parent.                                                                                                                                                                                                                              | Must   | M1                           |
+| NFR-REL-009 | Concurrent edits of master data shall not silently overwrite each other. | An update based on a stale version is rejected with a conflict message (optimistic concurrency).                                                                                                                                                                                                                                                                               | Should | M2                           |
+| NFR-REL-010 | Date logic shall be correct at day and year boundaries.                  | Tests at 23:59:59 and 00:00:00 Asia/Dhaka and across 30 June to 1 July assign the correct business date and fiscal year.                                                                                                                                                                                                                                                       | Must   | M1                           |
+| NFR-REL-011 | Client and server validation shall agree.                                | Shared Zod schemas on the client; a contract test runs the same invalid samples against Zod and the RPC and both reject them.                                                                                                                                                                                                                                                  | Should | M2                           |
+| NFR-REL-012 | Schema changes shall be safe.                                            | Migrations are forward-only, tested on staging with production-like data, preceded by a backup (FR-BKP-008) and wrapped in a transaction where possible.                                                                                                                                                                                                                       | Must   | M1                           |
+
+```gherkin
+Scenario: NFR-REL-006 retrying a sale after a lost response
+  Given a sale was submitted with idempotency key "K-7f3c" and committed as "MPR-2026-000124"
+  And the response never reached the terminal
+  When the terminal resubmits the same sale with key "K-7f3c"
+  Then the response is invoice "MPR-2026-000124"
+  And no second sale, stock movement, payment or invoice number is created
+```
+
+#### 3.4.5 Privacy (NFR-PRIV)
+
+| ID           | Requirement                                                                                                                                                                                                                               | Fit criterion                                                                                          | Pri    | MS                         |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------ | -------------------------- |
+| NFR-PRIV-001 | A personal data inventory shall be maintained: customers (name, phone, address), patients and prescribers on controlled sales, prescription images, staff (name, email, phone, pharmacist registration). All are classified Confidential. | The inventory exists in the security model and matches the schema (review at each milestone).          | Must   | M1                         |
+| NFR-PRIV-002 | Only the personal data listed in NFR-PRIV-001 shall be collected.                                                                                                                                                                         | Schema review finds no other personal fields (for example national ID or date of birth).               | Must   | M1                         |
+| NFR-PRIV-003 | Phone numbers shall be masked (for example `017XX-XXX344`) in lists and on receipts, and shown in full only on profile or exact-match lookup screens to authorized users.                                                                 | UI test of lists and receipt snapshots.                                                                | Should | M2                         |
+| NFR-PRIV-004 | Prescription images shall be retained for 6 years when linked to a controlled-drug sale and 2 years otherwise (CFG-28, OD-20), then purged by a scheduled job; access only by signed URLs valid at most 300 s; every view audited.        | A test image past its retention period is deleted by the job; views appear in the audit log.           | Should | M3                         |
+| NFR-PRIV-005 | Personal data shall not appear in logs, error reports, analytics or URLs.                                                                                                                                                                 | Sentry `beforeSend` scrubbing test; review of log samples; no phone numbers or names in query strings. | Must   | M2                         |
+| NFR-PRIV-006 | Requests from a customer to access or erase their data shall be fulfilled within 30 days by export and anonymization, retaining records required by law (FR-CUS-014).                                                                     | Procedure documented in the runbook and tested.                                                        | Should | M4                         |
+| NFR-PRIV-007 | Data sent to the AI provider shall be minimized and redacted (FR-AI-023).                                                                                                                                                                 | See FR-AI-023.                                                                                         | Must   | M5                         |
+| NFR-PRIV-008 | No promotional message shall be sent without recorded consent (FR-CUS-015).                                                                                                                                                               | Sending logic refuses customers without consent.                                                       | Must   | Later (consent capture M3) |
+| NFR-PRIV-009 | A privacy notice in English and Bangla shall describe the data collected, purposes, retention, hosting location and AI processing, and be available in the shop and in the application.                                                   | Notice published before launch.                                                                        | Should | M4                         |
+| NFR-PRIV-010 | Hosting of data in Singapore shall be disclosed and the Owner's acceptance recorded (A-04).                                                                                                                                               | Acceptance recorded in the decisions register.                                                         | Must   | M4                         |
+| NFR-PRIV-011 | Compliance with the Bangladesh personal-data protection law applicable at launch shall be reviewed by the Owner's legal adviser (OD-22).                                                                                                  | Review outcome recorded; resulting changes tracked as requirements.                                    | Should | M4                         |
+
+#### 3.4.6 Usability and accessibility (NFR-USAB)
+
+| ID           | Requirement                                                   | Fit criterion                                                                                                                                                                                                                                             | Pri    | MS                            |
+| ------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------- |
+| NFR-USAB-001 | The application shall conform to WCAG 2.1 level AA [R3].      | Automated axe checks in E2E tests report zero serious or critical violations; manual keyboard and screen-reader (NVDA) checks of sign-in, POS and main forms pass before each milestone exit; full audit before launch.                                   | Must   | M2 (audit M4)                 |
+| NFR-USAB-002 | The POS shall be keyboard-first.                              | A full sale (search, add, quantity, customer or card, discount, payment, commit, print) is completed without a mouse in an E2E test; focus is always visible; shortcuts follow Appendix C, are configurable and do not use browser-reserved combinations. | Must   | M2                            |
+| NFR-USAB-003 | Barcode scanning shall work regardless of focus (FR-POS-002). | E2E test with simulated scanner input.                                                                                                                                                                                                                    | Must   | M2                            |
+| NFR-USAB-004 | Counter operation shall be efficient.                         | In a usability test with 5 trained Salesmen, the median time for a three-line cash sale is at most 30 s by barcode and at most 45 s by name search.                                                                                                       | Should | M4 (first measured at M2 UAT) |
+| NFR-USAB-005 | The POS shall be easy to learn.                               | At least 4 of 5 new Salesmen complete a basic sale unaided after at most 30 minutes of training.                                                                                                                                                          | Should | M4                            |
+| NFR-USAB-006 | Errors shall be prevented and recoverable.                    | Destructive actions (void, write-off, cancellation) need confirmation; the cart has undo; leaving a form with unsaved changes warns; error messages state the problem and the next step in the user's language.                                           | Must   | M2                            |
+| NFR-USAB-007 | Screens shall work on the target devices.                     | Owner and Manager screens are usable at 320 CSS px width and at 200 % zoom; the POS is optimized for 1366 x 768 and larger.                                                                                                                               | Must   | M2                            |
+| NFR-USAB-008 | Visual information shall be perceivable.                      | Text contrast at least 4.5:1 (3:1 for large text); status (for example expiry) is never conveyed by color alone.                                                                                                                                          | Must   | M2                            |
+| NFR-USAB-009 | Touch targets shall be large enough on touch screens.         | At least 44 x 44 CSS pixels on mobile layouts.                                                                                                                                                                                                            | Should | M2                            |
+| NFR-USAB-010 | Help shall be available.                                      | A keyboard shortcut overlay and contextual help in the application; a user manual in English and Bangla at launch.                                                                                                                                        | Must   | M4                            |
+| NFR-USAB-011 | Receipts shall be legible.                                    | Minimum type size equivalent to 8 pt on 58 mm paper; Bangla conjuncts render correctly on a printed test sheet on each supported printer model.                                                                                                           | Must   | M2                            |
+
+#### 3.4.7 Internationalization and localization (NFR-I18N)
+
+| ID           | Requirement                                                                                                                                                                                                                                                       | Fit criterion                                                                       | Pri    | MS  |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------ | --- |
+| NFR-I18N-001 | All user-facing text shall be externalized (i18next); English shall be complete.                                                                                                                                                                                  | No hard-coded user-facing strings (lint rule); CI fails on keys missing in English. | Must   | M2  |
+| NFR-I18N-002 | Bangla (bn-BD) shall be complete for all screens, messages, receipts, reports and the user manual.                                                                                                                                                                | CI fails on keys missing in Bangla; native-speaker review sign-off.                 | Must   | M4  |
+| NFR-I18N-003 | Each user shall choose the language, switchable without reload; the organization default applies to new users.                                                                                                                                                    | E2E test switches language on the POS without losing the cart.                      | Must   | M2  |
+| NFR-I18N-004 | Numbers, currency, dates and times shall follow the locale: ৳ with South Asian digit grouping (৳1,23,456.50); in Bangla, Bangla digits by default (৳১,২৩,৪৫৬.৫০) with an organization option for Latin digits; dates DD/MM/YYYY; 12-hour time; always Asia/Dhaka. | Unit tests of the formatting functions for both locales.                            | Must   | M2  |
+| NFR-I18N-005 | Numeric inputs shall accept Bangla and Latin digits.                                                                                                                                                                                                              | Entering "১২" in a quantity field gives 12.                                         | Must   | M2  |
+| NFR-I18N-006 | Bangla text shall be Unicode only, with a bundled open-licence Bangla font (for example Noto Sans Bengali) for screen and PDF; legacy ANSI encodings (for example Bijoy) are not supported.                                                                       | PDF export renders Bangla correctly on a machine without Bangla fonts installed.    | Must   | M2  |
+| NFR-I18N-007 | Medicine names shall display as recorded in the catalog (normally English as printed on packs); an optional Bangla name is displayed alongside and is searchable.                                                                                                 | Searching the Bangla name finds the medicine.                                       | Should | M2  |
+| NFR-I18N-008 | Receipts shall print in English, Bangla or both per branch setting (FR-ORG-010).                                                                                                                                                                                  | Receipt snapshot tests for all three modes.                                         | Should | M2  |
+| NFR-I18N-009 | Layouts shall tolerate 30 % text expansion and Bangla line heights without truncating critical information.                                                                                                                                                       | Pseudo-localization test of main screens.                                           | Should | M2  |
+| NFR-I18N-010 | A new locale shall be addable by adding resource files only.                                                                                                                                                                                                      | Adding a test locale requires no code change.                                       | Should | M4  |
+
+#### 3.4.8 Maintainability (NFR-MAINT)
+
+Engineering rules are detailed in the [engineering standards](../engineering/engineering-standards.md) and
+[testing strategy](../engineering/testing-strategy.md).
+
+| ID            | Requirement                                           | Fit criterion                                                                                                                                                         | Pri    | MS                   |
+| ------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | -------------------- |
+| NFR-MAINT-001 | Code shall be statically checked.                     | TypeScript strict mode; ESLint, Prettier and `tsc` pass with zero errors in CI.                                                                                       | Must   | M0                   |
+| NFR-MAINT-002 | Code shall be tested to agreed levels.                | At least 80 % line and branch coverage on domain logic (money, rounding, FEFO, discounts, loyalty); 100 % of RPC functions and RLS policies have pgTAP tests.         | Must   | M1 (DB), M2 (client) |
+| NFR-MAINT-003 | Business rules shall have one source of truth.        | Rules are enforced in the database; client copies exist only for previews and use shared, tested modules.                                                             | Must   | M1                   |
+| NFR-MAINT-004 | Business parameters shall be configuration, not code. | Every parameter in Appendix A is stored in settings tables and changeable without deployment.                                                                         | Must   | M1                   |
+| NFR-MAINT-005 | Migrations shall be controlled.                       | Forward-only, versioned, linted (squawk or `supabase db lint`) and reviewed.                                                                                          | Must   | M1                   |
+| NFR-MAINT-006 | The development environment shall be reproducible.    | A new developer runs the application with local Supabase and seed data within 30 minutes following [CONTRIBUTING.md](../../CONTRIBUTING.md).                          | Should | M0                   |
+| NFR-MAINT-007 | Decisions and changes shall be documented.            | An ADR per significant decision; this SRS updated in the same pull request as a requirement change; CHANGELOG per release; Conventional Commits; semantic versioning. | Must   | M0                   |
+| NFR-MAINT-008 | Dependencies shall be kept healthy.                   | Dependabot weekly; no direct production dependency without a release for more than 2 years; Node 22 LTS.                                                              | Should | M2                   |
+| NFR-MAINT-009 | Business errors shall be catalogued.                  | Every business error has a stable code, English and Bangla messages and a test.                                                                                       | Must   | M2                   |
+| NFR-MAINT-010 | Features shall be releasable per organization.        | Feature flags per organization for loyalty, offline mode and AI.                                                                                                      | Should | M3                   |
+| NFR-MAINT-011 | Modules shall be decoupled.                           | Feature-based modules; a lint rule forbids circular imports.                                                                                                          | Should | M2                   |
+
+#### 3.4.9 Scalability and multi-tenancy (NFR-SCAL)
+
+| ID           | Requirement                                      | Fit criterion                                                                                                                                                                                                                                                                                                                 | Pri    | MS  |
+| ------------ | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --- |
+| NFR-SCAL-001 | The number of branches shall be unlimited.       | A new branch is operational through configuration only within 30 minutes (BO-07); tests run with 50 branches.                                                                                                                                                                                                                 | Must   | M1  |
+| NFR-SCAL-002 | The system shall be multi-tenant from the start. | Every tenant-owned row carries `organization_id` and is protected by RLS; a new organization needs no schema change; automated tests run with at least 3 organizations.                                                                                                                                                       | Must   | M1  |
+| NFR-SCAL-003 | Performance targets shall hold as data grows.    | Targets met in a synthetic data test with 30,000 catalog items, 10 branches and one year of sales at the reference workload; sales, movement and audit tables use partition-ready keys and are partitioned by month when a single table exceeds about 50 million rows or 10 GB, or when maintenance starts to affect latency. | Should | M4  |
+| NFR-SCAL-004 | Capacity shall scale without code change.        | The frontend is static on a CDN; capacity grows by upgrading the Supabase compute tier; a read replica may serve analytics.                                                                                                                                                                                                   | Should | M4  |
+| NFR-SCAL-005 | Queries shall be indexed.                        | Indexes on all foreign keys and query paths; pg_trgm GIN index for medicine search; a CI query lists unindexed foreign keys and fails if any.                                                                                                                                                                                 | Must   | M1  |
+| NFR-SCAL-006 | Database size shall be monitored.                | Alert at 70 % of the plan quota (500 MB on the Supabase Free tier at the time of writing).                                                                                                                                                                                                                                    | Must   | M4  |
+| NFR-SCAL-007 | Data growth shall be forecast.                   | Growth is estimated (initial estimate about 250 to 300 MB per branch per year including indexes, plus about 50 MB for the catalog, to be re-measured in M4) and reviewed quarterly against the plan quota.                                                                                                                    | Should | M4  |
+
+#### 3.4.10 Observability (NFR-OBS)
+
+| ID          | Requirement                                          | Fit criterion                                                                                                                                                                                                                                        | Pri    | MS  |
+| ----------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --- |
+| NFR-OBS-001 | Frontend errors shall be captured.                   | Sentry receives unhandled errors and promise rejections with release, environment and route; user IDs pseudonymized; personal data scrubbed; source maps uploaded privately.                                                                         | Must   | M4  |
+| NFR-OBS-002 | Server-side functions shall log in a structured way. | Edge Functions write JSON logs with timestamp, level, request ID, organization ID, function, duration and outcome; no personal data.                                                                                                                 | Must   | M3  |
+| NFR-OBS-003 | Requests shall be traceable end to end.              | The client sends a request ID with each RPC; it is recorded in audit entries, logs and Sentry events.                                                                                                                                                | Should | M2  |
+| NFR-OBS-004 | Outages shall be detected.                           | An uptime check every 5 minutes on the application URL and a health RPC that queries the database; alerts by email and a second channel to the maintainer and the Owner within 10 minutes of two consecutive failures.                               | Must   | M4  |
+| NFR-OBS-005 | Database performance shall be reviewed.              | `pg_stat_statements` reviewed monthly; queries slower than 500 ms are logged and triaged.                                                                                                                                                            | Should | M4  |
+| NFR-OBS-006 | Business health shall be monitored.                  | Alerts for integrity check failures (NFR-REL-003), gapless check failures (NFR-REL-004), backup staleness (NFR-BACKUP-006), reporting data older than 26 hours, and a terminal with unsynchronized offline sales for more than 2 hours while online. | Must   | M4  |
+| NFR-OBS-007 | Real-user performance shall be measured.             | LCP, INP and CLS collected from at least 10 % of sessions without personal data.                                                                                                                                                                     | Should | M4  |
+| NFR-OBS-008 | Alerts shall be actionable.                          | Every alert type links to a procedure in the [runbook](../operations/runbook.md).                                                                                                                                                                    | Must   | M4  |
+
+#### 3.4.11 Backup and recovery (NFR-BACKUP)
+
+| Supabase tier        | Mechanism                                                                                          | RPO                                | RTO     |
+| -------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------- | ------- |
+| Free                 | Nightly encrypted `pg_dump` and storage object backup through GitHub Actions; monthly offline copy | 24 hours                           | 4 hours |
+| Pro                  | Supabase daily backups plus the nightly encrypted dump                                             | 24 hours                           | 4 hours |
+| Pro with PITR add-on | Point-in-time recovery plus the above                                                              | Minutes (target 5 minutes or less) | 4 hours |
+
+| ID             | Requirement                                                                                                                                                                                            | Fit criterion                                                                                                                                                      | Pri                | MS  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------ | --- |
+| NFR-BACKUP-001 | On the Free tier, recovery shall meet RPO 24 hours and RTO 4 hours.                                                                                                                                    | Quarterly drill (NFR-BACKUP-007) measures both within target.                                                                                                      | Must               | M4  |
+| NFR-BACKUP-002 | On the Pro tier, recovery shall meet RPO 24 hours (daily backups) or minutes with PITR, and RTO 4 hours.                                                                                               | Drill on the Pro project measures both within target.                                                                                                              | Must (when on Pro) | M4  |
+| NFR-BACKUP-003 | Backups shall be encrypted with public-key encryption (`age`, X25519) before upload. The private key is held offline by the Owner with a sealed second copy; the key-loss procedure is in the runbook. | Decrypting with the custody key succeeds; the stored file is not readable without it.                                                                              | Must               | M4  |
+| NFR-BACKUP-004 | Backups shall be retained: daily for 30 days, monthly for 12 months, and the fiscal year-end (30 June) backup for 6 years.                                                                             | Retention job keeps exactly the expected set (test on a simulated calendar).                                                                                       | Must               | M4  |
+| NFR-BACKUP-005 | Backups shall follow the 3-2-1 rule: at least 3 copies, on 2 different media or providers, 1 offline.                                                                                                  | Inventory of copies reviewed monthly.                                                                                                                              | Must               | M4  |
+| NFR-BACKUP-006 | Backup failures shall be detected quickly.                                                                                                                                                             | An alert within 1 hour of a failed run, and whenever the newest backup is older than 26 hours.                                                                     | Must               | M4  |
+| NFR-BACKUP-007 | Restores shall be drilled quarterly.                                                                                                                                                                   | Restore into staging within RTO; integrity checks pass; row counts match the backup manifest; application smoke tests pass; results recorded in the runbook log.   | Must               | M4  |
+| NFR-BACKUP-008 | A restore shall preserve identities and numbering.                                                                                                                                                     | After restore, IDs, invoice and credit-note numbers and audit entries are unchanged and new documents continue the series without reusing numbers.                 | Must               | M4  |
+| NFR-BACKUP-009 | Data lost between the recovery point and the incident shall be identifiable.                                                                                                                           | After a restore, the system reports the lost time window per branch so paper records from that window can be re-entered (paper fallback procedure in the runbook). | Should             | M4  |
+
+### 3.5 Logical database requirements
+
+The canonical schema is in the [database design](../database/database-design.md). This section states only the
+requirements that the schema must satisfy.
+
+| ID     | Requirement                                                                                                                                                                                  |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LDB-01 | Every tenant-owned row carries `organization_id`; every branch-scoped row also carries `branch_id` (NFR-SCAL-002).                                                                           |
+| LDB-02 | Money is BIGINT paisa; percentages are NUMERIC(5,2) or integer basis points; quantities are INTEGER base units (C-04, C-05).                                                                 |
+| LDB-03 | Primary keys are UUIDs; human-readable numbers (invoice, credit note, transfer, card, SKU) are separate unique columns scoped by organization (and branch and fiscal year where applicable). |
+| LDB-04 | Ledgers (inventory movements, customer and supplier ledgers, points ledger, controlled-drug register, cash movements) and the audit log are append-only.                                     |
+| LDB-05 | Business records are archived (`archived_at` or `is_active`), never hard-deleted.                                                                                                            |
+| LDB-06 | Timestamps are TIMESTAMPTZ (UTC); business dates are DATE values computed in Asia/Dhaka.                                                                                                     |
+| LDB-07 | Daily summary tables per branch are maintained in the same transaction as the source documents; heavy analytics use materialized views refreshed on schedule.                                |
+
+**Retention summary**
+
+| Data                                                                         | Retention                                                                      |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Business records (sales, purchases, transfers, ledgers, register, customers) | Indefinite while the organization is active (no hard delete); at least 6 years |
+| Audit log                                                                    | At least 6 years (FR-AUD-007)                                                  |
+| Prescription images                                                          | 6 years for controlled-drug sales, 2 years otherwise (NFR-PRIV-004)            |
+| Notifications                                                                | 90 days (FR-NTF-011)                                                           |
+| Held bills                                                                   | Until the end of the business date (FR-POS-039)                                |
+| Idempotency keys                                                             | At least 7 days (NFR-REL-006)                                                  |
+| AI request logs                                                              | 90 days (FR-AI-017)                                                            |
+| Backups                                                                      | Per NFR-BACKUP-004                                                             |
+
+---
+
+## 4. Verification and traceability
+
+### 4.1 Verification methods
+
+Each requirement is verified by one of the methods of ISO/IEC/IEEE 29148 [R1]. **Test (T) is the default**; the
+exceptions are listed below.
+
+| Method        | Code | Typical use                                                                             | Tools                                                                                                                                                                                                                                                                                                    |
+| ------------- | ---- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Test          | T    | Functional rules, constraints, RLS, calculations, flows, performance, security controls | pgTAP via `supabase test db`; Vitest (unit and property-based); Vitest with supabase-js against the local stack (integration); Playwright (E2E, with axe for accessibility); Lighthouse CI; load tests (tool per [testing strategy](../engineering/testing-strategy.md)); CodeQL, gitleaks, `pnpm audit` |
+| Demonstration | D    | Physical printing, restore drills, offline operation on real devices                    | Recorded checklist with date, operator and result                                                                                                                                                                                                                                                        |
+| Inspection    | I    | Documentation, configuration, schema and process reviews                                | Review checklist in the pull request or milestone review                                                                                                                                                                                                                                                 |
+| Analysis      | A    | Capacity estimates, usability metrics, AI evaluation results                            | Report attached to the milestone review                                                                                                                                                                                                                                                                  |
+
+**Requirements verified other than by test (T):**
+
+| Method        | Requirements                                                                                                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Demonstration | IF-HW-002, IF-HW-003, FR-BKP-004, FR-BKP-005, NFR-BACKUP-007, NFR-USAB-011, NFR-AVAIL-004 (on real devices, in addition to automated tests)                                                                        |
+| Inspection    | NFR-SEC-001, NFR-SEC-014, NFR-SEC-015, NFR-SEC-016, NFR-PRIV-001, NFR-PRIV-002, NFR-PRIV-009, NFR-PRIV-010, NFR-PRIV-011, NFR-MAINT-006, NFR-MAINT-007, NFR-BACKUP-005, FR-AI-022 (in addition to test), FR-AI-028 |
+| Analysis      | NFR-AVAIL-001, NFR-USAB-004, NFR-USAB-005, NFR-SCAL-007, FR-AI-008, FR-AI-018                                                                                                                                      |
+
+**Primary test level by requirement type:**
+
+| Requirement type                                        | Primary level                                           | Examples                            |
+| ------------------------------------------------------- | ------------------------------------------------------- | ----------------------------------- |
+| Database rule (constraint, trigger, RLS, RPC behaviour) | pgTAP                                                   | FR-INV-005, FR-POS-030, NFR-SEC-003 |
+| Pure calculation                                        | Vitest unit and property-based tests                    | FR-POS-015, FR-POS-019, FR-LOY-028  |
+| API contract and idempotency                            | Integration tests through supabase-js                   | NFR-REL-006, IF-COM-002             |
+| End-to-end user goal                                    | Playwright, tagged with the use case                    | UC-06, UC-12, UC-19                 |
+| Accessibility                                           | Playwright with axe, plus manual checks                 | NFR-USAB-001, NFR-USAB-002          |
+| Performance                                             | Load tests and Lighthouse CI                            | NFR-PERF-001 to NFR-PERF-003        |
+| Security controls                                       | pgTAP isolation suites, header checks, CodeQL, gitleaks | NFR-SEC-002 to NFR-SEC-006          |
+
+### 4.2 Requirement identifiers in tests
+
+Every automated test that verifies a requirement carries the requirement ID, so that the traceability matrix can be
+generated from the code instead of being maintained by hand.
+
+| Test kind                             | Convention                                                                                                    | Example                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| pgTAP                                 | The assertion description starts with the ID                                                                  | `'FR-INV-005: concurrent sales cannot drive stock negative'`                   |
+| Vitest                                | The `describe` or `it` title starts with the ID                                                               | `describe('FR-POS-019 invoice discount allocation', ...)`                      |
+| Playwright                            | Tags with requirement and use case IDs                                                                        | `test('cash sale with loyalty card', { tag: ['@UC-06', '@FR-LOY-025'] }, ...)` |
+| Given/When/Then scenarios in this SRS | The scenario title starts with the ID; each scenario becomes one automated test with the same title           | `Scenario: FR-POS-030 a failed sale does not consume an invoice number`        |
+| Issues and pull requests              | Issue titles and the "Requirements" section of the pull request template list the IDs implemented or affected | `Implements: FR-POS-030, NFR-REL-004`                                          |
+
+### 4.3 Traceability chain and matrix
+
+```mermaid
+flowchart LR
+    REQ["SRS requirement, e.g. FR-POS-030 (priority, milestone)"] --> ISS["GitHub issue in milestone M1"]
+    ISS --> PR["Pull request listing FR-POS-030"]
+    PR --> CODE["Migration, function or UI code"]
+    PR --> TST["Tests tagged FR-POS-030 (pgTAP, Vitest, Playwright)"]
+    TST --> CI["CI traceability report"]
+    REQ --> CI
+    CI --> EXIT["Milestone exit review (roadmap)"]
+```
+
+A traceability script under `/scripts` (specified in the [testing strategy](../engineering/testing-strategy.md))
+extracts every ID, priority and milestone from the tables of this SRS, scans the test suites for IDs, and publishes a
+matrix (Markdown and CSV) as a CI artifact. The CI job:
+
+1. fails when a test references an ID that does not exist or is Withdrawn;
+2. warns when a Must requirement of the current or an earlier milestone has no automated test and is not listed in
+   4.1 as verified by another method;
+3. on a release tag that closes a milestone, fails on the condition in item 2 instead of warning.
+
+**Illustrative matrix rows**
+
+| Requirement    | Priority | Milestone | Method | Verified by                                                |
+| -------------- | -------- | --------- | ------ | ---------------------------------------------------------- |
+| FR-INV-005     | Must     | M1        | T      | pgTAP concurrency suite for stock allocation               |
+| FR-POS-030     | Must     | M1        | T      | pgTAP numbering suite; nightly gapless check (NFR-REL-004) |
+| FR-POS-019     | Must     | M1        | T      | Vitest property-based test of discount allocation          |
+| FR-LOY-025     | Must     | M3        | T      | pgTAP loyalty pricing suite; Playwright `@UC-13`           |
+| NFR-PERF-002   | Must     | M2        | T      | Load test report attached to the M4 review                 |
+| NFR-BACKUP-007 | Must     | M4        | D      | Quarterly restore drill record in the runbook log          |
+
+### 4.4 Mapping to milestones and exit criteria
+
+- Every requirement has exactly one target milestone (column MS). The [roadmap](../roadmap.md) groups them into
+  deliverables and defines milestone exit criteria.
+- A milestone exits when: all Must requirements targeting it or an earlier milestone are verified (tests green on
+  `main`, or the non-test verification recorded); every Should requirement targeting it is verified or deferred with a
+  recorded Owner decision; and the traceability report is attached to the release.
+- Requirements first enforced in the database in M1 and surfaced in screens in M2 are verified at both points (pgTAP in
+  M1, end-to-end in M2).
+
+### 4.5 Acceptance testing
+
+At the end of M2, M3, M4 and M5, the Owner, supported by one Branch Manager and one Salesman, performs user acceptance
+testing on the staging environment using the use cases of [3.2](#32-use-cases) and realistic, anonymized data.
+Defects are classified as Blocker, Major or Minor; a milestone is accepted only with no open Blocker or Major defects
+and with the Owner's recorded sign-off.
+
+### 4.6 Change control
+
+1. Requirements change only through a pull request to this file, reviewed by the lead engineer; changes to business
+   rules also need the Owner's approval in the pull request.
+2. IDs are never reused or renumbered. A removed requirement keeps its row, marked "Withdrawn (date, reason,
+   successor ID)".
+3. Document versioning: MAJOR for a re-baseline (milestone scope change), MINOR for added or changed requirements,
+   PATCH for editorial changes. The revision history is updated with each change.
+4. A change that affects architecture also needs an [ADR](../adr/README.md).
+5. Tests and documents referencing a changed ID are updated in the same pull request; the traceability report shows the
+   impact.
+6. When the Owner resolves an open decision (Appendix B), the decision, date and any changed defaults are recorded there
+   and the affected requirements are updated.
+
+---
+
+## 5. Out of scope
+
+The following are not delivered in milestones M1 to M5. "Later" items are expected in future releases and the design
+must not block them; "Excluded" items are not planned.
+
+| Item                                                                                                    | Status     | Provision in this design                                                                 |
+| ------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------- |
+| E-commerce and online ordering                                                                          | Later      | Multi-tenant API and catalog can serve another sales channel                             |
+| Home delivery management                                                                                | Later      | Customer address is already captured (optional)                                          |
+| SMS reminders and OTP through a Bangladeshi gateway                                                     | Later (v2) | Consent flag (FR-CUS-015), notification types, Edge Function pattern (IF-SW-008)         |
+| SaaS self-service onboarding and subscription billing                                                   | Later      | Multi-tenancy from M1 (NFR-SCAL-002), FR-ORG-012                                         |
+| Native mobile application                                                                               | Later      | Responsive, installable PWA                                                              |
+| Supplier EDI or distributor ordering integration                                                        | Later      | Purchase orders exportable as PDF and CSV                                                |
+| Government reporting integrations (DGDA, NBR VAT returns)                                               | Later      | Controlled-drug register and VAT reports are exportable                                  |
+| Per-organization restore                                                                                | Later      | FR-BKP-009; organization export (FR-BKP-007)                                             |
+| Accounting general ledger, financial statements                                                         | Excluded   | Exports for external accounting software; management operating summary only (FR-RPT-016) |
+| Payroll, HR and attendance                                                                              | Excluded   | Salary advance is only an expense category                                               |
+| MFS and card payment gateway integration (bKash, Nagad, Rocket APIs, card terminal integration)         | Excluded   | Manual capture of TrxID and card references (FR-POS-025, FR-POS-026)                     |
+| Direct hardware control (ESC/POS commands, cash drawer control, weighing scales)                        | Excluded   | Browser printing through OS drivers (IF-HW-002)                                          |
+| Clinical functions: dosing, drug-interaction checking, patient medical records, e-prescription exchange | Excluded   | AI is explicitly barred from medical advice (FR-AI-021)                                  |
+| Insurance and corporate credit billing                                                                  | Excluded   | Customer credit (বাকি) covers individual credit only                                     |
+| Multiple currencies or time zones                                                                       | Excluded   | BDT and Asia/Dhaka are fixed (FR-ORG-001)                                                |
+| Wholesale distribution and manufacturing features                                                       | Excluded   | —                                                                                        |
+
+---
+
+## Appendix A. Configuration parameters and defaults
+
+All parameters are stored as organization settings (or on the stated entity) and are changeable without deployment
+(NFR-MAINT-004). Changes are audited and apply to new transactions only (FR-ORG-006). Who may change each parameter is
+defined in the [security model](../security/security-model.md); by default it is the Owner.
+
+| ID     | Parameter                                                 | Default                                                                                                 | Allowed values                                             | Scope        | Used by                            |
+| ------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------ | ---------------------------------- |
+| CFG-01 | VAT rate on medicines (prices MRP-inclusive)              | 0.00 %                                                                                                  | 0.00 to 50.00 %                                            | Organization | FR-POS-015                         |
+| CFG-02 | Round invoice total to nearest taka                       | Off                                                                                                     | On, Off                                                    | Organization | FR-POS-015, FR-POS-051             |
+| CFG-03 | Fiscal year start month                                   | July                                                                                                    | January to December                                        | Organization | FR-ORG-011                         |
+| CFG-04 | Document number formats                                   | Invoice `<BRANCH>-<FY>-<NNNNNN>`; credit note `<BRANCH>-CN-<FY>-<NNNNNN>`; transfer `TRF-<FY>-<NNNNNN>` | Changeable only before the first document of a fiscal year | Organization | FR-POS-030, FR-POS-053, FR-TRF-003 |
+| CFG-05 | Manual discount limits by role                            | Salesman 5 %, Branch Manager 15 %, Owner 100 %                                                          | 0 to 100 %, not decreasing with seniority                  | Organization | FR-POS-017, FR-POS-018             |
+| CFG-06 | Sale return window                                        | 7 days                                                                                                  | 0 to 90 days                                               | Organization | FR-POS-046                         |
+| CFG-07 | Return value requiring approval                           | ৳500                                                                                                    | ৳0 or more                                                 | Organization | FR-POS-048                         |
+| CFG-08 | Near-expiry thresholds                                    | 30, 60, 90 days                                                                                         | 1 to 365 days, ascending                                   | Organization | FR-INV-020, FR-NTF-002, FR-RPT-008 |
+| CFG-09 | Short shelf-life warning at goods receipt                 | 180 days                                                                                                | 0 to 730 days                                              | Organization | FR-PUR-006                         |
+| CFG-10 | Held bill lifetime                                        | End of business date                                                                                    | End of day, or 1 to 24 hours                               | Organization | FR-POS-039                         |
+| CFG-11 | Require open cash session for sales and collections       | On (from M3)                                                                                            | On, Off                                                    | Organization | FR-CSH-004                         |
+| CFG-12 | Stock adjustment value a Branch Manager may approve       | ৳5,000 at cost per adjustment                                                                           | ৳0 or more                                                 | Organization | FR-INV-008, FR-INV-014             |
+| CFG-13 | Cash variance threshold                                   | ৳100                                                                                                    | ৳0 or more                                                 | Organization | FR-CSH-008                         |
+| CFG-14 | Blind stock count                                         | On                                                                                                      | On, Off                                                    | Organization | FR-INV-013                         |
+| CFG-15 | Expense approval limits                                   | Salesman ৳500, Branch Manager ৳5,000; above: Owner                                                      | ৳0 or more                                                 | Organization | FR-CSH-013                         |
+| CFG-16 | Controlled-drug prescription validity                     | 30 days                                                                                                 | 1 to 180 days                                              | Organization | FR-CDR-002                         |
+| CFG-17 | Controlled-drug maximum quantity per sale                 | Not set                                                                                                 | 1 base unit or more                                        | Medicine     | FR-CDR-004                         |
+| CFG-18 | Loyalty stacking with manual discounts                    | Best of                                                                                                 | Best of, Stack                                             | Organization | FR-LOY-026                         |
+| CFG-19 | Membership fee refund on cancellation                     | None                                                                                                    | None, Pro-rata                                             | Organization | FR-LOY-019                         |
+| CFG-20 | Card holder verification on typed or phone lookup         | On (last three phone digits)                                                                            | On, Off                                                    | Organization | FR-LOY-024                         |
+| CFG-21 | Loyalty abuse thresholds                                  | R1 to R7 as in 3.3.8.6                                                                                  | 0 or more per rule; a rule can be disabled                 | Organization | FR-LOY-041                         |
+| CFG-22 | Loyalty abuse response                                    | Flag only                                                                                               | Flag only, Hold benefit                                    | Organization | FR-LOY-043                         |
+| CFG-23 | Loyalty expiry reminder window                            | 7 days                                                                                                  | 1 to 60 days                                               | Organization | FR-LOY-038                         |
+| CFG-24 | Renewal counting window                                   | 30 days after end date                                                                                  | 0 to 180 days                                              | Organization | FR-LOY-049                         |
+| CFG-25 | Loyalty card number format                                | 10 digits including a Luhn check digit                                                                  | 8 to 16 digits including check digit                       | Organization | FR-LOY-012                         |
+| CFG-26 | Daily digest time                                         | 06:00 Asia/Dhaka                                                                                        | Any time                                                   | Organization | FR-NTF-002                         |
+| CFG-27 | Transfer receipt escalation                               | 48 hours                                                                                                | 1 to 168 hours                                             | Organization | FR-NTF-005                         |
+| CFG-28 | Prescription image retention                              | 6 years (controlled sales), 2 years (others)                                                            | 1 to 10 years                                              | Organization | NFR-PRIV-004                       |
+| CFG-29 | AI enabled, per feature                                   | Off                                                                                                     | On, Off per feature                                        | Organization | FR-AI-015                          |
+| CFG-30 | AI monthly budget                                         | USD 20 equivalent                                                                                       | 0 or more                                                  | Organization | FR-AI-016                          |
+| CFG-31 | Idle lock                                                 | 15 minutes                                                                                              | 5 to 60 minutes                                            | Organization | FR-IAM-011                         |
+| CFG-32 | Default credit limit for new customers                    | ৳0 (no credit)                                                                                          | ৳0 or more                                                 | Organization | FR-CUS-005                         |
+| CFG-33 | Weekly insight schedule                                   | Saturday 07:00 Asia/Dhaka, week Saturday to Friday                                                      | Any weekday and time                                       | Organization | FR-AI-014                          |
+| CFG-34 | VAT rate on membership fee                                | 0.00 %                                                                                                  | 0.00 to 50.00 %                                            | Organization | FR-LOY-016                         |
+| CFG-35 | Below-cost sale warning                                   | On                                                                                                      | On, Off                                                    | Organization | FR-POS-021                         |
+| CFG-36 | Enabled payment methods                                   | All (Cash, bKash, Nagad, Rocket, Card, Credit)                                                          | Any subset including Cash                                  | Organization | FR-POS-022                         |
+| CFG-37 | MFS transaction ID mandatory                              | On                                                                                                      | On, Off                                                    | Organization | FR-POS-025                         |
+| CFG-38 | Latin digits in the Bangla interface                      | Off                                                                                                     | On, Off                                                    | Organization | NFR-I18N-004                       |
+| CFG-39 | Discount reasons                                          | Regular customer; Elderly or patient support; Damaged packaging; Price match; Other                     | Editable list                                              | Organization | FR-POS-016                         |
+| CFG-40 | Near-expiry sale block                                    | 0 days (only expired batches are blocked)                                                               | 0 to 365 days                                              | Organization | FR-POS-013                         |
+| CFG-41 | Require "prescription seen" confirmation for Rx medicines | Off                                                                                                     | On, Off                                                    | Organization | FR-CDR-012                         |
+
+---
+
+## Appendix B. Open decisions register
+
+Loyalty decisions OD-01 to OD-13 are listed in
+[3.3.8.8](#3388-owner-decisions-pending-and-configured-defaults). Other open decisions:
+
+| ID    | Decision                                                                                                      | Configured default until decided                                                                                                                                         | Needed by        |
+| ----- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- |
+| OD-14 | Fiscal year start month                                                                                       | July (CFG-03)                                                                                                                                                            | M1               |
+| OD-15 | Rounding invoice totals to the nearest taka                                                                   | Off (CFG-02); recommended On if cash change in paisa is impractical at the counter                                                                                       | M1               |
+| OD-16 | Manual discount limits per role                                                                               | Salesman 5 %, Branch Manager 15 %, Owner 100 % (CFG-05)                                                                                                                  | M2               |
+| OD-17 | Return policy                                                                                                 | 7 days; approval above ৳500 or for controlled drugs; cold-chain items non-returnable (CFG-06, CFG-07, FR-CAT-013)                                                        | M3               |
+| OD-18 | Who may dispense controlled drugs                                                                             | Owner, Branch Managers, and Salesmen recorded as registered pharmacists (FR-CDR-003)                                                                                     | M2               |
+| OD-19 | Controlled-drug prescription validity and maximum quantities                                                  | 30 days; no per-medicine maximum until set (CFG-16, CFG-17)                                                                                                              | M2               |
+| OD-20 | Prescription image retention                                                                                  | 6 years for controlled sales, 2 years otherwise (CFG-28)                                                                                                                 | M3               |
+| OD-21 | Supabase tier for production                                                                                  | Free tier with nightly encrypted dumps; an upgrade to Pro before launch is recommended in view of the growth estimate (NFR-SCAL-007) and backup options (NFR-BACKUP-002) | M4               |
+| OD-22 | Legal review: controlled-drug register format, record retention periods, personal-data protection obligations | Register per FR-CDR-007; retention of at least 6 years; privacy controls per NFR-PRIV                                                                                    | Before M4 launch |
+| OD-23 | Cash session mandatory for all sales                                                                          | On (CFG-11)                                                                                                                                                              | M3               |
+| OD-24 | VAT rate on medicine sales                                                                                    | 0 % (CFG-01), to be confirmed by the Owner's accountant                                                                                                                  | M1               |
+| OD-25 | Stock adjustment and expense approval limits                                                                  | ৳5,000 adjustment; ৳500 and ৳5,000 expense (CFG-12, CFG-15)                                                                                                              | M2               |
+| OD-26 | AI enablement and monthly budget                                                                              | Off; USD 20 when enabled (CFG-29, CFG-30)                                                                                                                                | M5               |
+| OD-27 | Weekly insight schedule and week definition                                                                   | Saturday 07:00, Saturday to Friday (CFG-33)                                                                                                                              | M5               |
+| OD-28 | Acceptance of data hosting in Singapore                                                                       | Assumed accepted (A-04); acceptance to be recorded before real data is loaded                                                                                            | M2               |
+| OD-29 | Enforcing "prescription seen" confirmation for Rx medicines                                                   | Off (CFG-41)                                                                                                                                                             | M2               |
+
+---
+
+## Appendix C. Indicative POS keyboard map
+
+The defaults below follow the proposal in the [architecture](../architecture/architecture.md) (section 9.7); the final
+map is fixed in the UX specification. Browser-reserved keys (F1, F3, F5, F11, F12, Ctrl+N, Ctrl+T, Ctrl+W, Alt+D,
+Alt+E, Alt+F) are not used, and every chosen key (in particular F6) must be verified as capturable in Chrome and Edge on
+Windows before the map is fixed (NFR-USAB-002).
+
+| Action                                             | Default key          |
+| -------------------------------------------------- | -------------------- |
+| Focus medicine search                              | F2                   |
+| Move through results or cart lines                 | Arrow Up, Arrow Down |
+| Add highlighted result to cart                     | Enter                |
+| Increase or decrease quantity of the selected line | + and -              |
+| Change pack unit of the selected line              | Alt+U                |
+| Remove selected line                               | Delete               |
+| Undo last removal                                  | Ctrl+Z               |
+| Customer or loyalty card lookup                    | F4                   |
+| Park (hold) bill                                   | F6                   |
+| Recall parked bill                                 | F8                   |
+| Open payment                                       | F9                   |
+| Confirm payment and commit sale                    | Ctrl+Enter           |
+| Apply discount                                     | Alt+S                |
+| Reprint last receipt                               | Alt+P                |
+| Show shortcut help                                 | Ctrl+/               |
+| Close dialog or cancel current step                | Esc                  |
+
+---
+
+## Appendix D. Requirement statistics
+
+Counts are generated from the requirement tables of this version (0.1.0) and must be regenerated when requirements
+change (the traceability script of section 4.3 produces the same figures).
+
+**Functional requirements by module and priority**
+
+| Functional module                     | Must    | Should | Could  | Won't | Total   |
+| ------------------------------------- | ------- | ------ | ------ | ----- | ------- |
+| Organization and branches (ORG)       | 8       | 3      | 0      | 1     | 12      |
+| Users, roles and authentication (IAM) | 12      | 3      | 3      | 0     | 18      |
+| Catalog (CAT)                         | 9       | 3      | 2      | 0     | 14      |
+| Inventory (INV)                       | 15      | 5      | 0      | 0     | 20      |
+| Purchases (PUR)                       | 9       | 8      | 2      | 0     | 19      |
+| Sales and POS (POS)                   | 45      | 14     | 0      | 0     | 59      |
+| Customers (CUS)                       | 10      | 4      | 1      | 0     | 15      |
+| Loyalty card program (LOY)            | 38      | 11     | 2      | 1     | 52      |
+| Stock transfers (TRF)                 | 12      | 1      | 0      | 0     | 13      |
+| Expenses and cash sessions (CSH)      | 13      | 1      | 1      | 0     | 15      |
+| Reports and dashboards (RPT)          | 21      | 2      | 1      | 0     | 24      |
+| Audit log (AUD)                       | 6       | 1      | 1      | 0     | 8       |
+| Notifications (NTF)                   | 9       | 1      | 1      | 1     | 12      |
+| Backup, restore and export (BKP)      | 6       | 2      | 0      | 1     | 9       |
+| AI features (AI)                      | 20      | 8      | 1      | 0     | 29      |
+| Controlled-drug rules (CDR)           | 9       | 5      | 0      | 0     | 14      |
+| **Total**                             | **242** | **72** | **15** | **4** | **333** |
+
+**Non-functional requirements by category and priority**
+
+| Quality category                     | Must   | Should | Could | Won't | Total   |
+| ------------------------------------ | ------ | ------ | ----- | ----- | ------- |
+| Performance (PERF)                   | 7      | 4      | 0     | 0     | 11      |
+| Security (SEC)                       | 14     | 2      | 0     | 0     | 16      |
+| Availability (AVAIL)                 | 5      | 1      | 0     | 0     | 6       |
+| Reliability and integrity (REL)      | 10     | 2      | 0     | 0     | 12      |
+| Privacy (PRIV)                       | 6      | 5      | 0     | 0     | 11      |
+| Usability and accessibility (USAB)   | 8      | 3      | 0     | 0     | 11      |
+| Internationalization (I18N)          | 6      | 4      | 0     | 0     | 10      |
+| Maintainability (MAINT)              | 7      | 4      | 0     | 0     | 11      |
+| Scalability and multi-tenancy (SCAL) | 4      | 3      | 0     | 0     | 7       |
+| Observability (OBS)                  | 5      | 3      | 0     | 0     | 8       |
+| Backup and recovery (BACKUP)         | 8      | 1      | 0     | 0     | 9       |
+| **Total**                            | **80** | **32** | **0** | **0** | **112** |
+
+**Requirements by target milestone** (first milestone in which the requirement is verifiable)
+
+| Target milestone | Functional | Non-functional |
+| ---------------- | ---------- | -------------- |
+| M0               | 0          | 5              |
+| M1               | 59         | 22             |
+| M2               | 98         | 36             |
+| M3               | 124        | 8              |
+| M4               | 19         | 39             |
+| M5               | 29         | 1              |
+| Later            | 4          | 1              |
+
+In addition, this SRS defines 22 external interface requirements (IF-\*), 33 use cases, 41 configuration
+parameters and 29 open decisions.
