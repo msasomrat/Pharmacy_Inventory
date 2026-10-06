@@ -251,6 +251,16 @@ begin
 end;
 $$;
 
+-- Pure utility functions may run inside triggers/policies on behalf of signed-in users.
+grant execute on function
+  app.fail(text, text, text),
+  app.percent_of(bigint, integer),
+  app.allocate_proportionally(bigint, bigint[]),
+  app.normalize_bd_phone(text),
+  app.fiscal_year_label(date, integer),
+  app.luhn_check_digit(text)
+to authenticated, service_role;
+
 -- Keeps updated_at / updated_by current.
 create or replace function app.touch_updated()
 returns trigger
