@@ -24,7 +24,7 @@ trap cleanup EXIT
 "${RUN[@]}" "$PG_BIN/initdb" -D "$WORK/data" -U postgres -A trust -E UTF8 --locale=C.UTF-8 >/dev/null
 "${RUN[@]}" "$PG_BIN/pg_ctl" -D "$WORK/data" -o "-p $PORT -k $WORK -c listen_addresses='' -c timezone=UTC" -w start >/dev/null
 
-PSQL=("${RUN[@]}" psql -X -q -v ON_ERROR_STOP=1 -h "$WORK" -p "$PORT" -U postgres -d postgres)
+PSQL=("${RUN[@]}" env PGOPTIONS="-c client_min_messages=warning" psql -X -q -v ON_ERROR_STOP=1 -h "$WORK" -p "$PORT" -U postgres -d postgres)
 
 "${PSQL[@]}" -f "$ROOT/scripts/db/supabase-shim.sql"
 
