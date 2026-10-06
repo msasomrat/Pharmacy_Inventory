@@ -110,11 +110,8 @@ decisions that the architecture description depends on. Their records:
 | Frontend stack                                                            | [ADR-0003](0003-react-vite-typescript-spa.md) (application style and core framework; supporting libraries are listed in architecture section 7) |
 | Cloudflare Pages for hosting and PR previews                              | [ADR-0004](0004-cloudflare-pages-hosting.md)                                                                                                    |
 | Testing stack; trunk-based development and CI; offline outbox; AI gateway | Not yet recorded, see [section 8](#8-decision-backlog)                                                                                          |
-
-[ADR-0001](0001-record-architecture-decisions.md) (the ADR process) and
-[ADR-0008](0008-append-only-inventory-ledger-with-fefo.md) (stock ledger and FEFO, described in
-architecture sections 10.4 and 11.2 and database design section 9) are not yet listed in architecture
-section 23 and should be added there.
+| ADR process (MADR in the repository)                                      | [ADR-0001](0001-record-architecture-decisions.md)                                                                                               |
+| Append-only inventory ledger with batch projections and FEFO allocation   | [ADR-0008](0008-append-only-inventory-ledger-with-fefo.md)                                                                                      |
 
 ## 4. Status lifecycle
 

@@ -122,8 +122,9 @@ is the authoritative catalog): M1 implements `create_sale`, `void_sale`, `proces
 `record_customer_payment`, `record_supplier_payment`, `enroll_loyalty`, `create_organization`,
 `create_branch`, `add_member` and `update_member`; stock transfers (`request_stock_transfer`,
 `dispatch_stock_transfer`, `receive_stock_transfer` and related functions) and cash sessions follow in
-M3. The SRS uses indicative names (`receive_purchase`, `transfer_stock`, `process_return`); the mapping
-is architecture open issue OI-01 and database design DB-OI-01.
+M3. The SRS and the architecture use the canonical names of
+[database design 8.5](../database/database-design.md#85-public-rpc-summary) (architecture OI-01 and
+database design DB-OI-01, both closed).
 
 ### Consequences
 

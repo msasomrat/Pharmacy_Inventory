@@ -6,7 +6,7 @@ Management System (PIMS), from the foundation milestone M0 to the AI milestone M
 | Field             | Value                                                                                        |
 | ----------------- | -------------------------------------------------------------------------------------------- |
 | Document ID       | PIMS-RMP-001                                                                                 |
-| Version           | 1.0                                                                                          |
+| Version           | 1.1                                                                                          |
 | Status            | Draft for M0 review                                                                          |
 | Owner             | Engineering lead                                                                             |
 | Approver          | Product owner (pharmacy owner)                                                               |
@@ -225,16 +225,16 @@ Deliverables name the canonical document or ID that specifies them; they do not 
 **Goal.** A reviewed design baseline and a working delivery pipeline, so that every M1 change lands on a
 protected `main` through green CI, in environments that exist.
 
-| ID    | Deliverable                                                                                                                                                                                                                                                        | State at baseline                                                                                         |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| M0-D1 | Documentation set: SRS, architecture, database design, security model, engineering standards, testing strategy, runbook, ADR-0001 to ADR-0008, glossary, this roadmap, root README, CONTRIBUTING, SECURITY (index: [docs/README.md](README.md))                    | Drafted; runbook in progress; all in review                                                               |
-| M0-D2 | Repository tooling: TypeScript strict, ESLint (flat config, jsx-a11y), Prettier, Vitest with coverage, Playwright, Husky with lint-staged and commitlint, `.editorconfig`, `.nvmrc`, `engine-strict`                                                               | Done                                                                                                      |
-| M0-D3 | CI: `ci.yml` (quality, database with pgTAP, e2e, gitleaks, dependency review), `codeql.yml`, Dependabot                                                                                                                                                            | Done; the CodeQL licence question for a private repository is open (architecture OI-04)                   |
-| M0-D4 | Repository governance: branch protection and required checks on `main` (ENG-03), pull request template sections (ENG-01), `CHANGELOG.md` (ENG-02), commitlint scope `adr` (ENG-09), secret-scanning push protection and allowed-actions setting (SEC-GAP-19, part) | Open                                                                                                      |
-| M0-D5 | Environments: local stack (Supabase CLI), `pims-staging` Supabase project in Singapore, Cloudflare Pages project with PR previews and the staging alias, GitHub Environments `staging` and `production` with a required reviewer, Sentry project                   | Local done; others open. `pims-prod` is created at pilot preparation, see [RD-03](#101-roadmap-decisions) |
-| M0-D6 | ADRs due at M0 exit ([ADR backlog](adr/README.md#8-decision-backlog)): testing stack; trunk-based development, Conventional Commits, semantic versioning and CI; static analysis on a private repository                                                           | Open                                                                                                      |
-| M0-D7 | Owner review: SRS approval (becomes the requirements baseline); decisions needed by M1 (section 7) resolved or defaults accepted                                                                                                                                   | Open                                                                                                      |
-| M0-D8 | Account ownership: Supabase, Cloudflare, GitHub, Sentry and domain accounts registered to a business email, with TOTP, and the Owner holding administrator access to each (reduces risk R-08)                                                                      | Open                                                                                                      |
+| ID    | Deliverable                                                                                                                                                                                                                                                                                  | State at baseline                                                                                         |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| M0-D1 | Documentation set: SRS, architecture, database design, security model, engineering standards, testing strategy, runbook, ADR-0001 to ADR-0008, glossary, this roadmap, root README, CONTRIBUTING, SECURITY (index: [docs/README.md](README.md))                                              | Drafted; all in review                                                                                    |
+| M0-D2 | Repository tooling: TypeScript strict, ESLint (flat config, jsx-a11y), Prettier, Vitest with coverage, Playwright, Husky with lint-staged and commitlint, `.editorconfig`, `.nvmrc`, `engine-strict`                                                                                         | Done                                                                                                      |
+| M0-D3 | CI: `ci.yml` (quality, database with pgTAP, e2e, gitleaks, dependency review), `codeql.yml`, Dependabot                                                                                                                                                                                      | Done; the CodeQL licence question for a private repository is open (architecture OI-04)                   |
+| M0-D4 | Repository governance: branch protection and required checks on `main` (ENG-03), pull request template sections (ENG-01, resolved in the template), `CHANGELOG.md` (ENG-02), commitlint scope `adr` (ENG-09), secret-scanning push protection and allowed-actions setting (SEC-GAP-19, part) | Open                                                                                                      |
+| M0-D5 | Environments: local stack (Supabase CLI), `pims-staging` Supabase project in Singapore, Cloudflare Pages project with PR previews and the staging alias, GitHub Environments `staging` and `production` with a required reviewer, Sentry project                                             | Local done; others open. `pims-prod` is created at pilot preparation, see [RD-03](#101-roadmap-decisions) |
+| M0-D6 | ADRs due at M0 exit ([ADR backlog](adr/README.md#8-decision-backlog)): testing stack; trunk-based development, Conventional Commits, semantic versioning and CI; static analysis on a private repository                                                                                     | Open                                                                                                      |
+| M0-D7 | Owner review: SRS approval (becomes the requirements baseline); decisions needed by M1 (section 7) resolved or defaults accepted                                                                                                                                                             | Open                                                                                                      |
+| M0-D8 | Account ownership: Supabase, Cloudflare, GitHub, Sentry and domain accounts registered to a business email, with TOTP, and the Owner holding administrator access to each (reduces risk R-08)                                                                                                | Open                                                                                                      |
 
 **Exit criteria**
 
@@ -259,37 +259,40 @@ for the domain name. The CodeQL decision depends on the GitHub plan (architectur
 ledger with FEFO, purchasing, sales, customers and dues, audit), so that the M2 user interface only
 composes existing RPCs and never implements business rules itself.
 
-**Current state.** Seven migrations under `supabase/migrations/` and four pgTAP files under
-`supabase/tests/database/` (test helpers, platform guards, tenancy, purchase-to-sale flow) were written
-ahead of plan. The [database design](database/database-design.md) (section 21) lists 23 implementation
-deltas, D-01 to D-23, of which six are High priority, and the [security model](security/security-model.md)
-(section 22) lists the related gaps. Until the M1 freeze point these are folded into the existing files;
+**Current state.** Seven migrations under `supabase/migrations/` and 13 pgTAP files with 1,488
+assertions under `supabase/tests/database/` (as of commit `32d65ba`: test helpers, platform guards,
+tenancy, purchase-to-sale flow, five regression suites, `dblink` concurrency interleavings, the RLS and
+privilege matrix, and area suites for inventory, purchasing, loyalty and sales edge cases) were written
+ahead of plan; renaming them into the prefix scheme of the testing strategy (section 5.1) is TST-05. The
+[database design](database/database-design.md) (section 21) lists the implementation deltas against the
+first migrations (D-01 to D-28; High: D-01 to D-06, D-24 and D-27), part of which commit `32d65ba` already
+resolved, and the [security model](security/security-model.md) (section 22) lists the related gaps. Until the M1 freeze point these are folded into the existing files;
 afterwards each change is a new migration.
 
-| ID     | Deliverable                                                                                                                                                                                                  |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| M1-D1  | High deltas D-01 to D-06 fixed test-first: a failing pgTAP test per delta, then the fix.                                                                                                                     |
-| M1-D2  | Medium deltas D-07 to D-16 fixed; Low deltas D-17 to D-23 fixed or re-targeted to the milestone that needs them, with the new target recorded in database design section 21.                                 |
-| M1-D3  | Database-level security gaps closed: SEC-GAP-01, -02, -03, -05, -06, -09, -13, -14, -16 and -17 (security model section 22).                                                                                 |
-| M1-D4  | RLS isolation matrix for every table, role and operation, including cross-organization and cross-branch cases, and extended platform guards ([testing strategy](engineering/testing-strategy.md) section 6). |
-| M1-D5  | pgTAP suites for every M1 RPC, including concurrency tests for FEFO allocation, gapless numbering and idempotent replay.                                                                                     |
-| M1-D6  | Development seed `supabase/seed.sql` with the accounts documented in CONTRIBUTING.md, plus test factories.                                                                                                   |
-| M1-D7  | Integration test harness (Vitest with supabase-js) and the requirement traceability script and CI report (SRS 4.3).                                                                                          |
-| M1-D8  | CI additions: migration linting with squawk, type-drift check (`pnpm gen:types` produces no diff), generated `src/lib/database.types.ts` committed.                                                          |
-| M1-D9  | `deploy.yml` applying migrations to staging on merge to `main`; first application to staging is the **M1 freeze point** (target 2026-11-26).                                                                 |
-| M1-D10 | Naming and fiscal-year alignment closed across documents: architecture OI-01 and OI-02, database design DB-OI-01 and DB-OI-02.                                                                               |
+| ID     | Deliverable                                                                                                                                                                                                                     |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1-D1  | High deltas D-01 to D-06 and D-24 fixed test-first: a failing pgTAP test per delta, then the fix.                                                                                                                               |
+| M1-D2  | Medium deltas D-07 to D-16 fixed; Low deltas D-17 to D-23 fixed or re-targeted to the milestone that needs them, with the new target recorded in database design section 21; D-25 to D-28 follow the milestones recorded there. |
+| M1-D3  | Database-level security gaps closed: SEC-GAP-01, -02, -03, -05, -06, -09, -13, -14, -16 and -17 (security model section 22).                                                                                                    |
+| M1-D4  | RLS isolation matrix for every table, role and operation, including cross-organization and cross-branch cases, and extended platform guards ([testing strategy](engineering/testing-strategy.md) section 6).                    |
+| M1-D5  | pgTAP suites for every M1 RPC, including concurrency tests for FEFO allocation, gapless numbering and idempotent replay.                                                                                                        |
+| M1-D6  | Development seed `supabase/seed.sql` with the accounts documented in CONTRIBUTING.md, plus test factories.                                                                                                                      |
+| M1-D7  | Integration test harness (Vitest with supabase-js) and the requirement traceability script and CI report (SRS 4.3).                                                                                                             |
+| M1-D8  | CI additions: migration linting with squawk, type-drift check (`pnpm gen:types` produces no diff), generated `src/lib/database.types.ts` committed.                                                                             |
+| M1-D9  | `deploy.yml` applying migrations to staging on merge to `main`; first application to staging is the **M1 freeze point** (target 2026-11-26).                                                                                    |
+| M1-D10 | Naming and fiscal-year alignment closed across documents: architecture OI-01 and OI-02, database design DB-OI-01 and DB-OI-02.                                                                                                  |
 
 **Exit criteria**
 
-| ID    | Criterion                                                                                                                                               |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M1-X1 | Every Must requirement targeting M0 or M1 is verified; the traceability report shows none without a test or a recorded alternative verification method. |
-| M1-X2 | Every RPC and every RLS policy has pgTAP tests; the isolation matrix passes for all five roles.                                                         |
-| M1-X3 | No High delta and no database-level security gap from M1-D3 remains open.                                                                               |
-| M1-X4 | Migrations apply from scratch in CI and incrementally on staging; `supabase db lint` reports no warnings; squawk and the type-drift check pass.         |
-| M1-X5 | The integrity checks (gapless numbering, ledger equals projection, controlled-drug register balance) run and pass on the seed data.                     |
-| M1-X6 | The Owner has decided OD-14, OD-15 and OD-24 or accepted their defaults, and the invoice number format matches FR-POS-030 (`MPR-2026-000123`).          |
-| M1-X7 | A release tag closes the milestone.                                                                                                                     |
+| ID    | Criterion                                                                                                                                                                                                                                                                           |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1-X1 | Every Must requirement targeting M0 or M1 is verified; the traceability report shows none without a test or a recorded alternative verification method.                                                                                                                             |
+| M1-X2 | Every RPC and every RLS policy has pgTAP tests; the isolation matrix passes for Owner, Branch Manager and Salesman (AAL1 and AAL2 variants), an authenticated non-member, a deactivated member, the Owner of another tenant and `anon` (Accountant and Auditor are added in M4-D6). |
+| M1-X3 | No High delta (except D-27, due with M4-D6) and no database-level security gap from M1-D3 remains open.                                                                                                                                                                             |
+| M1-X4 | Migrations apply from scratch in CI and incrementally on staging; `supabase db lint` reports no warnings; squawk and the type-drift check pass.                                                                                                                                     |
+| M1-X5 | The integrity checks (gapless numbering, ledger equals projection, controlled-drug register balance) run and pass on the seed data.                                                                                                                                                 |
+| M1-X6 | The Owner has decided OD-14, OD-15 and OD-24 or accepted their defaults, and the invoice number format matches FR-POS-030 (`MPR-2026-000123`).                                                                                                                                      |
+| M1-X7 | A release tag closes the milestone.                                                                                                                                                                                                                                                 |
 
 **Dependencies.** M0-X3 (protected `main`) and M0-X4 (staging). Owner decisions OD-14, OD-15, OD-24.
 
@@ -405,22 +408,22 @@ fast under load, reviewed for security, documented for its users, and launched a
 | M4-D3 | Monitoring: uptime checks on the web app and the `health` Edge Function, Sentry and Supabase usage alerts, SLO tracking, audit-log hash chain (FR-AUD-008).                                                                                                                                    |
 | M4-D4 | Performance: volume dataset (30,000 medicines, 10 branches, one year of sales), load tests at three times the reference peak (NFR-PERF-010), Lighthouse CI and blocking bundle budgets.                                                                                                        |
 | M4-D5 | Security: pre-launch security review (security model 18.4), penetration-test checklist, DAST scan, SBOM, closure of every "before launch" gap, outcome of the legal review (OD-22), privacy notice in English and Bangla (NFR-PRIV-009).                                                       |
-| M4-D6 | Accountant and Auditor roles (security model 6.1).                                                                                                                                                                                                                                             |
+| M4-D6 | Accountant and Auditor roles (security model 6.1), after the `sales.view` predicate on customer-linked tables (database design delta D-27); isolation matrix extended to Accountant and Auditor, including their AAL1 variants.                                                                |
 | M4-D7 | User manual in English and Bangla, counter quick-reference cards, training for every live branch; runbook completed with the incident playbooks required by the security model (17.3).                                                                                                         |
 | M4-D8 | Launch: rehearsal on staging, go/no-go review on 2027-08-19, production release `v1.0.0` on 2027-08-22 in the 01:00 to 06:00 window, then two weeks of hypercare with daily check-ins.                                                                                                         |
 
 **Exit criteria**
 
-| ID    | Criterion                                                                                                                                                                                 |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M4-X1 | Every Must requirement targeting M0 to M4 is verified; from this release the traceability check is blocking (SRS 4.3).                                                                    |
-| M4-X2 | A restore drill has restored production backups into staging within the RTO of 4 hours and the applicable RPO (NFR-BACKUP-001 or NFR-BACKUP-002), with the result in the runbook log.     |
-| M4-X3 | Load test results meet the performance budgets of the SRS (NFR-PERF) at three times the reference peak.                                                                                   |
-| M4-X4 | The security review is passed: no open Critical or High finding, all "before launch" gaps closed, the ASVS Level 2 checklist completed with deviations accepted by the Owner.             |
-| M4-X5 | Monitoring and alerting are live; availability during business hours was at least 99.5 % over the last four weeks of the pilot (NFR-AVAIL-001).                                           |
-| M4-X6 | The user manual and the privacy notice are published in English and Bangla, and the staff of every live branch are trained.                                                               |
-| M4-X7 | Offline sales (Should, FR-POS-055 to FR-POS-059 except the Must rule FR-POS-057) are released, or their slip to a post-launch `v1.x` release is recorded as an Owner decision (v2 label). |
-| M4-X8 | The Owner's written launch approval is recorded and `v1.0.0` is tagged and deployed.                                                                                                      |
+| ID    | Criterion                                                                                                                                                                                                |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M4-X1 | Every Must requirement targeting M0 to M4 is verified; from this release the traceability check is blocking (SRS 4.3); the isolation matrix passes for all five roles, including Accountant and Auditor. |
+| M4-X2 | A restore drill has restored production backups into staging within the RTO of 4 hours and the applicable RPO (NFR-BACKUP-001 or NFR-BACKUP-002), with the result in the runbook log.                    |
+| M4-X3 | Load test results meet the performance budgets of the SRS (NFR-PERF) at three times the reference peak.                                                                                                  |
+| M4-X4 | The security review is passed: no open Critical or High finding, all "before launch" gaps closed, the ASVS Level 2 checklist completed with deviations accepted by the Owner.                            |
+| M4-X5 | Monitoring and alerting are live; availability during business hours was at least 99.5 % over the last four weeks of the pilot (NFR-AVAIL-001).                                                          |
+| M4-X6 | The user manual and the privacy notice are published in English and Bangla, and the staff of every live branch are trained.                                                                              |
+| M4-X7 | Offline sales (Should, FR-POS-055 to FR-POS-059 except the Must rule FR-POS-057) are released, or their slip to a post-launch `v1.x` release is recorded as an Owner decision (v2 label).                |
+| M4-X8 | The Owner's written launch approval is recorded and `v1.0.0` is tagged and deployed.                                                                                                                     |
 
 **Dependencies.** M3 exit and the pilot. OD-21 (production tier and its monthly cost, about USD 25 to 30
 for one to three branches per architecture section 20) and OD-22 (legal review, needed before the
@@ -479,8 +482,10 @@ already makes room for each one (SRS section 5).
 ## 6. Requirement-to-milestone mapping
 
 Every SRS requirement has exactly one target milestone, the first milestone in which it is verifiable
-(SRS 1.5 and 4.4). The roadmap does not assign requirements; it groups them into the deliverables above.
-The tables below summarize SRS 0.1.0 and must be regenerated when the SRS changes (the traceability script
+(SRS 1.5 and 4.4). Requirements whose database part ships in M1 and whose screen ships later (for
+example voids, "M1 (DB), M2 (UI)", and returns, "M1 (DB), M3 (UI)") count under M1 and are verified
+again when their screens arrive (SRS 4.4). The roadmap does not assign requirements; it groups them into the deliverables above.
+The tables below summarize SRS 0.3.0 and must be regenerated when the SRS changes (the traceability script
 of SRS 4.3 produces the same figures).
 
 **Functional requirements by module and target milestone**
@@ -491,19 +496,19 @@ of SRS 4.3 produces the same figures).
 | Users, roles, authentication (FR-IAM) | 4      | 11     | 1       | 2      | 0      | 0     | 18      |
 | Catalog (FR-CAT)                      | 8      | 5      | 1       | 0      | 0      | 0     | 14      |
 | Inventory (FR-INV)                    | 7      | 13     | 0       | 0      | 0      | 0     | 20      |
-| Purchases (FR-PUR)                    | 6      | 8      | 5       | 0      | 0      | 0     | 19      |
-| Sales and POS (FR-POS)                | 15     | 27     | 12      | 5      | 0      | 0     | 59      |
+| Purchases (FR-PUR)                    | 6      | 8      | 7       | 0      | 0      | 0     | 21      |
+| Sales and POS (FR-POS)                | 30     | 27     | 3       | 5      | 0      | 0     | 65      |
 | Customers (FR-CUS)                    | 5      | 6      | 3       | 1      | 0      | 0     | 15      |
-| Loyalty (FR-LOY)                      | 0      | 0      | 51      | 0      | 0      | 1     | 52      |
+| Loyalty (FR-LOY)                      | 0      | 0      | 52      | 0      | 0      | 1     | 53      |
 | Stock transfers (FR-TRF)              | 1      | 0      | 12      | 0      | 0      | 0     | 13      |
 | Cash sessions and expenses (FR-CSH)   | 0      | 0      | 15      | 0      | 0      | 0     | 15      |
-| Reports (FR-RPT)                      | 0      | 15     | 9       | 0      | 0      | 0     | 24      |
+| Reports (FR-RPT)                      | 0      | 15     | 10      | 0      | 0      | 0     | 25      |
 | Audit (FR-AUD)                        | 3      | 3      | 1       | 1      | 0      | 0     | 8       |
 | Notifications (FR-NTF)                | 0      | 4      | 6       | 1      | 0      | 1     | 12      |
 | Backup and export (FR-BKP)            | 0      | 0      | 0       | 8      | 0      | 1     | 9       |
 | AI (FR-AI)                            | 0      | 0      | 0       | 0      | 29     | 0     | 29      |
 | Controlled drugs (FR-CDR)             | 4      | 3      | 6       | 1      | 0      | 0     | 14      |
-| **Total**                             | **59** | **98** | **124** | **19** | **29** | **4** | **333** |
+| **Total**                             | **74** | **98** | **119** | **19** | **29** | **4** | **343** |
 
 **Non-functional requirements by target milestone** (SRS Appendix D): M0 5, M1 22, M2 36, M3 8, M4 39,
 M5 1, Later 1; 112 in total. Most quality requirements are first verifiable in M2 (when the user
@@ -585,12 +590,13 @@ the risks below concern the schedule.
 | --------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------- | ---------- |
 | RMP-OI-01 | Replace the approximate Ramadan and Eid dates with the gazetted dates when published                                     | Engineering lead | 2027-01-31 |
 | RMP-OI-02 | Reflect RD-02 and RD-03 in the architecture (sections 10.1 and 20) and the runbook                                       | Engineering lead | M0 exit    |
-| RMP-OI-03 | Reference RD-01 from SRS NFR-PERF-007 and architecture section 22.2, and close ENG-08                                    | Engineering lead | M0 exit    |
+| RMP-OI-03 | **Closed.** SRS NFR-PERF-007 and architecture section 22.2 reference RD-01; ENG-08 is closed in engineering standards 25 | Engineering lead | M0 exit    |
 | RMP-OI-04 | Confirm the pilot dates and the go-live day of the week with the Owner and the Branch Manager (busy days at the counter) | Owner            | M2 exit    |
 | RMP-OI-05 | Create the GitHub milestones `M0 Foundation` to `M5 AI` with the target dates of section 3                               | Engineering lead | M0 exit    |
 
 ## 11. Revision history
 
-| Version | Date       | Author           | Change                                                                                        |
-| ------- | ---------- | ---------------- | --------------------------------------------------------------------------------------------- |
-| 1.0     | 2026-10-06 | Engineering lead | First roadmap: milestones M0 to M5, pilot, Later items, timeline from the 2026-10-06 baseline |
+| Version | Date       | Author           | Change                                                                                                                                        |
+| ------- | ---------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | 2026-10-06 | Engineering lead | First roadmap: milestones M0 to M5, pilot, Later items, timeline from the 2026-10-06 baseline                                                 |
+| 1.1     | 2026-10-06 | Engineering lead | Section 6 regenerated from SRS 0.3.0; M1 current state at commit `32d65ba` (13 pgTAP files); RMP-OI-03 closed; M0-D1 and M0-D4 states updated |

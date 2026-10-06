@@ -220,6 +220,11 @@ Planned scripts (added with the work that needs them; see the
    title. The branch is deleted automatically.
 7. **Watch staging**: after the merge, `main` deploys to staging; confirm the smoke tests pass and fix
    or revert the same day if anything breaks.
+   **Interim rule:** until `deploy.yml` exists (roadmap M1-D9), there is no staging deployment to
+   watch; instead run `pnpm db:reset && pnpm test:db` and `pnpm test:e2e` locally on the merged commit
+   (Definition of Done item 11, [engineering standards 7.2](docs/engineering/engineering-standards.md#72-definition-of-done-a-change-is-complete)).
+   The pull request that adds `deploy.yml` removes this note, the matching rule in engineering
+   standards 7.2 and the interim rule in `.github/pull_request_template.md`.
 
 `main` is protected: pull requests only, required checks green, linear history, squash merge only.
 

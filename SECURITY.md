@@ -10,16 +10,22 @@ scope.
 **Please do not report security vulnerabilities through public GitHub issues, pull requests or
 discussions.**
 
-Report privately through GitHub Security Advisories:
+Report privately by email to **`security@<mail-domain>`** (the PIMS business email domain; see
+[Placeholders](#placeholders) below). This mailbox is the primary and only public reporting channel.
+It is monitored by the Owner and the engineering lead, and its contents are never forwarded to public
+trackers.
 
-1. Open the repository's **Security** tab and choose **Report a vulnerability**, or go directly to
-   <https://github.com/msasomrat/Pharmacy_Inventory/security/advisories/new>.
-2. Describe the issue using the checklist below.
-3. Submit. Only the maintainers can see the report.
+The same address, the policy link and the preferred languages are published in machine-readable form
+at `https://<app-domain>/.well-known/security.txt` ([RFC 9116](https://www.rfc-editor.org/rfc/rfc9116)).
+If an OpenPGP key is listed there under `Encryption`, you may encrypt your report with it; encryption
+is optional.
 
-If you cannot use GitHub Security Advisories, open a public issue titled "Request for a private
-security contact" that contains **no details** of the vulnerability, and a maintainer will arrange a
-private channel.
+Repository collaborators may instead open a draft advisory from the repository's **Security** tab
+(**Advisories**, **New draft security advisory**). Outside reporters cannot do this, because the
+repository is private ([README, License](README.md#license)).
+
+Do not attach customer, patient or prescription data to a report; describe it instead (for example
+"the response contained another organization's customer names").
 
 Please include as much of the following as you can:
 
@@ -54,8 +60,9 @@ Severity is assessed with CVSS v3.1 and the impact on tenant isolation, health a
 and stock integrity. If we decide that a report is not a vulnerability or is out of scope, we will
 explain why.
 
-After a fix is released we publish a GitHub Security Advisory describing the issue, the affected and
-fixed versions and, if you wish, your name. We do not offer a paid bug bounty at this time.
+After a fix is released we send you, and the affected pharmacies, a written advisory describing the
+issue, the affected and fixed versions and, if you wish, your name; the same advisory is recorded as a
+GitHub Security Advisory in the private repository. We do not offer a paid bug bounty at this time.
 
 ## Supported versions
 
@@ -75,7 +82,8 @@ in a new release rather than backported.
 
 ### In scope
 
-- The web application in `src/` and its security headers in `public/_headers`.
+- The web application in `src/`, its security headers in `public/_headers` and its
+  `public/.well-known/security.txt`.
 - Database migrations, Row Level Security policies, grants and functions in `supabase/`.
 - Supabase Edge Functions in `supabase/functions/`.
 - GitHub Actions workflows and repository configuration in `.github/`.
@@ -134,7 +142,34 @@ frontend.
 
 ## For maintainers
 
-- Keep **Private vulnerability reporting** enabled in the repository settings (Settings, Code security).
-- Triage new advisories within the timelines above and follow incident playbook IR-10 in the
+- Keep the `security@<mail-domain>` mailbox (or alias) active and forwarded to both the Owner and the
+  engineering lead, with spam filtering that never silently discards mail; check it at least every
+  business day.
+- Keep `public/.well-known/security.txt` (RFC 9116) current. It must contain at least:
+
+  ```text
+  Contact: mailto:security@<mail-domain>
+  Expires: <date at most 12 months ahead, ISO 8601, for example 2027-10-01T00:00:00+06:00>
+  Preferred-Languages: en, bn
+  Canonical: https://<app-domain>/.well-known/security.txt
+  Policy: https://<app-domain>/.well-known/security-policy.txt
+  ```
+
+  Add an `Encryption:` line only if an OpenPGP key is published. Because the repository is private,
+  `Policy:` must point to a publicly reachable copy of this file (served from
+  `public/.well-known/security-policy.txt`), not to GitHub. Renew `Expires` before it lapses.
+
+- Track each report as a draft GitHub Security Advisory in the private repository (GitHub private
+  vulnerability reporting is not available to outside reporters on a private repository), triage it
+  within the timelines above and follow incident playbook IR-10 in the
   [runbook](docs/operations/runbook.md).
-- Request a CVE through the advisory when a released version is affected.
+- Request a CVE through the advisory only if PIMS is ever distributed to parties outside the
+  maintainers' own deployments; for the hosted application, the written advisory to affected
+  pharmacies is sufficient.
+
+### Placeholders
+
+`<mail-domain>` and `<app-domain>` are the email and web-app domains chosen during production setup
+(see the [runbook](docs/operations/runbook.md), section 3.1). Until they are chosen, the maintainers
+must replace `security@<mail-domain>` in this file with a monitored interim address controlled by the
+Owner, so that a working contact is always published.

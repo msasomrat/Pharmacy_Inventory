@@ -119,7 +119,8 @@ SOLID is applied in spirit:
 ## 3. Branching model
 
 PIMS uses **trunk-based development**: `main` is the trunk, always releasable, and deployed to staging
-automatically after every merge (section 22).
+automatically after every merge (section 22) once `deploy.yml` exists (roadmap M1-D9, target
+2026-11-26). Until then the interim rule of section 7.2 item 11 applies.
 
 ### 3.1 Branches
 
@@ -188,7 +189,7 @@ flowchart LR
   ci -- yes --> review{"Review approved,<br/>conversations resolved?"}
   review -- changes requested --> commits
   review -- yes --> squash["Squash merge to main<br/>title = commit message"]
-  squash --> staging["Automatic deploy<br/>to staging"]
+  squash --> staging["Automatic deploy<br/>to staging (from M1-D9)"]
   staging --> tag["Release tag vX.Y.Z"]
   tag --> prod["Production deploy<br/>(approval, 01:00-06:00 Dhaka)"]
 ```
@@ -325,7 +326,9 @@ The pull request template contains these sections, in this order:
   the pull request is out of draft. The author merges; the squash title is re-checked before
   confirming.
 - After merge, the author watches the staging deployment and its smoke tests (section 22) and fixes
-  forward or reverts within the same working day if anything breaks. `main` is never left red: a
+  forward or reverts within the same working day if anything breaks. Until `deploy.yml` exists
+  (roadmap M1-D9) there is no staging deployment to watch; the author instead runs the interim checks
+  of section 7.2 item 11 on the merged commit. `main` is never left red: a
   failing `main` is fixed or the offending commit is reverted (`revert:`) within 2 hours of detection.
 
 ---
@@ -454,6 +457,10 @@ A change is done when **all** applicable items hold:
 10. All required CI checks are green, review is approved, the pull request is squash-merged with a
     Conventional Commit title, and the branch is deleted.
 11. The staging deployment succeeded and its smoke tests passed.
+    **Interim rule:** until `deploy.yml` exists (roadmap M1-D9, target 2026-11-26), item 11 is
+    replaced by: `pnpm db:reset && pnpm test:db` and `pnpm test:e2e` pass locally on the merged
+    commit. The pull request that adds `deploy.yml` removes this interim rule here, in
+    [CONTRIBUTING.md](../../CONTRIBUTING.md) section 6 and in `.github/pull_request_template.md`.
 
 A requirement is **verified** only when its milestone exit criteria in the [roadmap](../roadmap.md)
 are met; "done" for a pull request does not replace user acceptance testing (SRS section 4.5).
@@ -1278,33 +1285,33 @@ Workflows: `.github/workflows/ci.yml` (jobs `quality`, `database`, `e2e`, `secre
 `dependency-review`) and `.github/workflows/codeql.yml` (job `analyze`). Jobs run in parallel except
 `e2e`, which needs `quality`.
 
-| #   | Stage                    | Command or tool                                                              | Job (`ci.yml` unless stated) | Runs on                     | Blocking          | Status                                             |
-| --- | ------------------------ | ---------------------------------------------------------------------------- | ---------------------------- | --------------------------- | ----------------- | -------------------------------------------------- |
-| 1   | Install                  | `pnpm install --frozen-lockfile`                                             | `quality`, `e2e`             | PR, push to `main`          | Yes               | In place                                           |
-| 2   | Lint                     | `pnpm lint` (ESLint, `--max-warnings=0`)                                     | `quality`                    | PR, `main`                  | Yes               | In place                                           |
-| 3   | Format check             | `pnpm format:check` (Prettier)                                               | `quality`                    | PR, `main`                  | Yes               | In place                                           |
-| 4   | Typecheck                | `pnpm typecheck` (`tsc -b --noEmit`)                                         | `quality`                    | PR, `main`                  | Yes               | In place                                           |
-| 5   | Unit and component tests | `pnpm test:coverage` (Vitest with coverage thresholds)                       | `quality`                    | PR, `main`                  | Yes               | In place                                           |
-| 6   | Build                    | `pnpm build`                                                                 | `quality`                    | PR, `main`                  | Yes               | In place                                           |
-| 7   | Dependency audit         | `pnpm audit --prod --audit-level high`                                       | `quality`                    | PR, `main`                  | Yes               | In place                                           |
-| 8   | SQL lint                 | `supabase db lint --level warning --fail-on warning` (plpgsql_check)         | `database`                   | PR, `main`                  | Yes               | In place                                           |
-| 9   | Database tests           | `supabase test db` (pgTAP, including platform guards and RLS)                | `database`                   | PR, `main`                  | Yes               | In place                                           |
-| 10  | Migration lint           | squawk on changed migration files                                            | `database`                   | PR                          | Yes               | Planned (M1)                                       |
-| 11  | Type drift               | `pnpm gen:types` then `git diff --exit-code src/lib/database.types.ts`       | `database`                   | PR, `main`                  | Yes               | Planned (M1)                                       |
-| 12  | Integration tests        | Vitest with supabase-js against the local stack (testing strategy section 4) | `database`                   | PR, `main`                  | Yes               | Planned (M1)                                       |
-| 13  | End-to-end tests         | `pnpm test:e2e` (Playwright, Chromium desktop and Pixel 7 projects)          | `e2e`                        | PR, `main`                  | Yes               | In place (smoke); local Supabase stack added in M2 |
-| 14  | Accessibility            | axe checks inside E2E tests                                                  | `e2e`                        | PR, `main`                  | Yes               | Planned (M2)                                       |
-| 15  | Secret scanning          | gitleaks (full history)                                                      | `secrets`                    | PR, `main`                  | Yes               | In place                                           |
-| 16  | Dependency review        | `actions/dependency-review-action` (fail on high)                            | `dependency-review`          | PR                          | Yes               | In place                                           |
-| 17  | Static analysis          | CodeQL `security-extended`                                                   | `analyze` (`codeql.yml`)     | PR, `main`, weekly Monday   | Yes               | In place (licence: architecture OI-04)             |
-| 18  | Pull request title       | commitlint on the title                                                      | `pr-title`                   | PR                          | Yes               | Planned (M0)                                       |
-| 19  | i18n key parity          | Script comparing `en.json` and `bn.json` key sets                            | `quality`                    | PR, `main`                  | Yes               | Planned (M2)                                       |
-| 20  | Bundle budget            | Script over the Vite build report (section 16)                               | `quality`                    | PR, `main`                  | Yes               | Planned (M2, NFR-PERF-007)                         |
-| 21  | Bundle secret scan       | Script over `dist/` for key patterns (SEC-TC-18)                             | `quality`                    | PR, `main`                  | Yes               | Planned (M2)                                       |
-| 22  | Traceability report      | Script extracting SRS IDs and test tags (testing strategy section 16)        | `traceability`               | PR, `main`, release tags    | Yes (rules in 16) | Planned (M1)                                       |
-| 23  | Security headers         | Script requesting the preview deployment (SEC-TC-17)                         | `headers`                    | PR with a preview           | Yes               | Planned (M2)                                       |
-| 24  | DAST baseline            | OWASP ZAP baseline against staging                                           | `dast.yml`                   | Weekly, before each release | High alerts       | Planned (M2)                                       |
-| 25  | Lighthouse CI            | LCP and bundle checks on sign-in and POS routes                              | `lighthouse`                 | PR, `main`                  | Yes               | Planned (M4)                                       |
+| #   | Stage                    | Command or tool                                                              | Job (`ci.yml` unless stated) | Runs on                     | Blocking                                                                           | Status                                             |
+| --- | ------------------------ | ---------------------------------------------------------------------------- | ---------------------------- | --------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------- |
+| 1   | Install                  | `pnpm install --frozen-lockfile`                                             | `quality`, `e2e`             | PR, push to `main`          | Yes                                                                                | In place                                           |
+| 2   | Lint                     | `pnpm lint` (ESLint, `--max-warnings=0`)                                     | `quality`                    | PR, `main`                  | Yes                                                                                | In place                                           |
+| 3   | Format check             | `pnpm format:check` (Prettier)                                               | `quality`                    | PR, `main`                  | Yes                                                                                | In place                                           |
+| 4   | Typecheck                | `pnpm typecheck` (`tsc -b --noEmit`)                                         | `quality`                    | PR, `main`                  | Yes                                                                                | In place                                           |
+| 5   | Unit and component tests | `pnpm test:coverage` (Vitest with coverage thresholds)                       | `quality`                    | PR, `main`                  | Yes                                                                                | In place                                           |
+| 6   | Build                    | `pnpm build`                                                                 | `quality`                    | PR, `main`                  | Yes                                                                                | In place                                           |
+| 7   | Dependency audit         | `pnpm audit --prod --audit-level high`                                       | `quality`                    | PR, `main`                  | Yes                                                                                | In place                                           |
+| 8   | SQL lint                 | `supabase db lint --level warning --fail-on warning` (plpgsql_check)         | `database`                   | PR, `main`                  | Yes                                                                                | In place                                           |
+| 9   | Database tests           | `supabase test db` (pgTAP, including platform guards and RLS)                | `database`                   | PR, `main`                  | Yes                                                                                | In place                                           |
+| 10  | Migration lint           | squawk on changed migration files                                            | `database`                   | PR                          | Yes                                                                                | Planned (M1)                                       |
+| 11  | Type drift               | `pnpm gen:types` then `git diff --exit-code src/lib/database.types.ts`       | `database`                   | PR, `main`                  | Yes                                                                                | Planned (M1)                                       |
+| 12  | Integration tests        | Vitest with supabase-js against the local stack (testing strategy section 4) | `database`                   | PR, `main`                  | Yes                                                                                | Planned (M1)                                       |
+| 13  | End-to-end tests         | `pnpm test:e2e` (Playwright, Chromium desktop and Pixel 7 projects)          | `e2e`                        | PR, `main`                  | Yes                                                                                | In place (smoke); local Supabase stack added in M2 |
+| 14  | Accessibility            | axe checks inside E2E tests                                                  | `e2e`                        | PR, `main`                  | Yes                                                                                | Planned (M2)                                       |
+| 15  | Secret scanning          | gitleaks (full history)                                                      | `secrets`                    | PR, `main`                  | Yes                                                                                | In place                                           |
+| 16  | Dependency review        | `actions/dependency-review-action` (fail on high)                            | `dependency-review`          | PR                          | Yes                                                                                | In place                                           |
+| 17  | Static analysis          | CodeQL `security-extended`                                                   | `analyze` (`codeql.yml`)     | PR, `main`, weekly Monday   | Yes                                                                                | In place (licence: architecture OI-04)             |
+| 18  | Pull request title       | commitlint on the title                                                      | `pr-title`                   | PR                          | Yes                                                                                | Planned (M0)                                       |
+| 19  | i18n key parity          | Script comparing `en.json` and `bn.json` key sets                            | `quality`                    | PR, `main`                  | Yes                                                                                | Planned (M2)                                       |
+| 20  | Bundle budget            | Script over the Vite build report (section 16)                               | `quality`                    | PR, `main`                  | No in M2 (report only); Yes from M4 ([RD-01](../roadmap.md#101-roadmap-decisions)) | Planned (M2, NFR-PERF-007)                         |
+| 21  | Bundle secret scan       | Script over `dist/` for key patterns (SEC-TC-18)                             | `quality`                    | PR, `main`                  | Yes                                                                                | Planned (M2)                                       |
+| 22  | Traceability report      | Script extracting SRS IDs and test tags (testing strategy section 16)        | `traceability`               | PR, `main`, release tags    | Yes (rules in 16)                                                                  | Planned (M1)                                       |
+| 23  | Security headers         | Script requesting the preview deployment (SEC-TC-17)                         | `headers`                    | PR with a preview           | Yes                                                                                | Planned (M2)                                       |
+| 24  | DAST baseline            | OWASP ZAP baseline against staging                                           | `dast.yml`                   | Weekly, before each release | High alerts                                                                        | Planned (M2)                                       |
+| 25  | Lighthouse CI            | LCP and bundle checks on sign-in and POS routes                              | `lighthouse`                 | PR, `main`                  | Yes                                                                                | Planned (M4)                                       |
 
 ```mermaid
 flowchart LR
@@ -1335,7 +1342,8 @@ flowchart LR
 | `Dependency review`                         | `dependency-review` |
 | `Analyze (javascript-typescript)`           | `analyze`           |
 
-Planned jobs become required checks in the pull request that introduces them. A job name change is a
+Stage 20 (bundle budget) runs inside the required `quality` job but, until M4, only reports and never
+fails the job (roadmap RD-01). Planned jobs become required checks in the pull request that introduces them. A job name change is a
 branch-protection change and is done in the same pull request by an administrator.
 
 ### 21.3 Pipeline rules
@@ -1364,7 +1372,7 @@ engineering rules for moving a change through them.
 | Local          | Supabase CLI in Docker         | Vite dev server, port 5173            | `supabase/seed.sql` (synthetic)  | Developer                                            |
 | CI (ephemeral) | `supabase start` on the runner | Built bundle served by `vite preview` | Seed and test fixtures           | Every push and pull request                          |
 | PR preview     | `pims-staging`                 | Cloudflare Pages preview URL          | Staging data                     | Automatic per commit (UI review only)                |
-| Staging        | `pims-staging`                 | Cloudflare Pages alias of `main`      | Synthetic; never production data | Automatic on merge to `main`                         |
+| Staging        | `pims-staging`                 | Cloudflare Pages alias of `main`      | Synthetic; never production data | Automatic on merge to `main` (from M1-D9)            |
 | Production     | `pims-prod` (Singapore)        | Cloudflare Pages `production` branch  | Real data                        | Release tag plus approval, 01:00 to 06:00 Asia/Dhaka |
 
 Promotion rules:
@@ -1427,22 +1435,23 @@ require an ADR. File-wide or project-wide suppressions are not allowed.
 
 ## 25. Open issues
 
-| ID     | Issue                                                                                                                                                               | Owner              | Needed by |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | --------- |
-| ENG-01 | `.github/pull_request_template.md` lacks the Requirements, How it was tested, Database changes and Security and privacy impact sections of 5.3; update the template | Engineering lead   | M0        |
-| ENG-02 | `CHANGELOG.md` does not exist yet; create it with the structure of 20.2 before the first release tag                                                                | Engineering lead   | M0        |
-| ENG-03 | Branch protection for `main` (3.3) and the required checks (21.2) are not yet configured in the repository settings                                                 | Engineering lead   | M0        |
-| ENG-04 | Planned CI stages 10 to 12 and 18 to 25 (21.1) are not implemented                                                                                                  | Engineering        | M0 to M4  |
-| ENG-05 | ESLint module-boundary, no-cycle, literal-string and test-focus rules (section 23) are not yet configured                                                           | Engineering        | M2        |
-| ENG-06 | `src/lib/result.ts`, the `AppError` mapping and the RPC wrapper (8.5) are not yet implemented                                                                       | Engineering        | M2        |
-| ENG-07 | CodeQL licensing for a private repository (architecture OI-04, security model SEC-GAP-18) decides whether stage 17 stays required                                   | Owner, engineering | M0        |
-| ENG-08 | NFR-PERF-007 targets a CI bundle budget in M2 while architecture section 22.2 accepts it as debt until M4; agree the milestone in the roadmap                       | Engineering lead   | M2        |
-| ENG-09 | Add the scope `adr` (used by the ADR process) to `commitlint.config.js`                                                                                             | Engineering lead   | M0        |
+| ID     | Issue                                                                                                                                                                                                | Owner              | Needed by |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | --------- |
+| ENG-01 | Closed: `.github/pull_request_template.md` now has the Requirements, How it was tested, Database changes and Security and privacy impact sections of 5.3 and the Definition of Done checklist of 7.2 | Engineering lead   | Closed    |
+| ENG-02 | `CHANGELOG.md` does not exist yet; create it with the structure of 20.2 before the first release tag                                                                                                 | Engineering lead   | M0        |
+| ENG-03 | Branch protection for `main` (3.3) and the required checks (21.2) are not yet configured in the repository settings                                                                                  | Engineering lead   | M0        |
+| ENG-04 | Planned CI stages 10 to 12 and 18 to 25 (21.1) are not implemented                                                                                                                                   | Engineering        | M0 to M4  |
+| ENG-05 | ESLint module-boundary, no-cycle, literal-string and test-focus rules (section 23) are not yet configured                                                                                            | Engineering        | M2        |
+| ENG-06 | `src/lib/result.ts`, the `AppError` mapping and the RPC wrapper (8.5) are not yet implemented                                                                                                        | Engineering        | M2        |
+| ENG-07 | CodeQL licensing for a private repository (architecture OI-04, security model SEC-GAP-18) decides whether stage 17 stays required                                                                    | Owner, engineering | M0        |
+| ENG-08 | Closed by roadmap [RD-01](../roadmap.md#101-roadmap-decisions): the bundle budget (stage 20) is a non-blocking report in M2 and blocking from M4 with Lighthouse CI                                  | Engineering lead   | Closed    |
+| ENG-09 | Add the scope `adr` (used by the ADR process) to `commitlint.config.js`                                                                                                                              | Engineering lead   | M0        |
 
 ---
 
 ## 26. Revision history
 
-| Version | Date       | Author           | Change                                             |
-| ------- | ---------- | ---------------- | -------------------------------------------------- |
-| 1.0     | 2026-10-06 | Engineering lead | First complete engineering standards for M0 review |
+| Version | Date       | Author           | Change                                                                                                                                                |
+| ------- | ---------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | 2026-10-06 | Engineering lead | First complete engineering standards for M0 review                                                                                                    |
+| 1.1     | 2026-10-06 | Engineering lead | Interim Definition of Done rule until `deploy.yml` (M1-D9); stage 20 blocking from M4 per RD-01; ENG-08 closed; ENG-01 closed (pull request template) |

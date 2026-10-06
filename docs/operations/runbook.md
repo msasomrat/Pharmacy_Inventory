@@ -8,7 +8,7 @@ troubleshooting.
 | Field        | Value                                                                                                                                                                              |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Document ID  | PIMS-OPS-001                                                                                                                                                                       |
-| Version      | 1.0                                                                                                                                                                                |
+| Version      | 1.1                                                                                                                                                                                |
 | Status       | Draft for M0 review                                                                                                                                                                |
 | Owner        | Engineering lead (platform operator)                                                                                                                                               |
 | Approver     | Product owner (pharmacy owner)                                                                                                                                                     |
@@ -118,7 +118,7 @@ C = consulted, I = informed):
 
 ### 1.4 Implementation status
 
-PIMS is at milestone M0/M1 (commit `1a9cc25`). Several procedures describe workflows and functions that
+PIMS is at milestone M0/M1 (commit `7ce5c5f`). Several procedures describe workflows and functions that
 are designed but not yet built; each is marked with the milestone of the [roadmap](../roadmap.md) that
 delivers it and must exist before the procedure is relied on. Per the roadmap, `pims-prod` is created at
 pilot preparation (RD-03), the pilot at the Mohammadpur branch runs on it and becomes production at the
@@ -245,7 +245,7 @@ Names only; values live in the stores shown. Classes follow
 
 The pre-deployment backup (5.6) runs inside the production deployment job, which can read only the
 `production` environment; the backup credentials therefore exist in both `backup` and `production`
-(OPS-OI-01). Both copies are rotated together.
+(security model 11.2). Both copies are rotated together.
 
 **Cloudflare Pages** (project `pims-web`, Settings, Variables and Secrets; the Preview set holds staging
 values, the Production set holds production values):
@@ -261,19 +261,19 @@ values, the Production set holds production values):
 
 **Supabase** (per project):
 
-| Name                           | Where                                                       | Used by                          | Class | Notes                                     |
-| ------------------------------ | ----------------------------------------------------------- | -------------------------------- | ----- | ----------------------------------------- |
-| Database password (`postgres`) | Password manager; GitHub `SUPABASE_DB_PASSWORD`             | Deployments, break-glass         | C4    | 12 months                                 |
-| `backup_reader` role password  | Password manager; inside `BACKUP_DB_URL`                    | Backups                          | C4    | 12 months                                 |
-| Secret API key (service role)  | Injected into Edge Functions by the runtime                 | `admin-users`, retention purge   | C4    | 12 months                                 |
-| JWT signing keys               | Supabase Auth (managed)                                     | Auth                             | C4    | Standby-key rotation (9.6)                |
-| SMTP credentials               | Auth settings, SMTP                                         | Auth emails                      | C4    | 12 months                                 |
-| Storage S3 access keys         | Storage settings, S3 configuration                          | `backup.yml` only                | C4    | 12 months; one key named `backup-nightly` |
-| `SCHEDULER_SHARED_SECRET`      | Edge Function secrets and Vault (`scheduler_shared_secret`) | `pg_cron` calls through `pg_net` | C4    | 12 months; both copies change together    |
-| `ALLOWED_ORIGINS`              | Edge Function secrets                                       | CORS in Edge Functions           | C0    | `https://<app-domain>` (production)       |
-| `ANTHROPIC_API_KEY` (M5)       | Edge Function secrets                                       | `ai-gateway`                     | C4    | 12 months; provider spend limit set       |
-| `AI_GATEWAY_DB_URL` (M5)       | Edge Function secrets                                       | `ai-gateway`                     | C4    | 12 months                                 |
-| `SMS_GATEWAY_API_KEY` (v2)     | Edge Function secrets                                       | `notify-sms`                     | C4    | 12 months                                 |
+| Name                           | Where                                                       | Used by                                        | Class | Notes                                     |
+| ------------------------------ | ----------------------------------------------------------- | ---------------------------------------------- | ----- | ----------------------------------------- |
+| Database password (`postgres`) | Password manager; GitHub `SUPABASE_DB_PASSWORD`             | Deployments, break-glass                       | C4    | 12 months                                 |
+| `backup_reader` role password  | Password manager; inside `BACKUP_DB_URL`                    | Backups                                        | C4    | 12 months                                 |
+| Secret API key (service role)  | Injected into Edge Functions by the runtime                 | `admin-users`, retention purge, `storage-sign` | C4    | 12 months                                 |
+| JWT signing keys               | Supabase Auth (managed)                                     | Auth                                           | C4    | Standby-key rotation (9.6)                |
+| SMTP credentials               | Auth settings, SMTP                                         | Auth emails                                    | C4    | 12 months                                 |
+| Storage S3 access keys         | Storage settings, S3 configuration                          | `backup.yml` only                              | C4    | 12 months; one key named `backup-nightly` |
+| `SCHEDULER_SHARED_SECRET`      | Edge Function secrets and Vault (`scheduler_shared_secret`) | `pg_cron` calls through `pg_net`               | C4    | 12 months; both copies change together    |
+| `ALLOWED_ORIGINS`              | Edge Function secrets                                       | CORS in Edge Functions                         | C0    | `https://<app-domain>` (production)       |
+| `ANTHROPIC_API_KEY` (M5)       | Edge Function secrets                                       | `ai-gateway`                                   | C4    | 12 months; provider spend limit set       |
+| `AI_GATEWAY_DB_URL` (M5)       | Edge Function secrets                                       | `ai-gateway`                                   | C4    | 12 months                                 |
+| `SMS_GATEWAY_API_KEY` (v2)     | Edge Function secrets                                       | `notify-sms`                                   | C4    | 12 months                                 |
 
 **Offline only** (never stored on a connected system in plain form):
 
@@ -349,17 +349,17 @@ sender and the absence of Pro-only features.
 
 **GitHub**
 
-| Setting                           | Expected value                                                                                                                                                         |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Protection of `main`              | [Engineering standards 3.3](../engineering/engineering-standards.md#33-protection-of-main); required checks of section 21.2                                            |
-| Protection of `production` branch | Deletion and force pushes blocked; updated only by `deploy.yml`                                                                                                        |
-| Protection of release tags `v*`   | Tag ruleset: creation, update and deletion restricted to administrators                                                                                                |
-| Environment `staging`             | Deployment branches: `main`                                                                                                                                            |
-| Environment `production`          | Required reviewers: Owner and engineering lead, "prevent self-review" on once both have accounts; deployment refs: `main` and tags `v*.*.*` (OPS-OI-07)                |
-| Environment `backup`              | Deployment branches: `main`; no reviewers, so that the schedule can run                                                                                                |
-| Actions                           | Allowed actions pinned to a full commit SHA; default workflow permissions read-only; Actions may not create or approve pull requests; fork pull requests need approval |
-| Security features                 | Dependabot alerts and security updates, secret scanning with push protection, private vulnerability reporting on; CodeQL per OI-04                                     |
-| Notifications                     | Owner and engineering lead receive failed-workflow emails for scheduled workflows                                                                                      |
+| Setting                           | Expected value                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Protection of `main`              | [Engineering standards 3.3](../engineering/engineering-standards.md#33-protection-of-main); required checks of section 21.2                                                                                                                                                                                                                                          |
+| Protection of `production` branch | Deletion and force pushes blocked; updated only by `deploy.yml`                                                                                                                                                                                                                                                                                                      |
+| Protection of release tags `v*`   | Tag ruleset: creation, update and deletion restricted to administrators                                                                                                                                                                                                                                                                                              |
+| Environment `staging`             | Deployment branches: `main`                                                                                                                                                                                                                                                                                                                                          |
+| Environment `production`          | Required reviewers: Owner and engineering lead, "prevent self-review" on once both have accounts; deployment refs: tags `v*.*.*`, branches `release/v*` and `main` (`workflow_dispatch`)                                                                                                                                                                             |
+| Environment `backup`              | Deployment branches: `main`; no reviewers, so that the schedule can run                                                                                                                                                                                                                                                                                              |
+| Actions                           | Allowed actions pinned to a full commit SHA; default workflow permissions read-only; Actions may not create or approve pull requests; fork pull requests need approval                                                                                                                                                                                               |
+| Security features                 | Dependabot alerts and security updates, secret scanning with push protection; CodeQL per OI-04. Reports arrive through `security@<mail-domain>` (active, forwarded to the Owner and the engineering lead), `public/.well-known/security.txt` (RFC 9116) with a valid `Expires` date, and `public/.well-known/security-policy.txt` ([SECURITY.md](../../SECURITY.md)) |
+| Notifications                     | Owner and engineering lead receive failed-workflow emails for scheduled workflows                                                                                                                                                                                                                                                                                    |
 
 ---
 
@@ -379,6 +379,9 @@ Staging is set up with the same checklist, using staging names, the Free plan an
 - [ ] Transactional email provider chosen (for example Amazon SES in `ap-southeast-1`, Resend or Brevo;
       free tiers cover invitation and reset volumes, architecture 20.1).
 - [ ] Uptime and heartbeat monitor provider chosen, with terms that allow commercial use (OPS-OI-09).
+- [ ] Mailbox or alias `security@<mail-domain>` created, forwarded to the Owner and the engineering
+      lead, tested with an external message; `public/.well-known/security.txt` and
+      `security-policy.txt` updated with the real domains ([SECURITY.md](../../SECURITY.md)).
 
 ### 3.2 Platform accounts
 
@@ -495,7 +498,7 @@ curl -sSI "https://<app-domain>/index.html" | grep -i 'cache-control'
 
 - [ ] Sentry project `pims-web` with environments `production`, `staging` and `preview`; alert rules
       SEN-01 to SEN-04 (7.2); IP address storage off; data scrubbing on.
-- [ ] Uptime monitors MON-01, MON-02 (once `health` exists, M4), MON-04 and MON-05 and heartbeat
+- [ ] Uptime monitors MON-01, MON-02 (once `health` exists, M4), MON-04 to MON-06 and heartbeat
       MON-03 (7.4), with email and mobile push to the Owner and the engineering lead; send a test
       notification and confirm that both receive it.
 - [ ] Subscribe both administrators to the status pages of Supabase (Singapore region), Cloudflare
@@ -771,8 +774,11 @@ recovery point, so it is a SEV-1 decision taken by the Owner; follow [section 6]
 ### 5.1 Strategy
 
 The design meets FR-BKP-001 to FR-BKP-008 and NFR-BACKUP-003 to NFR-BACKUP-006 and implements the
-controls of [security model 16](../security/security-model.md#16-backup-security). Backups are classified
-C3 as a whole.
+controls of [security model 16](../security/security-model.md#16-backup-security). Backup bundles,
+evidence dumps (6.3) and restored projects are classified **C4**, because they contain the `auth`
+schema (password hashes, and TOTP secrets in `auth.mfa_factors`) and are readable without RLS. A
+restored project other than the one that becomes production (drill, R3, incident analysis) drops to C3
+only after the Auth purge of 6.6 step 2 (security model 16).
 
 | Layer                     | Mechanism                                                                                          | Schedule                                  | Location                                             | Retention                                       | Tier |
 | ------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------- | ----------------------------------------------- | ---- |
@@ -864,7 +870,7 @@ shred -u pims-backup-fy2026.key
    12 months; store as `BACKUP_R2_ACCESS_KEY_ID` and `BACKUP_R2_SECRET_ACCESS_KEY` in `backup` and
    `production`. R2 offers no write-only token type at the time of writing; the bucket locks prevent
    deletion and overwriting, and every object is encrypted, which together meet the intent of the
-   security model's write-only control (OPS-OI-04).
+   compensating controls accepted in security model 16.
 4. API token for restores: "Object Read only", same bucket, expiry 12 months; stored only in the
    `PIMS Operations` vault as `pims-backups-restore-ro`.
 5. Set `BACKUP_R2_ENDPOINT` to `https://<r2-account-id>.r2.cloudflarestorage.com` and `BACKUP_R2_BUCKET`
@@ -897,7 +903,7 @@ Verify from the operator workstation: `psql "$BACKUP_DB_URL" -c 'select count(*)
 succeeds, and `psql "$BACKUP_DB_URL" -c 'create table public.x (id int)'` fails with a read-only error.
 `bypassrls` is needed because `pg_dump` refuses to dump tables whose rows RLS would hide. If the platform
 rejects `bypassrls` or the `pg_read_all_data` grant, the fallback is the `postgres` user over the Session
-pooler, stored only in the GitHub environments; record the deviation (OPS-OI-10).
+pooler, stored only in the GitHub environments; record the deviation in the security model (T-BKP-06).
 
 #### 5.3.4 Storage access key
 
@@ -1059,8 +1065,10 @@ state as evidence, add `-f evidence_id=INC-<YYYYMMDD>-<NN>`: the bundle is then 
   security settings; never to staging (which previews reach) once production holds personal data (the
   pre-pilot exception is in 6.9), and never into a database on a laptop.
 - **Whole-database restores preserve identities and numbering** (NFR-BACKUP-008): IDs, invoice and
-  credit-note numbers and audit rows are loaded exactly as dumped, and new documents continue the
-  series. Per-organization restore is not supported (FR-BKP-009); use 6.6 for partial recovery.
+  credit-note numbers and audit rows are loaded exactly as dumped. A restore does, however, return the
+  counters in `app.document_sequences` to the recovery point, so numbers issued after it and already
+  printed for customers must be reconciled before branches resume (6.8.2); no number is ever issued
+  twice. Per-organization restore is not supported (FR-BKP-009); use 6.6 for partial recovery.
 - **Decrypted material** exists only in an encrypted or RAM-backed directory on the operator workstation
   (full-disk encryption, patched, not a counter PC) and is shredded when the restore is verified.
 
@@ -1071,9 +1079,13 @@ flowchart TD
   scope -->|"No"| reach{"Is pims-prod reachable<br/>and on Pro with a managed backup<br/>or PITR point before the damage?"}
   reach -->|"Yes"| r1["R1 Managed restore (6.4)"]
   reach -->|"No"| r2["R2 Nightly dump into a new project (6.5)"]
-  r1 --> verify["Verify (6.7), data-loss window<br/>and re-entry (6.8)"]
+  r1 --> verify["Verify (6.7)"]
   r2 --> verify
   r3 --> verify
+  verify --> window["Data-loss window (6.8.1)"]
+  window --> numbers["Reconcile numbers issued<br/>in the lost window (6.8.2)"]
+  numbers --> unfreeze["Unfreeze"]
+  unfreeze --> reentry["Re-entry (6.8.3)"]
 ```
 
 ### 6.2 Recovery targets
@@ -1129,9 +1141,10 @@ streamlined or the plan is upgraded before the next quarter.
    database size. The project URL and keys do not change.
 3. Storage objects are not part of managed backups. Files uploaded after the recovery point remain in
    the buckets without their metadata rows; list them after the restore and keep them for the re-entry
-   of their prescriptions (6.8).
-4. Continue with 6.7 (verification), 6.8 (data-loss window), unfreeze (6.5 step 12) and a manual backup
-   (5.10).
+   of their prescriptions (6.8.3).
+4. Continue with 6.7 (verification), 6.8.1 (data-loss window), 6.8.2 (number reconciliation, still
+   frozen), unfreeze (6.5 step 12), 6.8.3 (re-entry) and a manual backup (5.10). A PITR restore also
+   rolls the counters back, so 6.8.2 applies to it too.
 
 ### 6.5 R2: Restore the nightly dump into a new project
 
@@ -1202,7 +1215,8 @@ streamlined or the plan is upgraded before the next quarter.
 10. **Repoint operations:** GitHub `production` and `backup` environments (`SUPABASE_PROJECT_REF`,
     `SUPABASE_DB_PASSWORD`, `BACKUP_DB_URL`, `PROD_STORAGE_S3_*`), monitor MON-02's URL, `ALLOWED_ORIGINS`
     unchanged, status-page subscriptions, this runbook's `<prod-ref>` record in the vault.
-11. **Data-loss window** per branch (6.8) computed and given to the Branch Managers.
+11. **Data-loss window and numbers:** compute the window per branch (6.8.1) and give it to the Branch
+    Managers; reconcile every document series (6.8.2). Do not continue until 6.8.2 step 5 passes.
 12. **Unfreeze:** set the organization active again; resume the jobs with
     `select cron.alter_job(jobid, active := true) from cron.job;`; tell branches to sign in again and to
     start re-entry.
@@ -1218,12 +1232,26 @@ documents) when the rest of production must stay as it is:
 
 1. Restore the chosen backup into a temporary project `pims-recovery-<YYYYMMDD>` with steps 1 to 5 of
    6.5 (no cut-over, no Storage unless needed).
-2. Query the rows needed and compare them with production.
-3. Write a reviewed repair script or migration: master data is restored through the same paths the
+2. **Immediately after the restore, before any other query**, purge the Auth secrets and lock every
+   restored account, so that the copy cannot be used to sign in as a real user (security model 16):
+
+   ```sql
+   begin;
+   delete from auth.mfa_factors;    -- TOTP secrets
+   delete from auth.refresh_tokens;
+   delete from auth.sessions;
+   update auth.users set banned_until = 'infinity';
+   commit;
+   ```
+
+   Then turn off the email provider in the project's Auth settings. The project is C3 from here on.
+
+3. Query the rows needed and compare them with production.
+4. Write a reviewed repair script or migration: master data is restored through the same paths the
    application uses (audited); transactional damage is corrected with compensating entries (4.7.3),
    never by rewriting ledgers.
-4. Apply it through `deploy.yml` (migration) or, if urgent, _break-glass_ with the Owner's approval.
-5. Run the integrity checks (Appendix C.3); delete the temporary project; shred decrypted files.
+5. Apply it through `deploy.yml` (migration) or, if urgent, _break-glass_ with the Owner's approval.
+6. Run the integrity checks (Appendix C.3); delete the temporary project; shred decrypted files.
 
 ### 6.7 Post-restore verification checklist
 
@@ -1236,7 +1264,10 @@ Used after R1, R2 and R3 and in every drill. Record results in the incident or d
 - [ ] From M4: the audit hash chain verifies and each organization's chain head equals the head recorded
       in the backup index or the Owner's digest.
 - [ ] Document series: the last invoice and credit-note numbers per branch and fiscal year equal their
-      counters; the next document continues the series (in a drill, make one test sale to prove it).
+      restored counters (the series is consistent as of the recovery point). This does **not** prove
+      that the next number is safe to issue: in a production restore, numbers issued after the recovery
+      point are reconciled in 6.8.2 before unfreeze. In a drill, make one test sale to prove that the
+      series continues.
 - [ ] Security posture: Appendix C.1 queries return the expected results; Security Advisor shows no
       errors; sign-ups disabled; buckets private.
 - [ ] `pg_cron` jobs match database design 17.1.
@@ -1245,26 +1276,105 @@ Used after R1, R2 and R3 and in every drill. Record results in the incident or d
 - [ ] Smoke: the app loads, the Owner signs in with TOTP, POS search works, a recent invoice and a report
       open; `health` reports `ok`; no new Sentry issues.
 
-### 6.8 Data-loss window and paper re-entry
+### 6.8 Data-loss window, document numbers and paper re-entry
 
 NFR-BACKUP-009 requires the lost window per branch to be identified so that paper records can be
-re-entered.
+re-entered. 6.8.1 and 6.8.2 apply after every restore (R1, R2, and R3 when it rolls documents back) and
+run while the organization is still frozen. 6.8.3 applies after a restore and also after any outage in
+which branches wrote paper invoices (OP-01 to OP-05, Appendix A).
+
+#### 6.8.1 Data-loss window
 
 1. Run Appendix C.9 on the restored database: the last recorded sale and stock movement per branch. The
    window for a branch runs from that time to the freeze time (6.3).
 2. Collect the records of the window: the carbon copies of the paper invoice book used during the
-   outage (Appendix A), supplier invoices for goods received, bKash, Nagad and Rocket merchant
-   statements and card terminal settlement reports for digital payments, and prescriptions for
-   controlled-drug sales.
-3. Re-enter in this order so that stock exists before it is sold: goods receipts, stock transfers,
+   outage (Appendix A), the paper controlled-drug register, supplier invoices for goods received,
+   bKash, Nagad and Rocket merchant statements and card terminal settlement reports for digital
+   payments, and prescriptions for controlled-drug sales.
+
+#### 6.8.2 Document numbers issued in the lost window
+
+A restore returns `app.document_sequences` to the recovery point. Invoices, credit notes, goods
+receipts and other documents committed between the recovery point and the incident were numbered and
+often printed for customers or suppliers. If the counters simply continued, those numbers would be
+issued again to different documents, which breaks returns against the original invoice (FR-POS-045) and
+the VAT and DGDA audit trail. Database design 9.4's statement that a restore continues every series
+without reuse holds only when this procedure is followed (OPS-OI-17). The organization stays frozen
+until step 5 passes.
+
+1. **Find the highest issued number** per branch, fiscal year and series of database design 9.4 (at
+   least `sale`, `sale_return`, `goods_receipt`, `purchase_return`, `customer_payment`, `expense`,
+   `stock_count`, and the organization series `stock_transfer` and `loyalty_card`). Sources, in order
+   of reliability:
+   - the evidence backup of 6.3 step 3, when the damaged database was still readable: it contains the
+     lost documents themselves;
+   - the API (PostgREST) and Edge Function logs exported in 6.3 step 3: successful calls of the commit
+     RPCs give the number and times of documents committed after the recovery point;
+   - Sentry breadcrumbs of POS sessions in the window;
+   - paper evidence: customer copies brought back, A4 office copies, goods receipt papers, MFS
+     merchant statements and card settlement reports (count and times of sales);
+   - from M4, provisional references of offline sales still queued on terminals (FR-POS-056), which
+     receive their numbers only at synchronization and therefore never collide.
+2. **Record** in the incident issue, per series: the restored counter value, the highest number issued
+   before the incident, and each number in between with its source (recovered document, evidence only,
+   or unknown). When the sources disagree, take the highest number any source shows.
+3. **Re-issue recovered documents under their original numbers.** For every number whose document is
+   recoverable (from the evidence backup, or from paper with full line detail), re-enter it with its
+   original number, business date and time through `restore_reissue_document()` (database design 9.4, OPS-OI-17),
+   in ascending number order. Re-entry posts the same stock movements (to the original batches),
+   ledger entries, controlled-drug register entries and loyalty usage as the original document did.
+4. **Close the remaining numbers.** For every number that cannot be recovered, post a placeholder
+   document in Voided status with the reason `Lost in restore <incident ID>` through the same function,
+   so that the series stays gapless (the 9.4 check counts it) and the number is never issued again. A
+   customer who later presents a lost invoice is served against the placeholder: the Branch Manager
+   finds the matching re-entered paper document (6.8.3) by the note `orig no <number>` and processes
+   the return against it.
+5. **Check before unfreeze:** for every series the counter is at least the highest issued number of
+   step 1; the gapless verification of database design 9.4 (part of the integrity checks, Appendix
+   C.3) returns zero rows; the incident issue lists every re-issued and placeholder number. The Owner
+   signs off in the issue; only then does 6.5 step 12 (unfreeze) run.
+
+Until the function of OPS-OI-17 exists, steps 3 and 4 are done by a reviewed _break-glass_ script
+applied as in 6.6 step 4, prepared in `scripts/ops/` and rehearsed in the quarterly drill (6.9); it
+must be ready before the pilot holds real data (PL-E3). Never advance a counter without inserting the
+documents for the skipped numbers: a bare jump fails the gapless check and leaves numbers unaccounted
+for.
+
+#### 6.8.3 Re-entry of paper records
+
+Re-entry is done by the Branch Manager (or the Owner), never by a Salesman, on the same or next business
+day after service returns.
+
+1. Before re-entering anything, check that the document is not already in PIMS: from M4, offline sales
+   queued on terminals synchronize by themselves with their idempotency keys, so check the offline
+   exception queue first; after a restore, compare with the documents re-issued in 6.8.2.
+2. Re-enter in this order so that stock exists before it is sold: goods receipts, stock transfers,
    sales (controlled-drug sales with full prescription details), returns, customer collections and
    supplier payments.
-4. Every re-entered document carries the note `Re-entry <incident ID>, paper ref <number>`. v1 has no
-   back-dated entry, so re-entered documents carry the current business date (OPS-OI-08); the incident
-   report lists them so that the Owner's accountant can reconcile daily totals.
+3. Every re-entered document carries the note `Re-entry <incident ID>, paper ref <number>` (and
+   `orig no <number>` when it replaces a number closed in 6.8.2 step 4).
+4. **Business date.** Sales cannot be back-dated (FR-POS-032), so until the paper re-entry function of
+   SRS FR-POS-065 (database design `reenter_paper_sale()`, OPS-OI-08) exists, re-entered documents carry the current business date and these compensating rules
+   apply:
+   - **Batch:** select the batch written on the paper invoice through the FEFO override (FR-POS-031),
+     never the FEFO suggestion, so lot balances stay correct. If that batch has no stock in PIMS,
+     stop, investigate with a count (step 5) and record the finding in the incident issue.
+   - **Controlled drugs:** the paper controlled-drug register (Appendix A step 7) remains the record of
+     the actual dispensing date and time. The Branch Manager writes the PIMS invoice number next to each
+     paper register line, and the incident report lists every controlled-drug re-entry with its actual
+     and recorded dates for the register reports of that period.
+   - **Cash (from M3):** cash of paper sales is kept apart in an envelope marked with the date (Appendix
+     A step 9) and is not counted into the PIMS cash session of the outage day. Re-entry runs in a
+     separate cash session on a register reserved for re-entry (for example `Re-entry`), opened with a
+     zero float and closed against the envelope, so neither the outage day nor the re-entry day shows
+     a false variance.
+   - **Loyalty:** bulk re-entry can trigger abuse rules R1 to R6 (FR-LOY-041). They only flag
+     (OD-09); the Branch Manager resolves each flag with the reason `Re-entry <incident ID>`. Points are
+     credited through the card number written on paper.
+   - **Reports:** daily totals of the outage day and of the re-entry day differ from what happened;
+     the incident report lists every re-entered document with its paper date so that the Owner's
+     accountant can reconcile them.
 5. Count physically the top-selling items of each affected branch and post count corrections if needed.
-6. From M4, offline sales queued on terminals during the outage synchronize by themselves with their
-   idempotency keys; check the offline exception queue before re-entering anything twice.
 
 ### 6.9 Quarterly restore drill
 
@@ -1297,9 +1407,16 @@ Checklist (copy into an `ops:drill` issue named `DRILL-<YYYY>Q<N>`):
 - [ ] Temporary project `pims-drill-<YYYY>q<N>` created in Singapore with the settings baseline, but
       **no SMTP configured**, so the drill can never email real users.
 - [ ] 6.5 steps 2 to 7 performed and timed.
+- [ ] Right after 6.5 step 5 (database restore): Auth purge of 6.6 step 2 run (`auth.mfa_factors`,
+      `auth.refresh_tokens` and `auth.sessions` emptied, every restored user banned) before any other
+      query; time recorded.
 - [ ] 6.7 checklist completed. For the sign-in and test-sale checks, create a drill-only Owner account
-      in the drill project (Auth admin plus a membership by SQL) with its own TOTP; never use a real
-      user's credentials.
+      in the drill project (Auth admin plus a membership by SQL) with its own TOTP; it is the only
+      account that can sign in. Never use or unban a real user's account.
+- [ ] 6.8.2 rehearsed: for one branch, note the restored invoice counter N and treat N+1 to N+3 as
+      numbers issued before a simulated incident; re-issue N+1 under its number with a test document and
+      close N+2 and N+3 with placeholders, using the restore re-entry function (or the `scripts/ops/`
+      script of OPS-OI-17); the gapless check passes and the next test sale takes N+4.
 - [ ] Produce an encrypted archive of the restored Storage objects (`tar`, `zstd`, `age -r`) and hand
       it to the Owner for the next offline copy (5.7).
 - [ ] End time recorded. RTO = end minus T0. RPO = simulated incident time minus backup time.
@@ -1421,6 +1538,7 @@ request bodies, which may contain personal data.
 | MON-03 | Heartbeat `pims-prod-backup`                         | Pings from `backup.yml` (start, success, fail)             | Expected every 24 hours, grace 2 hours | "fail" ping, or silence for 26 hours | Owner, engineering lead (email, push) |
 | MON-04 | TLS certificate of `<app-domain>`                    | Certificate expiry                                         | Daily                                  | Under 14 days to expiry              | Engineering lead                      |
 | MON-05 | Domain registration                                  | Registrar expiry date                                      | Monthly                                | Under 30 days to expiry              | Owner                                 |
+| MON-06 | `https://<app-domain>/.well-known/security.txt`      | HTTPS `200` and the keyword `Contact: mailto:security@`    | Daily                                  | 2 consecutive failures               | Engineering lead                      |
 
 MON-02 queries the database on every check, which also keeps a Free-plan production project from being
 paused (NFR-AVAIL-006). Until the `health` function exists (M4), production must be on Pro or used every
@@ -1516,6 +1634,9 @@ The security model defines severity, the process and the security playbooks that
 
 When in doubt, choose the higher severity; lowering it later costs nothing.
 
+The response targets above are the operational targets for all incidents and match security model
+17.1, including the SEV-2 target of 1 hour during business hours (otherwise 4 business hours).
+
 ### 8.2 Roles during an incident
 
 | Role              | Default holder                         | Duties                                                                                                                              |
@@ -1563,7 +1684,7 @@ reports through [SECURITY.md](../../SECURITY.md). Within 15 minutes, open an inc
 | Disable AI (M5)                       | Organization AI setting off (CFG-29) or the gateway's global switch                     | Switch on                    |
 | Restrict direct database connections  | Supabase network restrictions (blocks direct and pooler connections, not the HTTP APIs) | Remove restrictions          |
 | Rotate secrets                        | 9.6                                                                                     | n/a                          |
-| Branches to paper                     | Appendix A                                                                              | Re-entry (6.8)               |
+| Branches to paper                     | Appendix A                                                                              | Re-entry (6.8.3)             |
 
 **Preserve evidence** before remediation changes it (security model 17.2):
 
@@ -1618,7 +1739,7 @@ Trigger: MON-01 or MON-02, or calls from several branches.
    an unhealthy database (CPU, memory, disk full) follows OP-10; a database that has gone read-only
    because the disk quota was exceeded needs disk space (Pro: disk expands; Free: upgrade, 9.7).
 5. Check LQ-01 and LQ-02 for the first errors; compare with the time of the last change.
-6. When service returns: tell branches (resolved template), start re-entry (6.8), watch for 2 hours.
+6. When service returns: tell branches (resolved template), start re-entry (6.8.3), watch for 2 hours.
 
 #### OP-02 One branch cannot use PIMS
 
@@ -1660,7 +1781,7 @@ Trigger: MON-01 or MON-02, or calls from several branches.
 1. Confirm on the Cloudflare status page. Installed PWAs (M4) keep working while Supabase is reachable.
 2. Nothing to roll back; tell branches to keep the app open and not to reload it, or to use paper.
 3. Do not improvise another host: sessions are stored per origin and the Auth redirect allow-list names
-   only `<app-domain>`. Continue on paper (or offline mode from M4) and re-enter afterwards (6.8).
+   only `<app-domain>`. Continue on paper (or offline mode from M4) and re-enter afterwards (6.8.3).
 
 #### OP-06 Faulty release or error spike
 
@@ -1821,7 +1942,7 @@ below complete them.
    their checksums.
 3. Identify the last clean recovery point (before the first malicious or corrupt change, from
    `audit.log` and logs) and restore (section 6), normally R2 into a new project.
-4. Identify the data-loss window and re-enter from paper (6.8).
+4. Identify the data-loss window, reconcile document numbers and re-enter from paper (6.8).
 5. Find and close the entry point before unfreezing.
 
 #### IR-08 Supply-chain compromise
@@ -1844,10 +1965,10 @@ below complete them.
 
 #### IR-10 Vulnerability report received
 
-1. Acknowledge privately within the timeline of [SECURITY.md](../../SECURITY.md); never discuss details
-   in a public issue.
-2. Reproduce on staging; assign severity; open a private GitHub security advisory and work in its
-   temporary private fork.
+1. Acknowledge the report from the `security@<mail-domain>` mailbox within the timeline of
+   [SECURITY.md](../../SECURITY.md); never discuss details in a public issue.
+2. Reproduce on staging; assign severity; open a draft GitHub Security Advisory in the private
+   repository and work in its temporary private fork.
 3. Fix with a regression test; release (4.4 or 4.6); publish the advisory and credit the reporter as
    agreed.
 
@@ -2117,6 +2238,8 @@ in the same `ops:change` issue. Runbook-specific items:
 - [ ] Monitors and alert routes tested: a test notification from the uptime monitor and from Sentry
       reaches both administrators.
 - [ ] Contact sheet at every branch and in the vault is current.
+- [ ] `security.txt` `Expires` is more than 3 months ahead; otherwise renew it (at most 12 months
+      ahead) in a pull request, and send a test message to `security@<mail-domain>`.
 - [ ] Backup inventory: offline copies of the last 12 months and year-end copies present (5.7).
 - [ ] This runbook reviewed; outdated dashboard paths and commands corrected.
 
@@ -2298,32 +2421,35 @@ needs them goes live.
 
 ## 13. Open issues
 
-| ID        | Issue                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Owner                                    | Needed by |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | --------- |
-| OPS-OI-01 | Backup credentials: architecture 14.2 places them in the GitHub environment `production`, security model 11.1 and 11.2 in `backup`. This runbook needs both (nightly job in `backup`, pre-deployment backup in `production`); update both documents                                                                                                                                                                                                                                           | Architecture and security model authors  | M4        |
-| OPS-OI-02 | Restore target: roadmap PA-07, PL-E3 and M4-X2 and engineering standards 22 restore production backups into staging, while architecture 14.1 keeps production data out of staging and security model 16 requires an isolated project; SRS FR-BKP-004 allows "a new or staging project". This runbook restores into a temporary isolated project once production holds personal data and allows staging only for the pre-pilot test (6.9). Align the roadmap and engineering standards wording | Engineering lead                         | M4        |
-| OPS-OI-03 | Job times differ: architecture 10.9 (integrity checks 03:30, held-bill purge 00:01, image purge Friday 03:45) and database design 17.1 (`app.job_integrity_checks()` 04:00, `app.job_purge_drafts()` 00:10). Security model 14.3 anchors chain heads at 03:30, after the 03:00 backup, so this runbook's backup reads chain heads at dump time                                                                                                                                                | Architecture and database design authors | M3        |
-| OPS-OI-04 | Cloudflare R2 has no write-only token type; security model 16 requires a write-only backup credential. This runbook compensates with bucket locks and encryption. Either record an accepted deviation in security model 20.3 or choose a store with write-only keys (for example Backblaze B2, or AWS S3 with a put-only policy)                                                                                                                                                              | Security model author, Owner             | M4        |
-| OPS-OI-05 | FR-BKP-003 asks each run to verify that the backup is decryptable, but the runner holds only the public key by design (security model 16). This runbook verifies the plaintext before encryption and the encrypted header, and proves decryption in the quarterly drill; raise an SRS change request to reword FR-BKP-003                                                                                                                                                                     | Requirements owner                       | M4        |
-| OPS-OI-06 | Re-check at M4 whether Supabase offers log-based alerts on the plan in use; otherwise decide on a log drain on Pro (7.1)                                                                                                                                                                                                                                                                                                                                                                      | Engineering lead                         | M4        |
-| OPS-OI-07 | Security model 11.2 limits the `production` environment to `main`, but production deployments are triggered by release tags (and hotfix `release/` branches); the environment must allow tags `v*.*.*`. Update security model 11.2                                                                                                                                                                                                                                                            | Security model author                    | M1        |
-| OPS-OI-08 | No back-dated entry exists for re-entering paper records after a restore (NFR-BACKUP-009); re-entered documents carry the current business date. Decide whether an Owner-only, audited back-dated entry is needed and how it interacts with daily summaries and fiscal-year numbering                                                                                                                                                                                                         | Owner, database design                   | M4        |
-| OPS-OI-09 | Choose the uptime and heartbeat monitor provider, checking that its free plan allows commercial use, and record it in 2.2                                                                                                                                                                                                                                                                                                                                                                     | Engineering lead                         | M4        |
-| OPS-OI-10 | Verify on staging that `backup_reader` can be created with `BYPASSRLS` and `pg_read_all_data` on Supabase; otherwise use the documented fallback. Add the Storage S3 key `backup-nightly` and `BACKUP_HEARTBEAT_URL` to the security model's secrets inventory (11.1)                                                                                                                                                                                                                         | Engineering lead, security model author  | M4        |
-| OPS-OI-11 | Verify how the pinned Supabase CLI applies a migration file containing `CREATE INDEX CONCURRENTLY` (database design 18 requires such files) before the first one is written, and document the result in 4.5                                                                                                                                                                                                                                                                                   | Engineering lead                         | M3        |
-| OPS-OI-12 | The `health` function in architecture 10.7 reports database reachability and version; this runbook proposes that it also reports `degraded` when the last integrity run or reporting refresh is older than 26 hours, so that a stopped scheduler is detected without the database calling external services. Decide and align                                                                                                                                                                 | Architecture author                      | M4        |
-| OPS-OI-13 | There is no maintenance or read-only mode; freezing writes during a restore relies on deactivating the organization by _break-glass_ SQL, which also blocks reading. Consider an Owner-visible maintenance flag checked by RPCs                                                                                                                                                                                                                                                               | Database design, engineering lead        | M4        |
-| OPS-OI-14 | The architecture's repository layout describes `backup.yml` as running "while on the free tier"; FR-BKP-006 and security model 16 keep the nightly dump on Pro. Update the comment                                                                                                                                                                                                                                                                                                            | Architecture author                      | M4        |
-| OPS-OI-15 | A Supabase access token carries all rights of the account that created it, across both organizations. Evaluate separate accounts per organization for CI tokens and record the decision in the security model                                                                                                                                                                                                                                                                                 | Security model author                    | M4        |
-| OPS-OI-16 | The Bangla texts in 8.4 and Appendix A need review by the Owner before they are printed for branches                                                                                                                                                                                                                                                                                                                                                                                          | Owner                                    | M2        |
+| ID        | Issue                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Owner                                      | Needed by           |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------- |
+| OPS-OI-01 | **Closed.** Security model 11.1 and 11.2 and architecture 14.2 now place the backup credentials in both GitHub Environments: `backup` (nightly job) and `production` (pre-deployment backup), rotated together                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Architecture and security model authors    | M4                  |
+| OPS-OI-02 | Restore target: roadmap PA-07, PL-E3 and M4-X2 and engineering standards 22 restore production backups into staging, while architecture 14.1 keeps production data out of staging and security model 16 requires an isolated project; SRS FR-BKP-004 allows "a new or staging project". This runbook restores into a temporary isolated project once production holds personal data and allows staging only for the pre-pilot test (6.9). Align the roadmap and engineering standards wording                                                                                                                                                                                                                                                                                                                                                                                                                         | Engineering lead                           | M4                  |
+| OPS-OI-03 | **Closed.** Architecture 10.9 now lists only platform jobs and defers every `app.job_*` time to database design 17.1; security model 14.3 anchors the audit chain head in `app.job_integrity_checks()` at 04:00, and the 03:00 backup records the chain heads present at dump time                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Architecture and database design authors   | M3                  |
+| OPS-OI-04 | **Closed.** Security model 16 now records that R2 has no write-only token type and accepts an "Object Read and Write" token limited to `pims-prod-backups` with compensating controls: bucket lock on every prefix, encryption of every object, deletion by lifecycle rules only, and the token held only in the `backup` and `production` environments                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Security model author, Owner               | M4                  |
+| OPS-OI-05 | FR-BKP-003 asks each run to verify that the backup is decryptable, but the runner holds only the public key by design (security model 16). This runbook verifies the plaintext before encryption and the encrypted header, and proves decryption in the quarterly drill; raise an SRS change request to reword FR-BKP-003                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Requirements owner                         | M4                  |
+| OPS-OI-06 | Re-check at M4 whether Supabase offers log-based alerts on the plan in use; otherwise decide on a log drain on Pro (7.1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Engineering lead                           | M4                  |
+| OPS-OI-07 | **Closed.** Security model 11.2 now allows tags `v*.*.*`, branches `release/v*` and `main` (for `workflow_dispatch`) in the `production` Environment, with a required reviewer; 2.4 updated                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Security model author                      | M1                  |
+| OPS-OI-08 | Paper re-entry carries the current business date because sales cannot be back-dated (FR-POS-032). Even with the compensating rules of 6.8.3, controlled-drug register entries in PIMS show the re-entry date, cash and daily totals land on the wrong day and loyalty abuse rules fire. SRS FR-POS-065 "Paper re-entry" (added in SRS 0.3.0) and database design `reenter_paper_sale()` (8.6.14) specify: an audited RPC for the Branch Manager or Owner that takes the paper reference and the actual date and time, accepts them only within the last 3 days and not before the last closed cash session, uses the batch written on paper as a FEFO override, posts register entries with the actual dispensing date, takes the next invoice number but stores the actual business date for reports, skips abuse rules R1 to R6, and posts cash to a designated re-entry session. Then replace 6.8.3 step 4 with it | Requirements owner, database design, Owner | Pilot entry (M2)    |
+| OPS-OI-09 | Choose the uptime and heartbeat monitor provider, checking that its free plan allows commercial use, and record it in 2.2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Engineering lead                           | M4                  |
+| OPS-OI-10 | **Closed.** Security model 11.1 lists the Storage S3 key `backup-nightly` and `BACKUP_HEARTBEAT_URL`, and T-BKP-06 and 16 accept `backup_reader` with `BYPASSRLS` and `pg_read_all_data` as C4; the staging check that Supabase allows these attributes stays part of 5.3.3 (documented fallback if not)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Engineering lead, security model author    | M4                  |
+| OPS-OI-11 | Verify how the pinned Supabase CLI applies a migration file containing `CREATE INDEX CONCURRENTLY` (database design 18 requires such files) before the first one is written, and document the result in 4.5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Engineering lead                           | M3                  |
+| OPS-OI-12 | The `health` function in architecture 10.7 reports database reachability and version; this runbook proposes that it also reports `degraded` when the last integrity run or reporting refresh is older than 26 hours, so that a stopped scheduler is detected without the database calling external services. Decide and align                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Architecture author                        | M4                  |
+| OPS-OI-13 | There is no maintenance or read-only mode; freezing writes during a restore relies on deactivating the organization by _break-glass_ SQL, which also blocks reading. Consider an Owner-visible maintenance flag checked by RPCs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Database design, engineering lead          | M4                  |
+| OPS-OI-14 | **Closed.** The architecture's repository layout and section 20.3 now keep `backup.yml` on every plan (FR-BKP-006, security model 16)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Architecture author                        | M4                  |
+| OPS-OI-15 | A Supabase access token carries all rights of the account that created it, across both organizations. Evaluate separate accounts per organization for CI tokens and record the decision in the security model                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Security model author                      | M4                  |
+| OPS-OI-16 | The Bangla texts in 8.4 and Appendix A need review by the Owner before they are printed for branches                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Owner                                      | M2                  |
+| OPS-OI-17 | A restore rolls `app.document_sequences` back, so numbers issued in the lost window could be reused (6.8.2). Database design 9.4 now qualifies "a restore continues every series without reuse" with the reconciliation of 6.8.2 and specifies the Owner-only, audited _break-glass_ functions `restore_reissue_document()` (re-issues a recovered document under its original number, business date and time) and `restore_close_number()` (posts a Voided placeholder `Lost in restore <incident ID>`). Implement them; until then, a reviewed script in `scripts/ops/` does both and is rehearsed in the drill                                                                                                                                                                                                                                                                                                     | Database design author, engineering lead   | Pilot entry (PL-E3) |
+| OPS-OI-18 | **Closed.** Security model 17.1 now sets the SEV-2 response at "within 1 hour during business hours; otherwise within 4 business hours", as in 8.1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Security model author                      | M2                  |
 
 ---
 
 ## 14. Revision history
 
-| Version | Date       | Author           | Change                                          |
-| ------- | ---------- | ---------------- | ----------------------------------------------- |
-| 1.0     | 2026-10-06 | Engineering lead | First complete operations runbook for M0 review |
+| Version | Date       | Author           | Change                                                                                                                                                                                                                                                               |
+| ------- | ---------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | 2026-10-06 | Engineering lead | First complete operations runbook for M0 review                                                                                                                                                                                                                      |
+| 1.1     | 2026-10-06 | Engineering lead | Backups and restores classed C4 with the Auth purge in R3 and drills; `security@` mailbox, `security.txt` monitor (MON-06) and renewal; production deployment refs; paper re-entry tracked against SRS FR-POS-065; OPS-OI-01, -03, -04, -07, -10, -14 and -18 closed |
 
 ---
 
@@ -2350,7 +2476,9 @@ and kept at every counter; invoice books are pre-printed per branch with numbers
    controlled-drug register.
 8. No returns, voids, loyalty enrollments or point redemptions on paper; write the loyalty card number so
    the purchase can be credited later.
-9. When PIMS works again, hand the invoice book to the Branch Manager for re-entry. Never throw it away.
+9. Keep the cash of paper sales apart in an envelope marked with the date. When PIMS works again, hand
+   the invoice book, the envelope and the paper controlled-drug register to the Branch Manager, who
+   re-enters them as described in runbook 6.8.3. Never throw the book away.
 
 **PIMS বন্ধ থাকলে করণীয়**
 
@@ -2372,7 +2500,8 @@ and kept at every counter; invoice books are pre-printed per branch with numbers
 
 ৮. ফেরত, বাতিল (ভয়েড), লয়্যালটি সদস্য করা বা পয়েন্ট ব্যবহার কাগজে করবেন না; লয়্যালটি কার্ড নম্বর লিখে রাখুন।
 
-৯. PIMS চালু হলে ইনভয়েস বইটি ম্যানেজারকে দিন। বই কখনো ফেলে দেবেন না।
+৯. কাগজের ইনভয়েসে বিক্রির নগদ টাকা তারিখ লেখা আলাদা খামে রাখুন। PIMS চালু হলে ইনভয়েস বই, খাম ও নিয়ন্ত্রিত ওষুধের
+রেজিস্টার ম্যানেজারকে দিন; ম্যানেজার রানবুক ৬.৮.৩ অনুযায়ী এন্ট্রি করবেন। বই কখনো ফেলে দেবেন না।
 
 **Paper invoice layout:** pre-printed number, branch, date, time, medicine (brand and strength), batch number,
 quantity, unit price, discount, line total, payment method, MFS transaction ID, customer phone (credit

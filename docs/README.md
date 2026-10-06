@@ -91,10 +91,10 @@ Accepted decisions at this version (status is maintained in the [ADR index](adr/
 
 ### 2.5 Operations and security
 
-| Document                                    | ID        | What it gives you                                                                                           |
-| ------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------- |
-| [Operations runbook](operations/runbook.md) | (pending) | Step-by-step procedures for deployment, migrations, backup, restore, monitoring and incidents (in progress) |
-| [Security policy](../SECURITY.md)           | n/a       | How to report a vulnerability privately, what to expect, and what is in scope                               |
+| Document                                    | ID           | What it gives you                                                                             |
+| ------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------- |
+| [Operations runbook](operations/runbook.md) | PIMS-OPS-001 | Step-by-step procedures for deployment, migrations, backup, restore, monitoring and incidents |
+| [Security policy](../SECURITY.md)           | n/a          | How to report a vulnerability privately, what to expect, and what is in scope                 |
 
 ## 3. Reading order for new engineers
 
@@ -202,7 +202,7 @@ with its document when the prefix is shared (see the notes).
 | `IF-*`, `UC-NN`, `LDB-NN`, `OE-NN`                                 | Interface requirements, use cases, logical database requirements, operating environment                                                      | SRS 3.1, 3.2, 3.5, 2.5                       |
 | `BO-NN`, `C-NN`, `A-NN`, `RK-NN`                                   | Business objectives, constraints, assumptions, requirement-level risks                                                                       | SRS 1.2, 2.6, 2.7, 2.8                       |
 | `OD-NN`, `CFG-NN`                                                  | Open Owner decisions, configuration parameters                                                                                               | SRS Appendix B and 3.3.8.8, Appendix A       |
-| `D-NN`                                                             | **Shared prefix:** dependencies in the SRS (D-01 to D-08); implementation deltas in the database design (D-01 to D-23)                       | SRS 2.7; database design 21                  |
+| `D-NN`                                                             | **Shared prefix:** dependencies in the SRS (D-01 to D-08); implementation deltas in the database design (D-01 to D-28)                       | SRS 2.7; database design 21                  |
 | `R1` to `R7`                                                       | Loyalty abuse rules                                                                                                                          | SRS 3.3.8.6                                  |
 | `R-NN`, `R-N`                                                      | **Shared prefix:** architecture risks (R-01 to R-10); database rounding rules (R-1 to R-5)                                                   | Architecture 22.1; database design 3.7       |
 | `ADR-NNNN`, `F-N`                                                  | Architecture decision records and their follow-up actions                                                                                    | [ADR index](adr/README.md)                   |
@@ -234,7 +234,6 @@ with its document when the prefix is shared (see the notes).
 
 | Document                                             | Purpose                                                                                     | Milestone | Reference                     |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------- | --------- | ----------------------------- |
-| `docs/operations/runbook.md`                         | Operational procedures (being written)                                                      | M0        | Roadmap M0-D1                 |
 | `CHANGELOG.md` (repository root)                     | Release history following Keep a Changelog                                                  | M0        | ENG-02                        |
 | POS UX specification                                 | Wireframes and the final POS keyboard map                                                   | M2        | Roadmap M2-D4; SRS Appendix C |
 | Data import templates and pilot quick guide (Bangla) | Templates for catalog, opening stock and dues; a counter guide for the pilot                | M2        | Roadmap M2-D12                |
@@ -249,7 +248,7 @@ with its document when the prefix is shared (see the notes).
 | DOC-OI-01 | Prefix `D-NN` is used for SRS dependencies and for database design deltas, and `R-NN` for architecture risks and database rounding rules. Rename one of each pair (for example deltas to `DD-NN`, rounding rules to `RND-N`) before more documents cite them | Engineering lead | M1        |
 | DOC-OI-02 | The database design has no document ID; assign `PIMS-DB-001`                                                                                                                                                                                                 | Engineering lead | M0 exit   |
 | DOC-OI-03 | Add a documentation check to CI: relative-link and anchor validation and Mermaid parsing for `docs/**/*.md` and the root Markdown files                                                                                                                      | Engineering lead | M1        |
-| DOC-OI-04 | Assign a document ID to the runbook when it is published (`PIMS-OPS-001` suggested) and add it to section 2.5                                                                                                                                                | Engineering lead | M0 exit   |
+| DOC-OI-04 | Closed 2026-10-06: the runbook is published as `PIMS-OPS-001` and listed in section 2.5                                                                                                                                                                      | Engineering lead | M0 exit   |
 
 ## 10. Revision history
 

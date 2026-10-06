@@ -230,7 +230,8 @@ Pharmacy_Inventory/
 ├── supabase/
 │   ├── config.toml             # local Supabase stack configuration
 │   ├── migrations/             # forward-only SQL migrations (M1 draft: 7 files)
-│   └── tests/database/         # pgTAP tests: platform guards, tenancy, purchase-to-sale flow
+│   └── tests/database/         # pgTAP (13 files): platform guards, tenancy, purchase-to-sale flow,
+│                               # regressions, dblink interleavings, RLS matrix, area suites
 ├── .env.example                # public VITE_* variables only; never secrets
 ├── CONTRIBUTING.md
 ├── README.md
@@ -245,13 +246,13 @@ Planned additions: `supabase/seed.sql` and `.github/workflows/deploy.yml` (M1),
 
 **Current milestone: M0 Foundation, in progress** (started 2026-10-06, target exit 2026-10-29).
 
-| Area                         | State                                                                                                                                                                                                               |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Design documentation         | Complete draft set in review: SRS, architecture, database design, security model, engineering standards, testing strategy, eight ADRs, glossary, roadmap; runbook in progress                                       |
-| Tooling and CI               | In place: strict TypeScript, linting, formatting, unit and end-to-end test harnesses, pgTAP database tests, CodeQL, secret scanning, dependency review, Dependabot                                                  |
-| Database (M1, started early) | Seven draft migrations covering tenancy, catalog, inventory ledger, purchasing, customers, loyalty groundwork, sales and reports, with first pgTAP suites; 23 documented deltas to close before the M1 freeze point |
-| Open M0 work                 | Branch protection and required checks, `CHANGELOG.md`, staging Supabase project, Cloudflare Pages project, SRS approval by the Owner                                                                                |
-| Not started                  | Application screens (M2), Edge Functions (M2), production environment (pilot preparation)                                                                                                                           |
+| Area                         | State                                                                                                                                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Design documentation         | Complete draft set in review: SRS, architecture, database design, security model, engineering standards, testing strategy, eight ADRs, glossary, roadmap, operations runbook                                                          |
+| Tooling and CI               | In place: strict TypeScript, linting, formatting, unit and end-to-end test harnesses, pgTAP database tests, CodeQL, secret scanning, dependency review, Dependabot                                                                    |
+| Database (M1, started early) | Seven draft migrations covering tenancy, catalog, inventory ledger, purchasing, customers, loyalty groundwork, sales and reports, with 13 pgTAP files (1,488 assertions); implementation deltas tracked in database design section 21 |
+| Open M0 work                 | Branch protection and required checks, `CHANGELOG.md`, staging Supabase project, Cloudflare Pages project, SRS approval by the Owner                                                                                                  |
+| Not started                  | Application screens (M2), Edge Functions (M2), production environment (pilot preparation)                                                                                                                                             |
 
 Milestone plan (target dates; the [roadmap](docs/roadmap.md) is authoritative and re-baselined at each
 milestone review):
