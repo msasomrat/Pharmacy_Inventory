@@ -1,31 +1,39 @@
-import { useTranslation } from 'react-i18next'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { RouterProvider } from 'react-router'
+import { Toaster } from 'sonner'
 
-import { SUPPORTED_LANGUAGES, type Language } from '@/i18n'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { AuthProvider } from '@/features/auth/auth-context'
+import { OrgProvider } from '@/features/org/org-context'
 
-const LANGUAGE_LABELS: Record<Language, string> = { en: 'English', bn: 'বাংলা' }
+import { router } from './router'
+import { ThemeProvider, useTheme } from './theme'
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false },
+    mutations: { retry: 0 }, // Never blindly retry writes; sales use idempotency keys instead.
+  },
+})
+
+function ThemedToaster() {
+  const { resolved } = useTheme()
+  return <Toaster theme={resolved} richColors position="top-right" closeButton />
+}
 
 export function App() {
-  const { t, i18n } = useTranslation()
-
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col justify-center gap-4 p-6">
-      <h1 className="text-3xl font-semibold text-brand-700">{t('app.name')}</h1>
-      <p className="text-lg">{t('app.tagline')}</p>
-      <p className="text-sm opacity-80">{t('app.status')}</p>
-      <label className="flex items-center gap-2 text-sm">
-        {t('app.language')}
-        <select
-          className="rounded border px-2 py-1"
-          value={i18n.language}
-          onChange={(event) => void i18n.changeLanguage(event.target.value)}
-        >
-          {SUPPORTED_LANGUAGES.map((lng) => (
-            <option key={lng} value={lng}>
-              {LANGUAGE_LABELS[lng]}
-            </option>
-          ))}
-        </select>
-      </label>
-    </main>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <OrgProvider>
+            <TooltipProvider>
+              <RouterProvider router={router} />
+              <ThemedToaster />
+            </TooltipProvider>
+          </OrgProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   )
 }

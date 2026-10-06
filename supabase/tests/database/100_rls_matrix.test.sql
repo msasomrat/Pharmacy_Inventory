@@ -19,7 +19,7 @@
 -- 3 row-level details, 4 cost columns per role, 5 RPCs (anon, cross-tenant, mixed ids, unassigned branch,
 -- unchanged-data fingerprint), 6 app.* helpers granted to authenticated.
 begin;
-select plan(806);
+select plan(809);
 
 -- =============================================================================
 -- Test helpers (rolled back with the file)
@@ -706,6 +706,7 @@ select is(
         'enroll_loyalty(uuid,uuid,uuid,uuid,payment_method,text)', 'leave_organization(uuid)',
         'lookup_loyalty(uuid,text)', 'my_invitations()', 'process_purchase_return(uuid,uuid,jsonb,text,uuid,text)',
         'process_sale_return(uuid,jsonb,text,uuid,payment_method)',
+        'quote_sale(uuid,jsonb,uuid,text,bigint,jsonb)',
         'receive_goods(uuid,uuid,jsonb,uuid,text,date,bigint,bigint,payment_method,text)',
         'record_customer_payment(uuid,uuid,bigint,payment_method,uuid,text)',
         'record_supplier_payment(uuid,bigint,payment_method,uuid,uuid,text,text)',
@@ -713,7 +714,7 @@ select is(
         'report_sales_summary(uuid,date,date,uuid)', 'report_stock_value(uuid)', 'search_medicines(uuid,text,integer)',
         'set_batch_price(uuid,bigint,bigint)', 'set_customer_credit_limit(uuid,bigint)', 'update_member(uuid,org_role,boolean,uuid[])',
         'void_sale(uuid,text,payment_method)'],
-  'schema public holds exactly the 27 RPC functions covered by this matrix');
+  'schema public holds exactly the 28 RPC functions covered by this matrix');
 select is(
   array(select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
          where n.nspname = 'public'
@@ -879,6 +880,7 @@ insert into tests.rls_calls (who, fn, sql, expect, note) values
   ('cross', 'adjust_stock', $$ select public.adjust_stock(tests.rid('a_batch_b1'), -1, 'loss', gen_random_uuid())::text $$, 'P0001:forbidden', 'of an A batch'),
   ('cross', 'set_batch_price', $$ select public.set_batch_price(tests.rid('a_batch_b1'), 1)::text $$, 'P0001:forbidden', 'of an A batch'),
   ('cross', 'search_medicines', $$ select count(*)::text from public.search_medicines(tests.rid('a_b1'), 'Napa') $$, 'P0001:forbidden', 'in A branch 1'),
+  ('cross', 'quote_sale', $$ select public.quote_sale(tests.rid('a_b1'), jsonb_build_array(jsonb_build_object('medicine_id', tests.rid('a_napa'), 'quantity', 1)))::text $$, 'P0001:forbidden', 'in A branch 1'),
   ('cross', 'set_customer_credit_limit', $$ select public.set_customer_credit_limit(tests.rid('a_customer'), 1)::text $$, 'P0001:forbidden', 'of an A customer'),
   ('cross', 'receive_goods', $$ select public.receive_goods(tests.rid('a_b1'), tests.rid('a_supplier'), jsonb_build_array(jsonb_build_object('medicine_id', tests.rid('a_napa'), 'batch_no', 'X', 'expiry_date', '2099-01-01', 'quantity', 1, 'unit_cost_paisa', 1, 'mrp_paisa', 2, 'sale_price_paisa', 2)), gen_random_uuid())::text $$, 'P0001:forbidden', 'into A branch 1'),
   ('cross', 'record_supplier_payment', $$ select public.record_supplier_payment(tests.rid('a_supplier'), 100, 'cash', gen_random_uuid())::text $$, 'P0001:forbidden', 'to an A supplier'),

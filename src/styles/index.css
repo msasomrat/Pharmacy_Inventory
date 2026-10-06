@@ -1,11 +1,172 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource/hind-siliguri/400.css';
+@import '@fontsource/hind-siliguri/500.css';
+@import '@fontsource/hind-siliguri/600.css';
 
-@theme {
-  --font-sans: 'Inter', 'Noto Sans Bengali', ui-sans-serif, system-ui, sans-serif;
-  --color-brand-600: oklch(0.55 0.13 165);
-  --color-brand-700: oklch(0.48 0.12 165);
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens. Colours are OKLCH; every surface/foreground pair meets WCAG AA contrast.
+ * Brand: pharmacy teal. Semantic: success (green), warning (amber), danger (red), info (sky).
+ */
+:root {
+  --background: oklch(0.985 0.003 180);
+  --foreground: oklch(0.21 0.02 200);
+  --surface: oklch(1 0 0);
+  --surface-muted: oklch(0.965 0.006 180);
+  --border: oklch(0.91 0.01 190);
+  --input: oklch(0.88 0.012 190);
+  --muted-foreground: oklch(0.5 0.02 200);
+  --primary: oklch(0.52 0.11 175);
+  --primary-hover: oklch(0.47 0.105 175);
+  --primary-foreground: oklch(0.99 0.01 175);
+  --primary-soft: oklch(0.95 0.035 175);
+  --primary-soft-foreground: oklch(0.38 0.08 175);
+  --success: oklch(0.55 0.14 150);
+  --success-soft: oklch(0.95 0.045 150);
+  --warning: oklch(0.64 0.15 70);
+  --warning-soft: oklch(0.96 0.06 85);
+  --danger: oklch(0.56 0.2 25);
+  --danger-soft: oklch(0.96 0.03 25);
+  --info: oklch(0.58 0.13 240);
+  --info-soft: oklch(0.95 0.03 240);
+  --ring: oklch(0.6 0.12 175);
+  --sidebar: oklch(0.2 0.025 200);
+  --sidebar-foreground: oklch(0.9 0.01 190);
+  --sidebar-muted: oklch(0.68 0.02 195);
+  --sidebar-active: oklch(0.29 0.04 185);
+  --chart-1: #007d65; /* validated: L-band, chroma, 3:1 vs #ffffff */
+  --chart-grid: oklch(0.93 0.008 190);
+  --shadow-color: 200 30% 20%;
 }
 
-:root {
-  color-scheme: light dark;
+.dark {
+  --background: oklch(0.17 0.015 200);
+  --foreground: oklch(0.94 0.008 190);
+  --surface: oklch(0.21 0.018 200);
+  --surface-muted: oklch(0.25 0.02 200);
+  --border: oklch(0.3 0.02 200);
+  --input: oklch(0.36 0.02 200);
+  --muted-foreground: oklch(0.7 0.02 195);
+  --primary: oklch(0.7 0.12 175);
+  --primary-hover: oklch(0.75 0.12 175);
+  --primary-foreground: oklch(0.18 0.03 180);
+  --primary-soft: oklch(0.3 0.05 178);
+  --primary-soft-foreground: oklch(0.86 0.08 175);
+  --success: oklch(0.72 0.15 150);
+  --success-soft: oklch(0.3 0.05 150);
+  --warning: oklch(0.8 0.14 80);
+  --warning-soft: oklch(0.32 0.05 80);
+  --danger: oklch(0.7 0.17 25);
+  --danger-soft: oklch(0.32 0.06 25);
+  --info: oklch(0.74 0.12 240);
+  --info-soft: oklch(0.3 0.05 240);
+  --ring: oklch(0.72 0.12 175);
+  --sidebar: oklch(0.14 0.015 200);
+  --sidebar-foreground: oklch(0.9 0.01 190);
+  --sidebar-muted: oklch(0.65 0.02 195);
+  --sidebar-active: oklch(0.24 0.035 185);
+  --chart-1: #3fa58e; /* validated against dark surface #0e1b1c */
+  --chart-grid: oklch(0.28 0.015 200);
+  --shadow-color: 200 30% 2%;
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', 'Hind Siliguri', ui-sans-serif, system-ui, sans-serif;
+  --font-bangla: 'Hind Siliguri', 'Inter Variable', ui-sans-serif, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-foreground: var(--primary-soft-foreground);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-grid: var(--chart-grid);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-active: var(--sidebar-active);
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --shadow-card:
+    0 1px 2px hsl(var(--shadow-color) / 0.06), 0 1px 3px hsl(var(--shadow-color) / 0.08);
+  --shadow-pop: 0 10px 30px -10px hsl(var(--shadow-color) / 0.35);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+  }
+  html[lang='bn'] body {
+    font-family: var(--font-bangla);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Receipt printing: only the receipt is printed, sized for 80 mm thermal paper. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-receipt,
+  .print-receipt * {
+    visibility: visible;
+  }
+  .print-receipt {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 72mm;
+    color: #000;
+    background: #fff;
+  }
+  @page {
+    size: 80mm auto;
+    margin: 4mm;
+  }
 }

@@ -27,5 +27,10 @@ export default defineConfig({
     port: PORT,
     reuseExistingServer: !isCI,
     timeout: 120_000,
+    // The UI tests run against a mocked Supabase API (e2e/support/mock-api.ts).
+    env: {
+      VITE_SUPABASE_URL: 'http://127.0.0.1:54321',
+      VITE_SUPABASE_ANON_KEY: 'e2e-anon-key-not-a-secret-000000',
+    },
   },
 })
