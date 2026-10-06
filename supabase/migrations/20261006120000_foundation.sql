@@ -123,9 +123,12 @@ create type public.cash_rounding as enum ('none', 'nearest_taka');
 
 -- Raises a business error with a stable machine-readable code in the DETAIL so clients can map
 -- it to a translated message. SQLSTATE P0001 (raise_exception).
+-- STABLE (not VOLATILE) so read-only helpers can call it without plpgsql_check warnings; it
+-- touches no data. IMMUTABLE callers raise directly instead, so the planner never pre-evaluates it.
 create or replace function app.fail(p_code text, p_message text, p_hint text default null)
 returns void
 language plpgsql
+stable
 set search_path = ''
 as $$
 begin
@@ -172,7 +175,7 @@ begin
   end if;
   for i in 1..n loop
     if p_weights[i] < 0 then
-      perform app.fail('invalid_weights', 'Allocation weights must be non-negative');
+      raise exception using errcode = 'P0001', message = 'Allocation weights must be non-negative', detail = 'invalid_weights';
     end if;
     weight_sum := weight_sum + p_weights[i];
   end loop;
@@ -222,8 +225,8 @@ begin
   elsif digits ~ '^01[3-9][0-9]{8}$' then
     return '+88' || digits;
   end if;
-  perform app.fail('invalid_phone', 'Invalid Bangladeshi mobile number', 'Use the format 01XXXXXXXXX');
-  return null;
+  raise exception using errcode = 'P0001', message = 'Invalid Bangladeshi mobile number',
+    detail = 'invalid_phone', hint = 'Use the format 01XXXXXXXXX';
 end;
 $$;
 
@@ -256,7 +259,7 @@ declare
   len integer := length(p_digits);
 begin
   if p_digits !~ '^[0-9]+$' then
-    perform app.fail('invalid_digits', 'Luhn input must be digits');
+    raise exception using errcode = 'P0001', message = 'Luhn input must be digits', detail = 'invalid_digits';
   end if;
   for i in 0..len - 1 loop
     d := substr(p_digits, len - i, 1)::integer;
