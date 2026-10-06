@@ -3,6 +3,12 @@
 # Creates a throwaway PostgreSQL cluster, loads a Supabase shim, applies every migration in order,
 # then runs all pgTAP tests. Requires PostgreSQL 15+ server binaries and pgTAP (pg_prove).
 # The authoritative run is `pnpm test:db` (real Supabase stack), which CI executes.
+#
+# Environment:
+#   TESTS_DIR  directory of *.sql pgTAP files to run (default: supabase/tests/database)
+#   SEED=1     also load supabase/seed.sql
+#   VERBOSE=1  print every assertion
+# Each run uses its own temporary cluster and Unix socket, so parallel runs never collide.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -38,7 +44,12 @@ if [ -f "$ROOT/supabase/seed.sql" ] && [ "${SEED:-0}" = "1" ]; then
   "${PSQL[@]}" -f "$ROOT/supabase/seed.sql"
 fi
 
-tests=("$ROOT"/supabase/tests/database/*.sql)
+TESTS_DIR="${TESTS_DIR:-$ROOT/supabase/tests/database}"
+tests=("$TESTS_DIR"/*.sql)
+# Shared helpers must always be installed first.
+if [ "$TESTS_DIR" != "$ROOT/supabase/tests/database" ]; then
+  tests=("$ROOT/supabase/tests/database/000_setup_test_helpers.test.sql" "${tests[@]}")
+fi
 if [ "${#tests[@]}" -eq 0 ]; then
   echo "No pgTAP tests found."
   exit 0
