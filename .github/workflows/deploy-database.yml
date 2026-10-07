@@ -45,6 +45,22 @@ jobs:
             postgres://*|postgresql://*) ;;
             *) echo "::error::SUPABASE_DB_URL must start with postgresql://"; exit 1 ;;
           esac
+          # Diagnose common copy/paste mistakes without ever printing the value.
+          url="$SUPABASE_DB_URL"
+          bad=0
+          fail() { echo "::error::$1"; bad=1; }
+          case "$url" in *[[:space:]]*) fail "SUPABASE_DB_URL contains a space or line break; paste it as one line" ;; esac
+          case "$url" in *'['*|*']'*) fail "SUPABASE_DB_URL contains [ or ]; remove the square brackets around the password" ;; esac
+          case "$url" in *'#'*) fail "Password contains # ; write it as %23" ;; esac
+          case "$url" in *'?'*) fail "Password contains ? ; write it as %3F" ;; esac
+          at_count=$(printf '%s' "$url" | tr -cd '@' | wc -c)
+          [ "$at_count" -gt 1 ] && fail "Password contains @ ; write it as %40"
+          if printf '%s' "$url" | grep -qE '%([^0-9A-Fa-f]|[0-9A-Fa-f][^0-9A-Fa-f]|[0-9A-Fa-f]?$)'; then
+            fail "Password contains a % that is not followed by two hex digits; write a literal % as %25"
+          fi
+          case "$url" in *@*.pooler.supabase.com:5432/postgres) ;; *) fail "SUPABASE_DB_URL must end with @aws-0-<region>.pooler.supabase.com:5432/postgres (Session pooler)" ;; esac
+          [ "$bad" -eq 0 ] || exit 1
+          echo "SUPABASE_DB_URL looks well-formed"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
