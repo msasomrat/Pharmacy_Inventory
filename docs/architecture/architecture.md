@@ -170,7 +170,7 @@ section 15.4).
 | C-06 | UI languages English and Bangla (bn-BD); currency BDT; time zone Asia/Dhaka (UTC+6, no DST)         | Business        |
 | C-07 | DGDA rules for Rx and controlled medicines                                                          | Regulation      |
 | C-08 | Start on free tiers; Supabase Pro (about USD 25 per month) only when triggers in section 20 are met | Budget          |
-| C-09 | Small team: no self-managed servers, one repository, pnpm and Node 22 LTS                           | Team            |
+| C-09 | Small team: no self-managed servers, one repository, pnpm and Node 24 LTS                           | Team            |
 
 ### 2.5 Assumptions (to be validated with the owner)
 
@@ -532,7 +532,7 @@ supporting libraries without their own ADR fall under the [ADR index](../adr/REA
 | Code quality             | ESLint (flat config, jsx-a11y), Prettier, Husky, lint-staged, commitlint                | Consistent style, Conventional Commits enforced locally and in CI                                                       | None                                        | [ADR index](../adr/README.md)                                                 |
 | CI/CD                    | GitHub Actions                                                                          | Native to the repository, free minutes for small teams, Supabase CLI support                                            | GitLab CI                                   | Backlog ([ADR index](../adr/README.md))                                       |
 | Monitoring               | Sentry (frontend), Supabase logs and reports, external uptime monitor                   | Low cost, adequate for one region and a small team                                                                      | Self-hosted Grafana stack                   | [ADR index](../adr/README.md)                                                 |
-| Package manager, runtime | pnpm, Node 22 LTS                                                                       | Fast, strict dependency resolution; LTS runtime                                                                         | npm, Yarn                                   | [ADR index](../adr/README.md)                                                 |
+| Package manager, runtime | pnpm, Node 24 LTS                                                                       | Fast, strict dependency resolution; LTS runtime                                                                         | npm, Yarn                                   | [ADR index](../adr/README.md)                                                 |
 | AI (M5)                  | Anthropic Claude API through the official TypeScript SDK in an Edge Function            | Strong reasoning and vision, structured outputs, prompt caching, batch discounts                                        | Other LLM providers                         | Backlog ([ADR index](../adr/README.md))                                       |
 
 ---

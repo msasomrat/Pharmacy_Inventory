@@ -72,7 +72,7 @@ Configuration (the delivery pipeline is specified in
 - One Pages project connected to the GitHub repository. The production branch is `production`, which only
   the release workflow fast-forwards to a release tag; every other branch, including `main`, builds as a
   preview with staging environment variables.
-- Build command `pnpm build`, output directory `dist/`, Node 22. Build watch paths skip builds for
+- Build command `pnpm build`, output directory `dist/`, Node 24. Build watch paths skip builds for
   documentation-only changes, protecting the monthly build allowance.
 - Security and caching headers come from `public/_headers` (copied to `dist/`); header values are owned
   by the [security model](../security/security-model.md#102-http-security-headers).

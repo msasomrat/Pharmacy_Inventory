@@ -79,7 +79,7 @@ git clone https://github.com/msasomrat/Pharmacy_Inventory.git
 cd Pharmacy_Inventory
 
 # 2. Toolchain
-nvm install && nvm use          # or install Node 22 another way
+nvm install && nvm use          # or install Node 24 another way
 corepack enable                 # provides the pinned pnpm 10.28.0
 
 # 3. Dependencies (also installs the Git hooks through Husky)
@@ -329,7 +329,7 @@ Write tests at the level where the rule lives ([testing strategy](docs/engineeri
 
 | Symptom                                                                  | Fix                                                                                                                                                             |
 | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install` fails with an engine error                                | Use Node 22.12 or later (`nvm use`) and run `corepack enable`                                                                                                   |
+| `pnpm install` fails with an engine error                                | Use Node 24.15 or later (`nvm use`) and run `corepack enable`                                                                                                   |
 | `pnpm db:start` fails: Docker not running or ports 54321 to 54324 in use | Start Docker; stop other Supabase projects (`pnpm exec supabase stop --all`) or whatever uses the ports                                                         |
 | `pnpm db:start` is slow or runs out of memory                            | Give Docker more memory, or start without optional services: `pnpm exec supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector,supavisor` |
 | The app shows "Invalid or missing environment variables"                 | Create `.env.local` from `.env.example` with the values from `pnpm exec supabase status -o env`                                                                 |

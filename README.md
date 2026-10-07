@@ -199,7 +199,7 @@ Exact versions are pinned in `package.json` and `pnpm-lock.yaml`; the rationale 
 | CI and supply chain      | GitHub Actions; CodeQL; gitleaks; Dependabot; dependency review; `pnpm audit`                                        | In place; deploy and backup workflows planned        |
 | Observability            | Sentry (frontend), Supabase logs, external uptime monitor                                                            | Sentry from M2; uptime monitor in M4                 |
 | AI                       | Anthropic Claude API through a server-side Edge Function                                                             | M5                                                   |
-| Toolchain                | Node.js 22 LTS (22.12.0 or later), pnpm 10.28.0, Supabase CLI 2.120, Docker                                          | In place                                             |
+| Toolchain                | Node.js 24 LTS (24.15.0 or later), pnpm 10.28.0, Supabase CLI 2.120, Docker                                          | In place                                             |
 
 ## Repository layout
 
@@ -273,7 +273,7 @@ milestone review):
 > This section is a placeholder. The complete and authoritative set-up guide, including prerequisites,
 > seed accounts and troubleshooting, is [CONTRIBUTING.md](CONTRIBUTING.md) (sections 2 and 3).
 
-You need Git, Node.js 22.12 or later, Corepack (for pnpm 10.28.0) and Docker. In outline:
+You need Git, Node.js 24.15 or later, Corepack (for pnpm 10.28.0) and Docker. In outline:
 
 ```bash
 corepack enable && pnpm install   # dependencies and Git hooks

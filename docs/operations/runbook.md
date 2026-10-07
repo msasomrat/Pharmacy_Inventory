@@ -257,7 +257,7 @@ values, the Production set holds production values):
 | `VITE_SENTRY_DSN`              | Variable | Web app build                      | C0    | Same project for both sets; environment tag differs                 |
 | `SENTRY_AUTH_TOKEN`            | Secret   | Source-map upload during the build | C4    | 12 months (security model 11.1)                                     |
 | `SENTRY_ORG`, `SENTRY_PROJECT` | Variable | Source-map upload                  | C0    | `pims`, `pims-web`                                                  |
-| `NODE_VERSION`, `PNPM_VERSION` | Variable | Build image                        | C0    | `22.12.0` and `10.28.0` (match `.nvmrc` and `packageManager`)       |
+| `NODE_VERSION`, `PNPM_VERSION` | Variable | Build image                        | C0    | `24` and `10.28.0` (match `.nvmrc` and `packageManager`)            |
 
 **Supabase** (per project):
 
