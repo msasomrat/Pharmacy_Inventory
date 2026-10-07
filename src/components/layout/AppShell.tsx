@@ -1,9 +1,10 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { Building2, Check, ChevronDown, LogOut, Menu, Search, ShieldCheck } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet } from 'react-router'
 
+import { prefetchCommonRoutes } from '@/app/routes'
 import { Logo } from '@/components/brand/logo'
 import { Button } from '@/components/ui/button'
 import {
@@ -42,7 +43,7 @@ function BranchSwitcher() {
         <Button
           variant="secondary"
           size="sm"
-          className="max-w-[16rem] gap-2"
+          className="min-w-0 max-w-[16rem] shrink gap-2"
           aria-label={t('nav.branch')}
         >
           <Building2 aria-hidden />
@@ -121,6 +122,8 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
 
+  useEffect(prefetchCommonRoutes, [])
+
   return (
     <div className="flex min-h-dvh bg-background">
       <a
@@ -152,11 +155,11 @@ export function AppShell() {
       </DialogPrimitive.Root>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:px-6">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/85 px-3 sm:gap-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:px-6">
           <Button
             variant="ghost"
             size="icon"
-            className="lg:hidden"
+            className="shrink-0 lg:hidden"
             onClick={() => setMobileOpen(true)}
             aria-label={t('nav.openMenu')}
           >
@@ -173,7 +176,7 @@ export function AppShell() {
             <Kbd>Ctrl</Kbd>
             <Kbd>K</Kbd>
           </button>
-          <div className="ml-auto flex items-center gap-1 md:ml-0">
+          <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1 md:ml-0">
             <LanguageToggle />
             <ThemeToggle />
             <UserMenu />

@@ -55,17 +55,17 @@ export function InventoryPage() {
                 <THead>
                   <TR>
                     <TH>{t('inventory.medicine')}</TH>
-                    <TH>{t('inventory.batch')}</TH>
+                    <TH className="hidden sm:table-cell">{t('inventory.batch')}</TH>
                     <TH>{t('inventory.expiry')}</TH>
                     <TH className="text-right">{t('inventory.onHand')}</TH>
-                    <TH className="text-right">{t('inventory.valueMrp')}</TH>
+                    <TH className="hidden text-right sm:table-cell">{t('inventory.valueMrp')}</TH>
                   </TR>
                 </THead>
                 <TBody>
                   {(expiring.data ?? []).map((b) => (
                     <TR key={b.batch_id}>
                       <TD className="font-medium">{b.brand_name}</TD>
-                      <TD className="font-mono text-xs">{b.batch_no}</TD>
+                      <TD className="hidden font-mono text-xs sm:table-cell">{b.batch_no}</TD>
                       <TD>
                         <span className="mr-2">{formatDate(b.expiry_date, lng)}</span>
                         <Badge
@@ -82,7 +82,7 @@ export function InventoryPage() {
                       <TD className="tabular text-right">
                         {formatNumber(b.quantity_on_hand, lng)}
                       </TD>
-                      <TD className="tabular text-right">
+                      <TD className="tabular hidden text-right sm:table-cell">
                         {formatTaka(paisa(b.stock_value_mrp_paisa), lng)}
                       </TD>
                     </TR>
@@ -110,7 +110,7 @@ export function InventoryPage() {
                 <THead>
                   <TR>
                     <TH>{t('inventory.medicine')}</TH>
-                    <TH>{t('inventory.rack')}</TH>
+                    <TH className="hidden sm:table-cell">{t('inventory.rack')}</TH>
                     <TH className="text-right">{t('inventory.sellable')}</TH>
                     <TH className="text-right">{t('inventory.reorderLevel')}</TH>
                   </TR>
@@ -122,7 +122,9 @@ export function InventoryPage() {
                         <p className="font-medium">{m.brand_name}</p>
                         <p className="text-xs text-muted-foreground">{m.generic_name}</p>
                       </TD>
-                      <TD>{(m.rack_location as string | null) ?? '—'}</TD>
+                      <TD className="hidden sm:table-cell">
+                        {(m.rack_location as string | null) ?? '—'}
+                      </TD>
                       <TD className="tabular text-right font-semibold text-danger">
                         {formatNumber(m.sellable_quantity, lng)}
                       </TD>

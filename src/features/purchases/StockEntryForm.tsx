@@ -36,6 +36,10 @@ import {
 import { SupplierDialog } from './SupplierDialog'
 
 type Mode = 'receive' | 'opening'
+
+/** One grid template for the header and every line on tablets/desktops; lines stack as cards on phones. */
+const LINE_GRID =
+  'md:grid-cols-[minmax(9rem,1fr)_7.5rem_9rem_5.5rem_5rem_6rem_6rem_6rem_6.5rem_2.5rem] md:gap-x-2'
 type PayMethod = 'cash' | 'bkash' | 'nagad' | 'rocket' | 'card' | 'bank_transfer'
 const PAY_METHODS: PayMethod[] = ['cash', 'bkash', 'nagad', 'rocket', 'card', 'bank_transfer']
 
@@ -247,7 +251,13 @@ export function StockEntryForm({ mode }: { mode: Mode }) {
   ) => {
     const err = errorsFor(i)[field]
     return (
-      <div>
+      <div className="min-w-0">
+        <span
+          aria-hidden
+          className="mb-1 block text-xs font-medium text-muted-foreground md:hidden"
+        >
+          {opts.label}
+        </span>
         <Input
           aria-label={`${opts.label} ${line.brandName}`}
           type={opts.type ?? 'text'}
@@ -351,101 +361,88 @@ export function StockEntryForm({ mode }: { mode: Mode }) {
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[960px] text-sm">
-                <thead className="border-b bg-surface-muted/60 text-xs tracking-wide text-muted-foreground uppercase">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium">{t('inventory.medicine')}</th>
-                    <th className="w-32 px-2 py-2 text-left font-medium">
-                      {t('purchases.batchNo')}
-                    </th>
-                    <th className="w-36 px-2 py-2 text-left font-medium">
-                      {t('purchases.expiry')}
-                    </th>
-                    <th className="w-24 px-2 py-2 text-left font-medium">{t('purchases.qty')}</th>
-                    <th className="w-20 px-2 py-2 text-left font-medium">
-                      {t(mode === 'receive' ? 'purchases.bonus' : 'purchases.extra')}
-                    </th>
-                    <th className="w-24 px-2 py-2 text-left font-medium">
-                      {t('purchases.unitCost')}
-                    </th>
-                    <th className="w-24 px-2 py-2 text-left font-medium">{t('purchases.mrp')}</th>
-                    <th className="w-24 px-2 py-2 text-left font-medium">
-                      {t('purchases.salePrice')}
-                    </th>
-                    <th className="w-28 px-3 py-2 text-right font-medium">
-                      {t('purchases.lineTotal')}
-                    </th>
-                    <th className="w-10" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
+              <div className="text-sm md:min-w-[960px]">
+                <div
+                  aria-hidden
+                  className={cn(
+                    LINE_GRID,
+                    'hidden border-b bg-surface-muted/60 px-3 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase md:grid',
+                  )}
+                >
+                  <span>{t('inventory.medicine')}</span>
+                  <span>{t('purchases.batchNo')}</span>
+                  <span>{t('purchases.expiry')}</span>
+                  <span>{t('purchases.qty')}</span>
+                  <span>{t(mode === 'receive' ? 'purchases.bonus' : 'purchases.extra')}</span>
+                  <span>{t('purchases.unitCost')}</span>
+                  <span>{t('purchases.mrp')}</span>
+                  <span>{t('purchases.salePrice')}</span>
+                  <span className="text-right">{t('purchases.lineTotal')}</span>
+                  <span />
+                </div>
+                <ul className="divide-y">
                   {lines.map((line, i) => {
                     const lt = lineTotal(line)
                     const dupe = showErrors && validation.dupes.has(line.key)
                     return (
-                      <tr key={line.key} className={cn('align-top', dupe && 'bg-danger-soft/40')}>
-                        <td className="px-3 py-2">
-                          <p className="font-medium">
-                            {line.brandName}{' '}
-                            <span className="font-normal text-muted-foreground">
-                              {line.strength}
-                            </span>
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {t('purchases.perUnit', { unit: line.unit })}
-                          </p>
-                          {dupe ? (
-                            <p className="text-xs text-danger">{t('purchases.err.duplicate')}</p>
-                          ) : null}
-                        </td>
-                        <td className="px-2 py-2">
-                          {cell(line, i, 'batchNo', {
-                            label: t('purchases.batchNo'),
-                            className: 'font-mono uppercase',
-                          })}
-                        </td>
-                        <td className="px-2 py-2">
-                          {cell(line, i, 'expiryMonth', {
-                            label: t('purchases.expiry'),
-                            type: 'month',
-                          })}
-                        </td>
-                        <td className="px-2 py-2">
-                          {cell(line, i, 'quantity', {
-                            label: t('purchases.qty'),
-                            inputMode: 'numeric',
-                          })}
-                        </td>
-                        <td className="px-2 py-2">
-                          {cell(line, i, 'bonus', {
-                            label: t(mode === 'receive' ? 'purchases.bonus' : 'purchases.extra'),
-                            inputMode: 'numeric',
-                            placeholder: '0',
-                          })}
-                        </td>
-                        <td className="px-2 py-2">
-                          {cell(line, i, 'unitCost', {
-                            label: t('purchases.unitCost'),
-                            inputMode: 'decimal',
-                          })}
-                        </td>
-                        <td className="px-2 py-2">
-                          {cell(line, i, 'mrp', {
-                            label: t('purchases.mrp'),
-                            inputMode: 'decimal',
-                          })}
-                        </td>
-                        <td className="px-2 py-2">
-                          {cell(line, i, 'salePrice', {
-                            label: t('purchases.salePrice'),
-                            inputMode: 'decimal',
-                            placeholder: line.mrp || '',
-                          })}
-                        </td>
-                        <td className="tabular px-3 py-2 pt-4 text-right">
+                      <li
+                        key={line.key}
+                        className={cn(
+                          LINE_GRID,
+                          'grid grid-cols-2 items-start gap-x-3 gap-y-3 px-4 py-4 sm:grid-cols-3 md:gap-y-0 md:px-3 md:py-2',
+                          dupe && 'bg-danger-soft/40',
+                        )}
+                      >
+                        <div className="col-span-2 flex items-start justify-between gap-2 sm:col-span-3 md:col-span-1 md:block">
+                          <div>
+                            <p className="font-medium">
+                              {line.brandName}{' '}
+                              <span className="font-normal text-muted-foreground">
+                                {line.strength}
+                              </span>
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {t('purchases.perUnit', { unit: line.unit })}
+                            </p>
+                            {dupe ? (
+                              <p className="text-xs text-danger">{t('purchases.err.duplicate')}</p>
+                            ) : null}
+                          </div>
+                          <span className="tabular shrink-0 font-semibold md:hidden">
+                            {lt === null ? '—' : formatTaka(paisa(lt), lng)}
+                          </span>
+                        </div>
+                        {cell(line, i, 'batchNo', {
+                          label: t('purchases.batchNo'),
+                          className: 'font-mono uppercase',
+                        })}
+                        {cell(line, i, 'expiryMonth', {
+                          label: t('purchases.expiry'),
+                          type: 'month',
+                        })}
+                        {cell(line, i, 'quantity', {
+                          label: t('purchases.qty'),
+                          inputMode: 'numeric',
+                        })}
+                        {cell(line, i, 'bonus', {
+                          label: t(mode === 'receive' ? 'purchases.bonus' : 'purchases.extra'),
+                          inputMode: 'numeric',
+                          placeholder: '0',
+                        })}
+                        {cell(line, i, 'unitCost', {
+                          label: t('purchases.unitCost'),
+                          inputMode: 'decimal',
+                        })}
+                        {cell(line, i, 'mrp', { label: t('purchases.mrp'), inputMode: 'decimal' })}
+                        {cell(line, i, 'salePrice', {
+                          label: t('purchases.salePrice'),
+                          inputMode: 'decimal',
+                          placeholder: line.mrp || '',
+                        })}
+                        <span className="tabular hidden pt-2 text-right md:block">
                           {lt === null ? '—' : formatTaka(paisa(lt), lng)}
-                        </td>
-                        <td className="py-2 pr-2">
+                        </span>
+                        <div className="flex items-end justify-end self-stretch md:block">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -456,12 +453,12 @@ export function StockEntryForm({ mode }: { mode: Mode }) {
                           >
                             <Trash2 aria-hidden />
                           </Button>
-                        </td>
-                      </tr>
+                        </div>
+                      </li>
                     )
                   })}
-                </tbody>
-              </table>
+                </ul>
+              </div>
             </div>
           )}
         </CardContent>

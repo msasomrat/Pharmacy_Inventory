@@ -8,19 +8,18 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 import { AuthGate } from './AuthGate'
 import { RouteError } from './RouteError'
+import { pageModules } from './routes'
 
-const DashboardPage = lazy(() =>
-  import('@/features/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })),
-)
-const PosPage = lazy(() => import('@/features/pos/PosPage').then((m) => ({ default: m.PosPage })))
+const DashboardPage = lazy(() => pageModules['/']().then((m) => ({ default: m.DashboardPage })))
+const PosPage = lazy(() => pageModules['/pos']().then((m) => ({ default: m.PosPage })))
 const MedicinesPage = lazy(() =>
-  import('@/features/medicines/MedicinesPage').then((m) => ({ default: m.MedicinesPage })),
+  pageModules['/medicines']().then((m) => ({ default: m.MedicinesPage })),
 )
 const PurchasesPage = lazy(() =>
-  import('@/features/purchases/PurchasesPage').then((m) => ({ default: m.PurchasesPage })),
+  pageModules['/purchases']().then((m) => ({ default: m.PurchasesPage })),
 )
 const InventoryPage = lazy(() =>
-  import('@/features/inventory/InventoryPage').then((m) => ({ default: m.InventoryPage })),
+  pageModules['/inventory']().then((m) => ({ default: m.InventoryPage })),
 )
 
 function page(node: ReactNode) {

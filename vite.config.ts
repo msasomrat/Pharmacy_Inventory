@@ -19,6 +19,27 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: true,
+    rolldownOptions: {
+      output: {
+        // Stable vendor chunks: a deploy that only changes app code leaves these cached in browsers
+        // (Cloudflare serves /assets/* as immutable). Charts stay with the dashboard's lazy chunk.
+        codeSplitting: {
+          groups: [
+            {
+              name: 'react',
+              test: /node_modules[\\/](react|react-dom|scheduler|react-router)[\\/]/,
+              priority: 30,
+            },
+            { name: 'supabase', test: /node_modules[\\/]@supabase[\\/]/, priority: 20 },
+            {
+              name: 'ui',
+              test: /node_modules[\\/](@radix-ui|@floating-ui|sonner|lucide-react|@tanstack|i18next|react-i18next)[\\/]/,
+              priority: 10,
+            },
+          ],
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',

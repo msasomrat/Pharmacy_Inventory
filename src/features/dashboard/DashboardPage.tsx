@@ -11,6 +11,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
@@ -28,7 +29,12 @@ import { addDays, businessDate, formatDate } from '@/lib/dates'
 import { formatNumber } from '@/lib/format'
 import { formatTaka, paisa } from '@/domain/money'
 
-import { SalesTrendChart, type TrendPoint } from './SalesTrendChart'
+import type { TrendPoint } from './SalesTrendChart'
+
+// The chart library is the heaviest dependency; load it after the numbers are on screen.
+const SalesTrendChart = lazy(() =>
+  import('./SalesTrendChart').then((m) => ({ default: m.SalesTrendChart })),
+)
 
 const EXPIRY_DAYS = 60
 
@@ -47,14 +53,16 @@ function Kpi({
 }) {
   const { t } = useTranslation()
   return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between">
+    <Card className="p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-2">
         <p className="text-sm text-muted-foreground">{label}</p>
-        <span className="grid size-9 place-items-center rounded-lg bg-primary-soft text-primary-soft-foreground">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary-soft-foreground sm:size-9">
           <Icon className="size-[18px]" aria-hidden />
         </span>
       </div>
-      <p className="tabular mt-2 text-2xl font-semibold tracking-tight">{muted ?? value}</p>
+      <p className="tabular mt-2 text-xl font-semibold tracking-tight sm:text-2xl">
+        {muted ?? value}
+      </p>
       {delta !== undefined && delta !== null && Number.isFinite(delta) ? (
         <p
           className={`mt-1 flex items-center gap-1 text-xs ${
@@ -161,7 +169,7 @@ export function DashboardPage() {
         }
       />
 
-      <section aria-label="KPIs" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label="KPIs" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {summary.isPending ? (
           Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[126px] rounded-lg" />)
         ) : (
@@ -204,7 +212,13 @@ export function DashboardPage() {
             <CardDescription>{t('dashboard.salesTrendBody')}</CardDescription>
           </CardHeader>
           <CardContent>
-            {summary.isPending ? <Skeleton className="h-64" /> : <SalesTrendChart data={trend} />}
+            {summary.isPending ? (
+              <Skeleton className="h-64" />
+            ) : (
+              <Suspense fallback={<Skeleton className="h-64" />}>
+                <SalesTrendChart data={trend} />
+              </Suspense>
+            )}
           </CardContent>
         </Card>
 

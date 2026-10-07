@@ -2,6 +2,7 @@ import { ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router'
 
+import { prefetchRoute } from '@/app/routes'
 import { Logo } from '@/components/brand/logo'
 import { Tooltip } from '@/components/ui/tooltip'
 import { cn } from '@/lib/cn'
@@ -34,6 +35,9 @@ export function SidebarNav({
                 to={item.to}
                 end={item.to === '/'}
                 onClick={onNavigate}
+                onMouseEnter={() => prefetchRoute(item.to)}
+                onFocus={() => prefetchRoute(item.to)}
+                onTouchStart={() => prefetchRoute(item.to)}
                 className={({ isActive }) =>
                   cn(
                     'group relative flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium text-sidebar-muted transition-colors hover:bg-sidebar-active hover:text-sidebar-foreground',

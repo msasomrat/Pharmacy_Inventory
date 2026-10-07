@@ -125,10 +125,10 @@ export function MedicinesPage() {
               <THead>
                 <TR>
                   <TH>{t('medicines.medicine')}</TH>
-                  <TH>{t('medicines.form')}</TH>
-                  <TH>{t('medicines.rack')}</TH>
-                  <TH className="text-right">{t('medicines.reorderLevel')}</TH>
-                  <TH>{t('medicines.barcodes')}</TH>
+                  <TH className="hidden md:table-cell">{t('medicines.form')}</TH>
+                  <TH className="hidden sm:table-cell">{t('medicines.rack')}</TH>
+                  <TH className="hidden text-right lg:table-cell">{t('medicines.reorderLevel')}</TH>
+                  <TH className="hidden xl:table-cell">{t('medicines.barcodes')}</TH>
                   {canManage ? <TH className="w-12" /> : null}
                 </TR>
               </THead>
@@ -153,14 +153,23 @@ export function MedicinesPage() {
                       <p className="text-xs text-muted-foreground">
                         {[m.genericName, m.manufacturerName].filter(Boolean).join(' · ') || '—'}
                       </p>
+                      {/* Phones: form and rack move into this cell; their columns are hidden. */}
+                      <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground md:hidden">
+                        {t(`medicines.forms.${m.dosageForm}`)}
+                        {m.rackLocation ? (
+                          <Badge tone="primary" className="font-mono sm:hidden">
+                            {m.rackLocation}
+                          </Badge>
+                        ) : null}
+                      </p>
                     </TD>
-                    <TD>
+                    <TD className="hidden md:table-cell">
                       <p>{t(`medicines.forms.${m.dosageForm}`)}</p>
                       <p className="text-xs text-muted-foreground">
                         {t('medicines.perUnit', { unit: m.baseUnitLabel })}
                       </p>
                     </TD>
-                    <TD>
+                    <TD className="hidden sm:table-cell">
                       {m.rackLocation ? (
                         <Badge tone="primary" className="font-mono">
                           {m.rackLocation}
@@ -169,10 +178,10 @@ export function MedicinesPage() {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TD>
-                    <TD className="tabular text-right">
+                    <TD className="tabular hidden text-right lg:table-cell">
                       {m.reorderLevel > 0 ? formatNumber(m.reorderLevel, lng) : '—'}
                     </TD>
-                    <TD className="max-w-40 truncate font-mono text-xs text-muted-foreground">
+                    <TD className="hidden max-w-40 truncate font-mono text-xs text-muted-foreground xl:table-cell">
                       {m.barcodes.join(', ') || '—'}
                     </TD>
                     {canManage ? (

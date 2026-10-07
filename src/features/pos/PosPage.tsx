@@ -309,7 +309,10 @@ export function PosPage() {
           />
         </div>
 
-        <Card className="min-h-[24rem] overflow-hidden">
+        {/* On phones the empty hint is hidden so the bill sits right under the search box. */}
+        <Card
+          className={cn('overflow-hidden lg:min-h-[24rem]', term.length < 2 && 'hidden lg:block')}
+        >
           {term.length < 2 ? (
             <EmptyState icon={PackageSearch} title={t('pos.searchHint')} />
           ) : results.isPending ? (

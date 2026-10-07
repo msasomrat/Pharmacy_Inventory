@@ -17,7 +17,7 @@ test.describe('owner (aal2): catalog and stock', () => {
     await page.goto('/medicines')
     await expect(page.getByText('2 medicines in your catalog')).toBeVisible()
     const napa = page.getByRole('row', { name: /Napa/ })
-    await expect(napa.getByText('A-3')).toBeVisible()
+    await expect(napa.getByText('A-3').filter({ visible: true })).toBeVisible()
     await expect(napa.getByText('Paracetamol · Beximco')).toBeVisible()
 
     await page.getByRole('button', { name: 'Add medicine' }).first().click()
@@ -81,7 +81,7 @@ test.describe('owner (aal2): catalog and stock', () => {
     await page.getByLabel('Qty Napa', { exact: true }).fill('100')
     await page.getByLabel('Bonus Napa', { exact: true }).fill('5')
     await page.getByLabel('Cost Napa', { exact: true }).fill('0.95')
-    await expect(page.getByRole('cell', { name: '৳95.00' })).toBeVisible()
+    await expect(page.getByText('৳95.00').filter({ visible: true }).first()).toBeVisible()
     await page.getByLabel('Paid now').fill('50')
     await page.getByRole('button', { name: 'Save goods receipt' }).click()
 
@@ -147,7 +147,7 @@ test.describe('owner (aal2): catalog and stock', () => {
     await mockBackend(page)
     await page.goto('/inventory')
     const napa = page.getByRole('row', { name: /Napa/ }).first()
-    await expect(napa.getByText('A-3')).toBeVisible()
+    await expect(napa.getByText('A-3').filter({ visible: true })).toBeVisible()
     await expect(napa.getByText('840')).toBeVisible()
     await expect(napa.getByText('2 batches')).toBeVisible()
   })

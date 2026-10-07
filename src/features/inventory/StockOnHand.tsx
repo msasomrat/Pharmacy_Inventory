@@ -127,10 +127,10 @@ export function StockOnHand() {
             <THead>
               <TR>
                 <TH>{t('inventory.medicine')}</TH>
-                <TH>{t('inventory.rack')}</TH>
+                <TH className="hidden sm:table-cell">{t('inventory.rack')}</TH>
                 <TH className="text-right">{t('inventory.onHand')}</TH>
                 <TH>{t('inventory.nextExpiry')}</TH>
-                <TH className="text-right">{t('inventory.price')}</TH>
+                <TH className="hidden text-right sm:table-cell">{t('inventory.price')}</TH>
               </TR>
             </THead>
             <TBody>
@@ -151,9 +151,14 @@ export function StockOnHand() {
                           count: r.batches,
                           n: formatNumber(r.batches, lng),
                         })}
+                        {r.rack ? (
+                          <Badge tone="primary" className="ml-1.5 font-mono sm:hidden">
+                            {r.rack}
+                          </Badge>
+                        ) : null}
                       </p>
                     </TD>
-                    <TD>
+                    <TD className="hidden sm:table-cell">
                       {r.rack ? (
                         <Badge tone="primary" className="font-mono">
                           {r.rack}
@@ -174,7 +179,7 @@ export function StockOnHand() {
                         </Badge>
                       ) : null}
                     </TD>
-                    <TD className="tabular text-right">
+                    <TD className="tabular hidden text-right sm:table-cell">
                       {formatTaka(paisa(r.salePricePaisa), lng)}
                     </TD>
                   </TR>
