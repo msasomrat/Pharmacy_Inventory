@@ -575,6 +575,18 @@ isOneToOne: false
       referencedColumns: ["organization_id","id"]
     }
                   ]
+                },"member_permissions": {
+                  Row: {
+                    "allowed": boolean,"membership_id": string,"organization_id": string,"permission": string,"updated_at": string,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "allowed": boolean,"membership_id": string,"organization_id": string,"permission": string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "allowed"?: boolean,"membership_id"?: string,"organization_id"?: string,"permission"?: string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Relationships: []
                 },"memberships": {
                   Row: {
                     "created_at": string,"created_by": string | null,"id": string,"is_active": boolean,"organization_id": string,"role": Database["public"]['Enums']["org_role"],"updated_at": string,"updated_by": string | null,"user_id": string
@@ -1133,6 +1145,11 @@ isOneToOne: false
 "leave_organization":
 { Args: { "p_organization_id": string }; Returns: undefined
                            },
+"list_members":
+{ Args: { "p_organization_id": string }; Returns: {
+              "branch_ids": (string)[],"created_at": string,"email": string,"full_name": string | null,"is_active": boolean,"last_sign_in_at": string | null,"membership_id": string,"overrides": Json,"role": Database["public"]['Enums']["org_role"],"user_id": string
+            }[]
+                           },
 "lookup_loyalty":
 { Args: { "p_card_or_phone": string,"p_organization_id": string }; Returns: {
               "card_id": string,"card_no": string,"customer_id": string,"customer_name": string,"discount_bp": number,"ends_on": string,"membership_id": string,"plan_name": string,"points_balance": number,"starts_on": string
@@ -1142,6 +1159,9 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: {
               "expires_at": string,"invitation_id": string,"organization_id": string,"organization_name": string,"role": Database["public"]['Enums']["org_role"]
             }[]
+                           },
+"my_permissions":
+{ Args: { "p_organization_id": string }; Returns: (string)[]
                            },
 "process_purchase_return":
 { Args: { "p_branch_id": string,"p_client_request_id": string,"p_items": Json,"p_note"?: string,"p_reason": string,"p_supplier_id": string }; Returns: Json
@@ -1184,6 +1204,9 @@ isOneToOne: false
               "branch_id": string,"branch_name": string,"expired_units": number,"sku_count": number,"units": number,"value_cost_paisa": number,"value_mrp_paisa": number
             }[]
                            },
+"revoke_invitation":
+{ Args: { "p_invitation_id": string }; Returns: undefined
+                           },
 "save_medicine":
 { Args: { "p_barcodes"?: (string)[],"p_base_unit_label"?: string,"p_branch_id"?: string,"p_brand_name": string,"p_dosage_form": Database["public"]['Enums']["dosage_form"],"p_generic_name"?: string,"p_is_active"?: boolean,"p_loyalty_eligible"?: boolean,"p_manufacturer_name"?: string,"p_medicine_id"?: string,"p_notes"?: string,"p_organization_id": string,"p_rack_location"?: string,"p_reorder_level"?: number,"p_schedule"?: Database["public"]['Enums']["drug_schedule"],"p_sku"?: string,"p_strength"?: string }; Returns: string
                            },
@@ -1197,6 +1220,9 @@ isOneToOne: false
                            },
 "set_customer_credit_limit":
 { Args: { "p_credit_limit_paisa": number,"p_customer_id": string }; Returns: undefined
+                           },
+"set_member_permissions":
+{ Args: { "p_membership_id": string,"p_overrides": Json }; Returns: (string)[]
                            },
 "update_member":
 { Args: { "p_branch_ids": (string)[],"p_is_active": boolean,"p_membership_id": string,"p_role": Database["public"]['Enums']["org_role"] }; Returns: undefined

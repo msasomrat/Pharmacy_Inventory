@@ -25,6 +25,7 @@ create table auth.users (
   phone text unique,
   raw_user_meta_data jsonb not null default '{}'::jsonb,
   raw_app_meta_data jsonb not null default '{}'::jsonb,
+  last_sign_in_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

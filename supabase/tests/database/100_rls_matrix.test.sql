@@ -19,7 +19,7 @@
 -- 3 row-level details, 4 cost columns per role, 5 RPCs (anon, cross-tenant, mixed ids, unassigned branch,
 -- unchanged-data fingerprint), 6 app.* helpers granted to authenticated.
 begin;
-select plan(813);
+select plan(840);
 
 -- =============================================================================
 -- Test helpers (rolled back with the file)
@@ -117,6 +117,7 @@ insert into tests.rls_read values
   ('memberships',              'O*',       'O*',       'O*', 'O*',       'O*',       'staff directory'),
   ('branch_assignments',       'O1,O2',    'O1,O2',    'O1,O2', 'O1,O2', 'O1,O2',    'staff directory'),
   ('invitations',              'O*',       '',         '',   '',         '',         'users.manage'),
+  ('member_permissions',       'O*',       '',         '',   '',         '',         'users.manage'),
   ('manufacturers',            'O*',       'O*',       'O*', 'O*',       'O*',       'shared catalog'),
   ('generics',                 'O*',       'O*',       'O*', 'O*',       'O*',       'shared catalog'),
   ('medicines',                'O*',       'O*',       'O*', 'O*',       'O*',       'shared catalog'),
@@ -545,6 +546,12 @@ select l, tests.rid(lower(l) || '_org'), tests.rid(lower(l) || '_b1'), tests.rid
        tests.rid(lower(l) || '_spare')
   from unnest(array['A', 'B']) l;
 
+-- One per-member override per organization (managers lose pricing.manage), so member_permissions has rows.
+insert into public.member_permissions (organization_id, membership_id, permission, allowed)
+select m.organization_id, m.id, 'pricing.manage', false
+  from public.memberships m
+ where m.role = 'manager' and m.organization_id in (select org_id from tests.rls_orgs);
+
 select tests.rid('owner_a') as owner_a, tests.rid('manager_a') as manager_a, tests.rid('salesman_a') as salesman_a,
        tests.rid('accountant_a') as accountant_a, tests.rid('auditor_a') as auditor_a,
        tests.rid('owner_b') as owner_b, tests.rid('manager_b') as manager_b, tests.rid('salesman_b') as salesman_b,
@@ -557,6 +564,7 @@ insert into tests.rls_rels (rel, relkind, pk_expr, upd_col, ins_sql)
 select c.relname, c.relkind,
        case c.relname
          when 'organization_settings' then 't.organization_id::text'
+         when 'member_permissions' then 't.membership_id::text || ''/'' || t.permission'
          when 'branch_medicine_settings' then 't.branch_id::text || ''/'' || t.medicine_id::text'
          when 'daily_branch_sales' then 't.branch_id::text || ''/'' || t.business_date::text'
          when 'customer_balances' then 't.customer_id::text'
@@ -648,12 +656,12 @@ select is(
         'customer_balances', 'customer_ledger_entries', 'customers', 'daily_branch_sales', 'generics',
         'goods_receipt_items', 'goods_receipts', 'inventory_movements', 'invitations', 'loyalty_cards',
         'loyalty_memberships', 'loyalty_plans', 'loyalty_point_ledger', 'loyalty_usage_daily', 'manufacturers',
-        'medicine_barcodes', 'medicine_packs', 'medicines', 'memberships', 'opening_stock_loads',
+        'medicine_barcodes', 'medicine_packs', 'medicines', 'member_permissions', 'memberships', 'opening_stock_loads',
         'organization_settings', 'organizations', 'prescriptions', 'profiles', 'purchase_return_items',
         'purchase_returns', 'sale_item_batches', 'sale_items', 'sale_payments', 'sale_return_items', 'sale_returns',
         'sales', 'stock_adjustments', 'supplier_balances', 'supplier_ledger_entries', 'supplier_payments',
         'suppliers'],
-  'schema public holds exactly the 39 tables and 3 views covered by this matrix');
+  'schema public holds exactly the 40 tables and 3 views covered by this matrix');
 select is(
   array(select c.relname::text from pg_class c join pg_namespace n on n.oid = c.relnamespace
          where n.nspname = 'public' and c.relkind in ('r', 'p') and not c.relrowsecurity order by 1),
@@ -704,19 +712,19 @@ select is(
         'create_branch(uuid,text,text,text,text)', 'create_organization(text,text,text,text)',
         'create_sale(uuid,jsonb,jsonb,uuid,uuid,text,bigint,jsonb,text)',
         'enroll_loyalty(uuid,uuid,uuid,uuid,payment_method,text)', 'leave_organization(uuid)',
-        'lookup_loyalty(uuid,text)', 'my_invitations()', 'process_purchase_return(uuid,uuid,jsonb,text,uuid,text)',
+        'list_members(uuid)', 'lookup_loyalty(uuid,text)', 'my_invitations()', 'my_permissions(uuid)', 'process_purchase_return(uuid,uuid,jsonb,text,uuid,text)',
         'process_sale_return(uuid,jsonb,text,uuid,payment_method)',
         'quote_sale(uuid,jsonb,uuid,text,bigint,jsonb)',
         'receive_goods(uuid,uuid,jsonb,uuid,text,date,bigint,bigint,payment_method,text)',
         'record_customer_payment(uuid,uuid,bigint,payment_method,uuid,text)',
         'record_supplier_payment(uuid,bigint,payment_method,uuid,uuid,text,text)',
         'replace_loyalty_card(uuid,text,text)', 'report_expiring_stock(uuid,integer)', 'report_low_stock(uuid)',
-        'report_sales_summary(uuid,date,date,uuid)', 'report_stock_value(uuid)',
+        'report_sales_summary(uuid,date,date,uuid)', 'report_stock_value(uuid)', 'revoke_invitation(uuid)',
         'save_medicine(uuid,text,dosage_form,uuid,text,text,text,text,drug_schedule,boolean,text,text[],text,boolean,uuid,text,integer)',
         'search_medicines(uuid,text,integer)',
-        'set_batch_price(uuid,bigint,bigint)', 'set_customer_credit_limit(uuid,bigint)', 'update_member(uuid,org_role,boolean,uuid[])',
+        'set_batch_price(uuid,bigint,bigint)', 'set_customer_credit_limit(uuid,bigint)', 'set_member_permissions(uuid,jsonb)', 'update_member(uuid,org_role,boolean,uuid[])',
         'void_sale(uuid,text,payment_method)'],
-  'schema public holds exactly the 29 RPC functions covered by this matrix');
+  'schema public holds exactly the 33 RPC functions covered by this matrix');
 select is(
   array(select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
          where n.nspname = 'public'
@@ -877,6 +885,10 @@ insert into tests.rls_calls (who, fn, sql, expect, note) values
   ('cross', 'my_invitations', $$ select count(*)::text from public.my_invitations() where organization_id = tests.rid('a_org') $$, 'ok:0', 'lists none of organization A''s invitations'),
   ('cross', 'accept_invitation', $$ select public.accept_invitation(tests.rid('a_invitation'))::text $$, 'P0001:invalid_invitation', 'addressed to someone else in A'),
   ('cross', 'update_member', $$ select public.update_member(tests.rid('a_manager_membership'), 'owner', true, '{}')::text $$, 'P0001:forbidden', 'of a member of A'),
+  ('cross', 'my_permissions', $$ select public.my_permissions(tests.rid('a_org'))::text $$, 'ok:{}', 'holds nothing in organization A'),
+  ('cross', 'list_members', $$ select count(*)::text from public.list_members(tests.rid('a_org')) $$, 'P0001:forbidden', 'of organization A'),
+  ('cross', 'set_member_permissions', $$ select public.set_member_permissions(tests.rid('a_manager_membership'), '{"sales.void": true}')::text $$, 'P0001:forbidden', 'of a member of A'),
+  ('cross', 'revoke_invitation', $$ select public.revoke_invitation(tests.rid('a_invitation'))::text $$, 'P0001:forbidden', 'of organization A'),
   ('cross', 'leave_organization', $$ select public.leave_organization(tests.rid('a_org'))::text $$, 'P0001:not_found', 'of organization A'),
   ('cross', 'add_opening_stock', $$ select public.add_opening_stock(tests.rid('a_b1'), jsonb_build_array(jsonb_build_object('medicine_id', tests.rid('a_napa'), 'batch_no', 'X', 'expiry_date', '2099-01-01', 'quantity', 1, 'cost_paisa', 1, 'mrp_paisa', 2, 'sale_price_paisa', 2)), gen_random_uuid())::text $$, 'P0001:forbidden', 'into A branch 1'),
   ('cross', 'adjust_stock', $$ select public.adjust_stock(tests.rid('a_batch_b1'), -1, 'loss', gen_random_uuid())::text $$, 'P0001:forbidden', 'of an A batch'),
