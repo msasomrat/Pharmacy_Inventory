@@ -8,6 +8,8 @@ export const pageModules = {
   '/inventory': () => import('@/features/inventory/InventoryPage'),
   '/medicines': () => import('@/features/medicines/MedicinesPage'),
   '/purchases': () => import('@/features/purchases/PurchasesPage'),
+  '/customers': () => import('@/features/customers/CustomersPage'),
+  '/loyalty': () => import('@/features/loyalty/LoyaltyPage'),
 } as const
 
 export type PagePath = keyof typeof pageModules

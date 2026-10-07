@@ -5,9 +5,11 @@ import {
   MAX_PAISA,
   MoneyError,
   addPaisa,
+  bpToPercentText,
   formatTaka,
   multiplyPaisa,
   paisa,
+  parsePercentBp,
   parseTaka,
   percentOf,
 } from './money'
@@ -101,5 +103,26 @@ describe('formatTaka', () => {
 
   it('renders Bangla digits', () => {
     expect(formatTaka(paisa(123456), 'bn')).toBe('৳১,২৩৪.৫৬')
+  })
+})
+
+describe('parsePercentBp / bpToPercentText', () => {
+  it('parses percentages to basis points exactly', () => {
+    expect(parsePercentBp('5')).toBe(500)
+    expect(parsePercentBp('7.5')).toBe(750)
+    expect(parsePercentBp(' 12.25 % ')).toBe(1225)
+    expect(parsePercentBp('0')).toBe(0)
+    expect(parsePercentBp('100')).toBe(10_000)
+  })
+  it('rejects invalid or out-of-range input', () => {
+    expect(() => parsePercentBp('')).toThrow(MoneyError)
+    expect(() => parsePercentBp('-1')).toThrow(MoneyError)
+    expect(() => parsePercentBp('1.234')).toThrow(MoneyError)
+    expect(() => parsePercentBp('100.5')).toThrow(MoneyError)
+  })
+  it('formats basis points without trailing zeros', () => {
+    expect(bpToPercentText(500)).toBe('5')
+    expect(bpToPercentText(750)).toBe('7.5')
+    expect(bpToPercentText(1225)).toBe('12.25')
   })
 })

@@ -18,3 +18,10 @@ export function isValidBdPhone(input: string): boolean {
     return false
   }
 }
+
+/** "+8801711223344" -> "01711-223344" for display. */
+export function displayPhone(phone: string | null): string {
+  if (!phone) return ''
+  const local = phone.replace(/^\+88/, '')
+  return local.length === 11 ? `${local.slice(0, 5)}-${local.slice(5)}` : local
+}

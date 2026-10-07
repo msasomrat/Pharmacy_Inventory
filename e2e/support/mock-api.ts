@@ -181,6 +181,88 @@ export const CATALOG = [
   },
 ]
 
+export const CUSTOMERS = [
+  {
+    id: 'cu1',
+    name: 'Karim Uddin',
+    phone: '+8801811223344',
+    address: null,
+    notes: null,
+    is_active: true,
+    credit_limit_paisa: 500000,
+  },
+  {
+    id: 'cu2',
+    name: 'Rahim Mia',
+    phone: '+8801711000000',
+    address: null,
+    notes: null,
+    is_active: true,
+    credit_limit_paisa: 0,
+  },
+  {
+    id: 'cu3',
+    name: 'Salma Begum',
+    phone: '+8801911000111',
+    address: 'Mohammadpur',
+    notes: null,
+    is_active: true,
+    credit_limit_paisa: 0,
+  },
+]
+
+const PLANS = [
+  {
+    id: 'pl3',
+    name: '3-Month Card',
+    duration_months: 3,
+    fee_paisa: 10000,
+    discount_bp: 500,
+    max_discount_per_invoice_paisa: null,
+    points_per_100_taka: 1,
+    point_value_paisa: 100,
+    min_redeem_points: 20,
+    is_active: true,
+    sort_order: 1,
+  },
+  {
+    id: 'pl6',
+    name: '6-Month Card',
+    duration_months: 6,
+    fee_paisa: 0,
+    discount_bp: 0,
+    max_discount_per_invoice_paisa: null,
+    points_per_100_taka: 0,
+    point_value_paisa: 0,
+    min_redeem_points: 0,
+    is_active: false,
+    sort_order: 2,
+  },
+]
+
+const MEMBERSHIPS = [
+  {
+    id: 'lm1',
+    status: 'active',
+    starts_on: dayOffset(-30),
+    ends_on: dayOffset(150),
+    customer_id: 'cu1',
+    customers: { name: 'Karim Uddin', phone: '+8801811223344' },
+    loyalty_cards: { id: 'c1', card_no: '8000000011', is_active: true },
+    loyalty_plans: { name: '6-Month Card' },
+  },
+  {
+    id: 'lm2',
+    status: 'active',
+    starts_on: dayOffset(-120),
+    ends_on: dayOffset(-30),
+    customer_id: 'cu2',
+    customers: { name: 'Rahim Mia', phone: '+8801711000000' },
+    loyalty_cards: { id: 'c2', card_no: '8000000045', is_active: true },
+    loyalty_plans: { name: '3-Month Card' },
+  },
+]
+
 /** Every RPC call the UI makes, for assertions on what was sent to the server. */
 export interface RpcCall {
   fn: string
@@ -291,6 +373,34 @@ export async function mockBackend(
       },
     ]),
   )
+
+  // Writes to tables are recorded as calls named "<METHOD> <table>" for assertions.
+  const writable = (table: string, rows: (url: URL) => unknown[], single?: unknown) =>
+    page.route(`${SUPABASE_URL}/rest/v1/${table}*`, async (route) => {
+      const request = route.request()
+      const url = new URL(request.url())
+      if (request.method() === 'GET') {
+        return single !== undefined ? json(route, single) : list(route, rows(url))
+      }
+      calls.push({
+        fn: `${request.method()} ${table}`,
+        body: (request.postDataJSON() ?? {}) as Record<string, unknown>,
+      })
+      if (request.method() === 'POST') return json(route, { id: `${table}-new` }, 201)
+      return route.fulfill({ status: 204, body: '' })
+    })
+  await writable('customers', () => CUSTOMERS)
+  await page.route(`${SUPABASE_URL}/rest/v1/customer_balances*`, (route) =>
+    json(route, [{ customer_id: 'cu1', balance_paisa: 35000 }]),
+  )
+  await writable('loyalty_memberships', (url) =>
+    // The customers page asks only for current memberships (ends_on >= today).
+    url.search.includes('ends_on=gte')
+      ? MEMBERSHIPS.filter((m) => m.ends_on >= dayOffset(0))
+      : MEMBERSHIPS,
+  )
+  await writable('loyalty_plans', () => PLANS)
+  await writable('organization_settings', () => [], { loyalty_enabled: true })
 
   await page.route(`${SUPABASE_URL}/rest/v1/rpc/**`, async (route) => {
     const fn = new URL(route.request().url()).pathname.split('/').pop() ?? ''
@@ -456,6 +566,20 @@ export async function mockBackend(
           total_paisa: 9500,
           replayed: false,
         })
+      case 'enroll_loyalty':
+        return json(route, {
+          membership_id: 'lm-new',
+          card_no: '8000000029',
+          starts_on: dayOffset(0),
+          ends_on: dayOffset(90),
+          fee_paisa: 10000,
+          replayed: false,
+        })
+      case 'cancel_loyalty_membership':
+      case 'set_customer_credit_limit':
+        return route.fulfill({ status: 204, body: '' })
+      case 'replace_loyalty_card':
+        return json(route, '8000000037')
       case 'add_opening_stock':
         return json(route, ((body.p_items ?? []) as unknown[]).length)
       default:

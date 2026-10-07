@@ -6,7 +6,15 @@ import { mockBackend } from './support/mock-api'
 // their card or collapse into cards). Runs once, at the narrowest common width.
 test.use({ viewport: { width: 360, height: 780 } })
 
-const PAGES = ['/', '/pos', '/inventory', '/medicines', '/purchases'] as const
+const PAGES = [
+  '/',
+  '/pos',
+  '/inventory',
+  '/medicines',
+  '/purchases',
+  '/customers',
+  '/loyalty',
+] as const
 
 for (const path of PAGES) {
   test(`${path} fits a 360px phone`, async ({ page }, info) => {

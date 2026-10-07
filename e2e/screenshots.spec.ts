@@ -101,3 +101,30 @@ test('inventory', async ({ page }) => {
   await page.getByText('Stock on hand').waitFor()
   await shot(page, 'inventory')
 })
+
+test('customers', async ({ page }) => {
+  await mockBackend(page)
+  await page.goto('/customers')
+  await page.getByRole('row', { name: /Karim Uddin/ }).waitFor()
+  await shot(page, 'customers')
+})
+
+test('loyalty enroll card', async ({ page }) => {
+  await mockBackend(page)
+  await page.goto('/customers')
+  await page.getByRole('button', { name: 'Give Salma Begum a loyalty card' }).click()
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /Enroll · collect/ })
+    .click()
+  await page.getByTestId('card-no').waitFor()
+  await shot(page, 'loyalty-card')
+})
+
+test('loyalty plans', async ({ page }) => {
+  await mockBackend(page)
+  await page.goto('/loyalty')
+  await page.getByRole('tab', { name: 'Plans' }).click()
+  await page.getByRole('region', { name: '3-Month Card' }).waitFor()
+  await shot(page, 'loyalty-plans')
+})

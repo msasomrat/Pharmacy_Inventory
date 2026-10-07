@@ -10,6 +10,13 @@ const PERMISSIONS = {
   'purchases.receive': ['owner', 'manager'],
   'suppliers.manage': ['owner', 'manager'],
   'stock.adjust': ['owner', 'manager'],
+  'customers.manage': ['owner', 'manager', 'salesman'],
+  // set_customer_credit_limit additionally requires the owner or manager role.
+  'customers.credit_limit': ['owner', 'manager'],
+  'loyalty.enroll': ['owner', 'manager', 'salesman'],
+  'loyalty.cancel': ['owner', 'manager'],
+  'loyalty.manage_plans': ['owner'],
+  'org.settings.manage': ['owner'],
 } as const satisfies Record<string, readonly OrgRole[]>
 
 export type Permission = keyof typeof PERMISSIONS

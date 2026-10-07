@@ -90,3 +90,20 @@ export function formatTaka(amount: Paisa, locale: DisplayLocale = 'en'): string 
   const text = `${negative ? '-' : ''}৳${grouped}.${fraction}`
   return locale === 'bn' ? toBanglaDigits(text) : text
 }
+
+const PERCENT_PATTERN = /^(\d{1,3})(?:\.(\d{1,2}))?$/
+
+/** Parses a percentage like "5", "7.5" or "12.25" into basis points (500, 750, 1225) without floats. */
+export function parsePercentBp(input: string): BasisPoints {
+  const match = PERCENT_PATTERN.exec(input.trim().replace(/%$/, '').trim())
+  if (!match) throw new MoneyError(`Invalid percentage: "${input}"`)
+  const [, whole = '0', fraction = ''] = match
+  const bp = Number(whole) * 100 + Number(fraction.padEnd(2, '0'))
+  if (bp > 10_000) throw new MoneyError(`Percentage above 100: "${input}"`)
+  return bp
+}
+
+/** 750 -> "7.5" (for inputs and labels). */
+export function bpToPercentText(bp: BasisPoints): string {
+  return (bp / 100).toFixed(2).replace(/\.?0+$/, '')
+}
