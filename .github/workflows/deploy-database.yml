@@ -1,11 +1,14 @@
 name: Deploy database
 
-# Applies pending migrations in supabase/migrations to the production Supabase project.
+# Applies pending migrations in supabase/migrations to the production Supabase database.
 # Manual only, guarded by the `production` GitHub Environment (add a required reviewer there).
-# Secrets (Settings -> Environments -> production -> Environment secrets):
-#   SUPABASE_ACCESS_TOKEN  personal access token from supabase.com/dashboard/account/tokens
-#   SUPABASE_DB_PASSWORD   database password chosen when the project was created
-#   SUPABASE_PROJECT_REF   project reference id (the xxxx in https://xxxx.supabase.co)
+# It connects straight to Postgres, so no Supabase account token is needed (least privilege).
+#
+# Secret (Settings -> Environments -> production -> Environment secrets):
+#   SUPABASE_DB_URL  the "Session pooler" connection string from Supabase -> Connect,
+#                    with [YOUR-PASSWORD] replaced by the database password, e.g.
+#                    postgresql://postgres.<ref>:<password>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres
+#                    (GitHub runners have no IPv6, so the direct db.<ref>.supabase.co host does not work.)
 on:
   workflow_dispatch:
     inputs:
@@ -30,27 +33,26 @@ jobs:
     timeout-minutes: 15
     environment: production
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
-      - name: Check secrets are configured
+      - name: Check secret is configured
         run: |
-          missing=0
-          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_REF; do
-            if [ -z "${!name}" ]; then echo "::error::Missing secret $name in the production environment"; missing=1; fi
-          done
-          exit $missing
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::Missing secret SUPABASE_DB_URL in the production environment"; exit 1
+          fi
+          case "$SUPABASE_DB_URL" in
+            *YOUR-PASSWORD*) echo "::error::Replace [YOUR-PASSWORD] in SUPABASE_DB_URL with the real password"; exit 1 ;;
+            postgres://*|postgresql://*) ;;
+            *) echo "::error::SUPABASE_DB_URL must start with postgresql://"; exit 1 ;;
+          esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
           version: 2.120.0
-      - name: Link project
-        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
       - name: Pending migrations (dry run)
-        run: supabase db push --dry-run
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --dry-run
       - name: Apply migrations
         if: inputs.mode == 'apply'
-        run: supabase db push
+        run: supabase db push --db-url "$SUPABASE_DB_URL"
       - name: Migration status
-        run: supabase migration list
+        run: supabase migration list --db-url "$SUPABASE_DB_URL"
