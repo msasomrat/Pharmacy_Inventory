@@ -22,6 +22,10 @@ const CustomersPage = lazy(() =>
   pageModules['/customers']().then((m) => ({ default: m.CustomersPage })),
 )
 const LoyaltyPage = lazy(() => pageModules['/loyalty']().then((m) => ({ default: m.LoyaltyPage })))
+const ReportsPage = lazy(() => pageModules['/reports']().then((m) => ({ default: m.ReportsPage })))
+const SettingsPage = lazy(() =>
+  pageModules['/settings']().then((m) => ({ default: m.SettingsPage })),
+)
 const InventoryPage = lazy(() =>
   pageModules['/inventory']().then((m) => ({ default: m.InventoryPage })),
 )
@@ -45,8 +49,8 @@ export const router = createBrowserRouter([
           { path: 'purchases', element: page(<PurchasesPage />) },
           { path: 'customers', element: page(<CustomersPage />) },
           { path: 'loyalty', element: page(<LoyaltyPage />) },
-          { path: 'reports', element: <ComingSoon titleKey="nav.reports" /> },
-          { path: 'settings', element: <ComingSoon titleKey="nav.settings" /> },
+          { path: 'reports', element: page(<ReportsPage />) },
+          { path: 'settings', element: page(<SettingsPage />) },
           { path: '*', element: <ComingSoon titleKey="nav.dashboard" /> },
         ],
       },

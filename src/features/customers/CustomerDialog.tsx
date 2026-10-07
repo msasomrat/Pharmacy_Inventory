@@ -19,7 +19,6 @@ import { Input } from '@/components/ui/input'
 import { MoneyError, parseTaka } from '@/domain/money'
 import { isValidBdPhone, normalizeBdPhone } from '@/domain/phone'
 import { useWorkspace } from '@/features/org/org-context'
-import { roleCan } from '@/features/org/permissions'
 import { rpc } from '@/lib/api'
 import { errorMessage, toAppError } from '@/lib/errors'
 import { supabase } from '@/lib/supabase'
@@ -79,9 +78,9 @@ export function CustomerDialog({
   onSaved?: (customer: { id: string; name: string; phone: string | null }) => void
 }) {
   const { t } = useTranslation()
-  const { org } = useWorkspace()
+  const { org, can } = useWorkspace()
   const queryClient = useQueryClient()
-  const canSetCredit = roleCan(org.role, 'customers.credit_limit')
+  const canSetCredit = (org.role === 'owner' || org.role === 'manager') && can('customers.manage')
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: defaults(customer),

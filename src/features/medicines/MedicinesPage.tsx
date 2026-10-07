@@ -12,7 +12,6 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { useWorkspace } from '@/features/org/org-context'
-import { roleCan } from '@/features/org/permissions'
 import { currentLanguage } from '@/i18n'
 import { formatNumber } from '@/lib/format'
 
@@ -22,8 +21,8 @@ import { PAGE_SIZE, listMedicines, type MedicineRow } from './medicines-api'
 export function MedicinesPage() {
   const { t } = useTranslation()
   const lng = currentLanguage()
-  const { org, branch } = useWorkspace()
-  const canManage = roleCan(org.role, 'catalog.manage')
+  const { org, branch, can } = useWorkspace()
+  const canManage = can('catalog.manage')
   const [search, setSearch] = useState('')
   const query = useDeferredValue(search)
   const [page, setPage] = useState(0)

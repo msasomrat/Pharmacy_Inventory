@@ -6,7 +6,6 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { useWorkspace } from '@/features/org/org-context'
-import { roleCan } from '@/features/org/permissions'
 import { cn } from '@/lib/cn'
 
 import { ReceiptHistory } from './ReceiptHistory'
@@ -16,11 +15,11 @@ type Tab = 'receive' | 'opening' | 'history'
 
 export function PurchasesPage() {
   const { t } = useTranslation()
-  const { org, branch } = useWorkspace()
-  const canView = roleCan(org.role, 'purchases.view')
+  const { branch, can } = useWorkspace()
+  const canView = can('purchases.view')
   const tabs: Tab[] = [
-    ...(roleCan(org.role, 'purchases.receive') ? (['receive'] as const) : []),
-    ...(roleCan(org.role, 'stock.adjust') ? (['opening'] as const) : []),
+    ...(can('purchases.receive') ? (['receive'] as const) : []),
+    ...(can('stock.adjust') ? (['opening'] as const) : []),
     'history',
   ]
   const [tab, setTab] = useState<Tab>(tabs[0] ?? 'history')

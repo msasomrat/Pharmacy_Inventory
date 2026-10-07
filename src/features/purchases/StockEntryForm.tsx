@@ -13,7 +13,6 @@ import { Select } from '@/components/ui/select'
 import { formatTaka, MoneyError, paisa, parseTaka } from '@/domain/money'
 import { MedicinePicker, type MedicineHit } from '@/features/medicines/MedicinePicker'
 import { useWorkspace } from '@/features/org/org-context'
-import { roleCan } from '@/features/org/permissions'
 import { currentLanguage } from '@/i18n'
 import { newRequestId, rpc } from '@/lib/api'
 import { cn } from '@/lib/cn'
@@ -83,9 +82,9 @@ function toTakaInput(p: number | null | undefined): string {
 export function StockEntryForm({ mode }: { mode: Mode }) {
   const { t } = useTranslation()
   const lng = currentLanguage()
-  const { org, branch } = useWorkspace()
+  const { org, branch, can } = useWorkspace()
   const queryClient = useQueryClient()
-  const canManageSuppliers = roleCan(org.role, 'suppliers.manage')
+  const canManageSuppliers = can('suppliers.manage')
   const today = businessDate()
 
   const [lines, setLines] = useState<DraftLine[]>(() => loadDraft(mode, branch.id))

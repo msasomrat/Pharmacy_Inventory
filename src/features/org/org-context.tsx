@@ -7,6 +7,8 @@ import { prefs } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/features/auth/auth-context'
 
+import { roleCan, type Permission } from './permissions'
+
 export type OrgRole = Database['public']['Enums']['org_role']
 
 export interface Branch {
@@ -30,6 +32,8 @@ interface OrgContextValue {
   selectOrganization: (organizationId: string) => void
   selectBranch: (branchId: string) => void
   refetch: () => Promise<unknown>
+  /** Effective permission of the signed-in user in the current organization (role + overrides). */
+  can: (permission: Permission) => boolean
 }
 
 const OrgContext = createContext<OrgContextValue | null>(null)
@@ -78,6 +82,27 @@ export function OrgProvider({ children }: { children: ReactNode }) {
 
   const memberships = useMemo(() => query.data ?? [], [query.data])
   const current = memberships.find((m) => m.organizationId === orgId) ?? memberships[0] ?? null
+
+  // Server truth (includes per-member overrides); the role template covers the first render.
+  const permissions = useQuery({
+    queryKey: ['my-permissions', current?.organizationId, aal.current],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('my_permissions', {
+        p_organization_id: current?.organizationId ?? '',
+      })
+      if (error) throw toAppError(error)
+      return new Set(data)
+    },
+    enabled: Boolean(current),
+    staleTime: 60_000,
+  })
+  const role = current?.role
+  const granted = permissions.data
+  const can = useCallback(
+    (permission: Permission) =>
+      granted ? granted.has(permission) : role ? roleCan(role, permission) : false,
+    [granted, role],
+  )
   const branch = current?.branches.find((b) => b.id === branchId) ?? current?.branches[0] ?? null
 
   const selectOrganization = useCallback((id: string) => {
@@ -100,6 +125,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       selectOrganization,
       selectBranch,
       refetch: query.refetch,
+      can,
     }),
     [
       query.isPending,
@@ -110,6 +136,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       branch,
       selectOrganization,
       selectBranch,
+      can,
     ],
   )
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>
@@ -122,8 +149,12 @@ export function useOrg(): OrgContextValue {
 }
 
 /** Requires a selected organization and branch (inside the app shell). */
-export function useWorkspace(): { org: Membership; branch: Branch } {
-  const { current, branch } = useOrg()
+export function useWorkspace(): {
+  org: Membership
+  branch: Branch
+  can: (permission: Permission) => boolean
+} {
+  const { current, branch, can } = useOrg()
   if (!current || !branch) throw new Error('No organization/branch selected')
-  return { org: current, branch }
+  return { org: current, branch, can }
 }

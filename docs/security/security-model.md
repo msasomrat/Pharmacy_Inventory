@@ -878,6 +878,29 @@ Permissions are evaluated on every request from the memberships table rather tha
 so a role change or deactivation takes effect on the next request (FR-IAM-010). Roles are fixed per
 organization in v1; per-organization custom roles are a possible SaaS feature and would need an ADR.
 
+### 6.7a Per-member access overrides
+
+Roles are templates. The Owner can switch individual permissions on or off for one member
+(`public.member_permissions`, written only by `set_member_permissions`, audited). `app.membership_has`
+resolves a permission as _override if present, else role template_, and `app.permitted_org_ids` /
+`app.has_permission` use it, so every RLS policy and RPC honours overrides without further changes.
+
+| Rule                                                                       | Enforcement                                                                                                         |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Owners always hold every permission and carry no overrides                 | `set_member_permissions` refuses (`owner_has_all`); trigger `member_permissions_guard` blocks privileged writes too |
+| `users.manage`, `branches.manage`, `org.settings.manage` cannot be granted | `app.permissions.grantable = false` (`not_grantable`)                                                               |
+| Seeing purchases implies seeing cost (P-45)                                | `permission_dependency` when `purchases.view` is effective without `reports.view_cost`                              |
+| A salesman with any granted permission needs a TOTP session                | `app.mfa_satisfied` treats such a salesman like a Manager                                                           |
+| A role change starts from the new template                                 | trigger `memberships_reset_overrides` clears overrides                                                              |
+| The app shows screens from the server's answer                             | `my_permissions(org)`; the UI never decides access on its own                                                       |
+
+Staff sign-in accounts are created by the Edge Function `admin-users`. It looks up a pending,
+unexpired invitation with the **caller's** JWT (RLS: `users.manage`), and only then uses the service-role
+Admin API to create that one confirmed user with a policy-compliant temporary password. The invitee
+still joins by accepting the invitation with their own session (FR-IAM-003). Tests: pgTAP
+`150_member_access`, RLS matrix (`member_permissions`, cross-tenant and anon cases for the four RPCs),
+and unit tests of the function handler.
+
 ### 6.8 Alignment with the M1 implementation
 
 Reviewing the revised M1 migrations (section 22 baseline) against this matrix found these remaining

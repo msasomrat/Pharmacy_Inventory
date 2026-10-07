@@ -22,7 +22,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { displayPhone } from '@/domain/phone'
 import { useWorkspace } from '@/features/org/org-context'
-import { roleCan } from '@/features/org/permissions'
 import { currentLanguage } from '@/i18n'
 import { rpc } from '@/lib/api'
 import { cn } from '@/lib/cn'
@@ -157,11 +156,11 @@ function ReasonDialog({
 function MembersTab() {
   const { t } = useTranslation()
   const lng = currentLanguage()
-  const { org } = useWorkspace()
+  const { org, can } = useWorkspace()
   const queryClient = useQueryClient()
   const today = businessDate()
-  const canEnroll = roleCan(org.role, 'loyalty.enroll')
-  const canCancel = roleCan(org.role, 'loyalty.cancel')
+  const canEnroll = can('loyalty.enroll')
+  const canCancel = can('loyalty.cancel')
   const [filter, setFilter] = useState<Filter>('active')
   const [text, setText] = useState('')
   const [enrolling, setEnrolling] = useState<PickedCustomer | null | undefined>(undefined)

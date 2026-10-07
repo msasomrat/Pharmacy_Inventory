@@ -14,6 +14,8 @@ const PAGES = [
   '/purchases',
   '/customers',
   '/loyalty',
+  '/reports',
+  '/settings',
 ] as const
 
 for (const path of PAGES) {

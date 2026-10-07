@@ -18,10 +18,11 @@ export function SidebarNav({
   onNavigate?: () => void
 }) {
   const { t } = useTranslation()
-  const { current } = useOrg()
+  const { current, can } = useOrg()
+  const sections = current ? navFor(can) : []
   return (
     <nav aria-label="Main" className="flex flex-col gap-6">
-      {navFor(current?.role).map((section) => (
+      {sections.map((section) => (
         <div key={section.key} className="flex flex-col gap-1">
           {collapsed ? null : (
             <p className="px-3 pb-1 text-[11px] font-semibold tracking-wider text-sidebar-muted uppercase">

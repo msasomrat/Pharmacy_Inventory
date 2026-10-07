@@ -128,3 +128,28 @@ test('loyalty plans', async ({ page }) => {
   await page.getByRole('region', { name: '3-Month Card' }).waitFor()
   await shot(page, 'loyalty-plans')
 })
+
+test('settings staff', async ({ page }) => {
+  await mockBackend(page)
+  await page.goto('/settings')
+  await page.getByRole('row', { name: /Sumi Akter/ }).waitFor()
+  await shot(page, 'settings-staff')
+})
+
+test('settings access', async ({ page }) => {
+  await mockBackend(page)
+  await page.goto('/settings')
+  await page.getByRole('button', { name: 'Manage Sumi Akter' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Void a sale').check()
+  await dialog.getByLabel('Add and edit customers').uncheck()
+  await shot(page, 'settings-access')
+})
+
+test('reports', async ({ page }) => {
+  await mockBackend(page)
+  await page.goto('/reports')
+  await page.getByRole('region', { name: 'Totals' }).waitFor()
+  await page.getByRole('button', { name: 'Last 7 days' }).click()
+  await shot(page, 'reports')
+})

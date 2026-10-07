@@ -18,7 +18,8 @@ export function CommandPalette({
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { current } = useOrg()
+  const { current, can } = useOrg()
+  const sections = current ? navFor(can) : []
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -53,7 +54,7 @@ export function CommandPalette({
               <Command.Empty className="p-6 text-center text-sm text-muted-foreground">
                 —
               </Command.Empty>
-              {navFor(current?.role).map((section) => (
+              {sections.map((section) => (
                 <Command.Group
                   key={section.key}
                   heading={t(`nav.sections.${section.key}`)}

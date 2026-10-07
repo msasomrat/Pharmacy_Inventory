@@ -263,6 +263,73 @@ const MEMBERSHIPS = [
   },
 ]
 
+export const ALL_PERMISSIONS = [
+  'audit.view',
+  'branches.manage',
+  'catalog.manage',
+  'controlled.register.view',
+  'customers.collect',
+  'customers.manage',
+  'data.export',
+  'loyalty.cancel',
+  'loyalty.enroll',
+  'loyalty.manage_plans',
+  'org.settings.manage',
+  'pricing.manage',
+  'purchases.receive',
+  'purchases.return',
+  'purchases.view',
+  'reports.view',
+  'reports.view_cost',
+  'sales.create',
+  'sales.credit',
+  'sales.return',
+  'sales.void',
+  'stock.adjust',
+  'suppliers.manage',
+  'suppliers.pay',
+  'users.manage',
+]
+
+const MEMBERS = [
+  {
+    membership_id: 'mb-owner',
+    user_id: USER,
+    email: 'rahima@shefa.example',
+    full_name: 'Rahima',
+    role: 'owner',
+    is_active: true,
+    branch_ids: [],
+    overrides: {},
+    last_sign_in_at: '2026-10-07T08:00:00Z',
+    created_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    membership_id: 'mb-sales',
+    user_id: '55555555-5555-4555-8555-555555555555',
+    email: 'sumi@shefa.example',
+    full_name: 'Sumi Akter',
+    role: 'salesman',
+    is_active: true,
+    branch_ids: [BRANCH],
+    overrides: {},
+    last_sign_in_at: null,
+    created_at: '2026-02-01T00:00:00Z',
+  },
+  {
+    membership_id: 'mb-manager',
+    user_id: '66666666-6666-4666-8666-666666666666',
+    email: 'rafiq@shefa.example',
+    full_name: 'Rafiq Hasan',
+    role: 'manager',
+    is_active: true,
+    branch_ids: [BRANCH],
+    overrides: { 'purchases.receive': false },
+    last_sign_in_at: '2026-10-06T08:00:00Z',
+    created_at: '2026-02-01T00:00:00Z',
+  },
+]
+
 /** Every RPC call the UI makes, for assertions on what was sent to the server. */
 export interface RpcCall {
   fn: string
@@ -271,9 +338,23 @@ export interface RpcCall {
 
 export async function mockBackend(
   page: Page,
-  options: { signedIn?: boolean; aal?: 'aal1' | 'aal2' } = {},
+  options: {
+    signedIn?: boolean
+    aal?: 'aal1' | 'aal2'
+    role?: 'owner' | 'manager' | 'salesman' | 'accountant' | 'auditor'
+    /** Effective permissions returned by my_permissions (default: everything, as for an owner). */
+    permissions?: string[]
+    /** false = the admin-users Edge Function is not deployed (404). */
+    adminFunction?: boolean
+  } = {},
 ): Promise<RpcCall[]> {
-  const { signedIn = true, aal = 'aal2' } = options
+  const {
+    signedIn = true,
+    aal = 'aal2',
+    role = 'owner',
+    permissions = ALL_PERMISSIONS,
+    adminFunction = true,
+  } = options
   const calls: RpcCall[] = []
   if (signedIn) {
     await page.addInitScript((session) => {
@@ -283,22 +364,52 @@ export async function mockBackend(
 
   await page.route(`${SUPABASE_URL}/auth/v1/**`, (route) => json(route, fakeSession(aal).user))
   await page.route(`${SUPABASE_URL}/rest/v1/memberships*`, (route) =>
-    json(route, [
-      { organization_id: ORG, role: 'owner', organizations: { name: 'Shefa Pharmacy' } },
-    ]),
+    json(route, [{ organization_id: ORG, role, organizations: { name: 'Shefa Pharmacy' } }]),
   )
   await page.route(`${SUPABASE_URL}/rest/v1/branches*`, (route) =>
     json(route, [
-      { id: BRANCH, organization_id: ORG, code: 'MPR', name: 'Mohammadpur' },
+      {
+        id: BRANCH,
+        organization_id: ORG,
+        code: 'MPR',
+        name: 'Mohammadpur',
+        address: 'Tajmahal Road',
+        phone: '+8801711000001',
+        is_active: true,
+      },
       {
         id: '44444444-4444-4444-8444-444444444444',
         organization_id: ORG,
         code: 'DHN',
         name: 'Dhanmondi',
+        address: null,
+        phone: null,
+        is_active: true,
       },
     ]),
   )
-  await page.route(`${SUPABASE_URL}/rest/v1/branch_assignments*`, (route) => json(route, []))
+  // Branch edits (PATCH) are recorded; GET is answered above for both the shell and Settings.
+  await page.route(`${SUPABASE_URL}/rest/v1/branches?*`, async (route) => {
+    if (route.request().method() === 'GET') return route.fallback()
+    calls.push({
+      fn: `${route.request().method()} branches`,
+      body: (route.request().postDataJSON() ?? {}) as Record<string, unknown>,
+    })
+    return route.fulfill({ status: 204, body: '' })
+  })
+  await page.route(`${SUPABASE_URL}/functions/v1/admin-users`, async (route) => {
+    calls.push({
+      fn: 'admin-users',
+      body: (route.request().postDataJSON() ?? {}) as Record<string, unknown>,
+    })
+    return adminFunction
+      ? json(route, { status: 'created' }, 201)
+      : json(route, { code: 'not_found' }, 404)
+  })
+  // Managers and salesmen work in assigned branches (owners see all branches anyway).
+  await page.route(`${SUPABASE_URL}/rest/v1/branch_assignments*`, (route) =>
+    json(route, [{ branch_id: BRANCH }]),
+  )
   await page.route(`${SUPABASE_URL}/rest/v1/medicines*`, (route) => list(route, CATALOG))
   await page.route(`${SUPABASE_URL}/rest/v1/generics*`, (route) =>
     json(route, [
@@ -400,7 +511,28 @@ export async function mockBackend(
       : MEMBERSHIPS,
   )
   await writable('loyalty_plans', () => PLANS)
-  await writable('organization_settings', () => [], { loyalty_enabled: true })
+  await writable('organization_settings', () => [], {
+    loyalty_enabled: true,
+    salesman_max_discount_bp: 500,
+    manager_max_discount_bp: 1500,
+    vat_bp: 0,
+    return_window_days: 7,
+    void_window_hours: 24,
+    near_expiry_block_days: 0,
+    expiry_alert_days: 90,
+    require_prescription_for_rx: false,
+    cash_rounding: 'none',
+  })
+  await writable('organizations', () => [], { name: 'Shefa Pharmacy' })
+  await writable('invitations', () => [
+    {
+      id: 'inv-1',
+      email: 'late@shefa.example',
+      role: 'salesman',
+      branch_ids: [BRANCH],
+      expires_at: `${dayOffset(2)}T10:00:00Z`,
+    },
+  ])
 
   await page.route(`${SUPABASE_URL}/rest/v1/rpc/**`, async (route) => {
     const fn = new URL(route.request().url()).pathname.split('/').pop() ?? ''
@@ -557,6 +689,31 @@ export async function mockBackend(
         ])
       case 'my_invitations':
         return json(route, [])
+      case 'my_permissions':
+        return json(route, permissions)
+      case 'list_members':
+        return json(route, MEMBERS)
+      case 'add_member':
+        return json(route, 'inv-new')
+      case 'set_member_permissions':
+        return json(route, [])
+      case 'update_member':
+      case 'revoke_invitation':
+        return route.fulfill({ status: 204, body: '' })
+      case 'create_branch':
+        return json(route, 'branch-new')
+      case 'report_stock_value':
+        return json(route, [
+          {
+            branch_id: BRANCH,
+            branch_name: 'Mohammadpur',
+            sku_count: 412,
+            units: 18250,
+            value_mrp_paisa: 152340000,
+            value_cost_paisa: 118900000,
+            expired_units: 12,
+          },
+        ])
       case 'save_medicine':
         return json(route, 'm-new')
       case 'receive_goods':

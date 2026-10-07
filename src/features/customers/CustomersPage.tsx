@@ -14,7 +14,6 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { formatTaka, paisa } from '@/domain/money'
 import { EnrollDialog, type PickedCustomer } from '@/features/loyalty/EnrollDialog'
 import { useWorkspace } from '@/features/org/org-context'
-import { roleCan } from '@/features/org/permissions'
 import { currentLanguage } from '@/i18n'
 import { formatDate } from '@/lib/dates'
 import { formatNumber } from '@/lib/format'
@@ -45,9 +44,9 @@ function LoyaltyBadge({ row }: { row: CustomerRow }) {
 export function CustomersPage() {
   const { t } = useTranslation()
   const lng = currentLanguage()
-  const { org } = useWorkspace()
-  const canManage = roleCan(org.role, 'customers.manage')
-  const canEnroll = roleCan(org.role, 'loyalty.enroll')
+  const { org, can } = useWorkspace()
+  const canManage = can('customers.manage')
+  const canEnroll = can('loyalty.enroll')
   const [search, setSearch] = useState('')
   const query = useDeferredValue(search)
   const [page, setPage] = useState(0)

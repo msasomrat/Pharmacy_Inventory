@@ -11,7 +11,6 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useWorkspace } from '@/features/org/org-context'
-import { roleCan } from '@/features/org/permissions'
 import { errorMessage, toAppError } from '@/lib/errors'
 import { supabase } from '@/lib/supabase'
 
@@ -127,10 +126,10 @@ function PlanCard({ plan, canEdit }: { plan: Plan; canEdit: boolean }) {
 
 export function PlansEditor() {
   const { t } = useTranslation()
-  const { org } = useWorkspace()
+  const { org, can } = useWorkspace()
   const queryClient = useQueryClient()
-  const canEdit = roleCan(org.role, 'loyalty.manage_plans')
-  const canToggle = roleCan(org.role, 'org.settings.manage')
+  const canEdit = can('loyalty.manage_plans')
+  const canToggle = can('org.settings.manage')
   const plans = useQuery({
     queryKey: ['loyalty-plans', org.organizationId],
     queryFn: () => listPlans(org.organizationId),
@@ -168,7 +167,7 @@ export function PlansEditor() {
   })
 
   return (
-    <div className="grid gap-6">
+    <div className="grid min-w-0 grid-cols-1 gap-6">
       <Card>
         <CardContent className="flex flex-wrap items-center justify-between gap-4 pt-5">
           <div className="max-w-xl space-y-1">

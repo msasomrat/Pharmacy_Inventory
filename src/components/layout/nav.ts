@@ -11,13 +11,14 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-import type { OrgRole } from '@/features/org/org-context'
+import type { Permission } from '@/features/org/permissions'
 
 export interface NavItem {
   to: string
   key: string
   icon: LucideIcon
-  roles: OrgRole[]
+  /** Shown when the user holds any of these permissions; omitted = every member. */
+  anyOf?: Permission[]
   shortcut?: string
 }
 
@@ -26,46 +27,47 @@ export interface NavSection {
   items: NavItem[]
 }
 
-const ALL: OrgRole[] = ['owner', 'manager', 'salesman', 'accountant', 'auditor']
-const STAFF: OrgRole[] = ['owner', 'manager', 'salesman']
-const MANAGEMENT: OrgRole[] = ['owner', 'manager', 'accountant', 'auditor']
-
-/** Navigation visible per role. The UI only hides links; the database enforces every permission. */
+/** Navigation visible per permission. The UI only hides links; the database enforces every permission. */
 export const NAV: NavSection[] = [
   {
     key: 'sell',
     items: [
-      { to: '/', key: 'dashboard', icon: LayoutDashboard, roles: ALL, shortcut: 'G D' },
-      { to: '/pos', key: 'pos', icon: ShoppingCart, roles: STAFF, shortcut: 'F2' },
+      { to: '/', key: 'dashboard', icon: LayoutDashboard, shortcut: 'G D' },
+      { to: '/pos', key: 'pos', icon: ShoppingCart, anyOf: ['sales.create'], shortcut: 'F2' },
     ],
   },
   {
     key: 'stock',
     items: [
-      { to: '/inventory', key: 'inventory', icon: Boxes, roles: ALL },
-      { to: '/medicines', key: 'medicines', icon: Pill, roles: ALL },
-      { to: '/purchases', key: 'purchases', icon: Truck, roles: MANAGEMENT },
+      { to: '/inventory', key: 'inventory', icon: Boxes },
+      { to: '/medicines', key: 'medicines', icon: Pill },
+      { to: '/purchases', key: 'purchases', icon: Truck, anyOf: ['purchases.view'] },
     ],
   },
   {
     key: 'people',
     items: [
-      { to: '/customers', key: 'customers', icon: Contact, roles: ALL },
-      { to: '/loyalty', key: 'loyalty', icon: CreditCard, roles: ALL },
+      { to: '/customers', key: 'customers', icon: Contact },
+      { to: '/loyalty', key: 'loyalty', icon: CreditCard },
     ],
   },
   {
     key: 'insights',
     items: [
-      { to: '/reports', key: 'reports', icon: BarChart3, roles: MANAGEMENT },
-      { to: '/settings', key: 'settings', icon: Settings, roles: ['owner'] },
+      { to: '/reports', key: 'reports', icon: BarChart3, anyOf: ['reports.view'] },
+      {
+        to: '/settings',
+        key: 'settings',
+        icon: Settings,
+        anyOf: ['users.manage', 'branches.manage', 'org.settings.manage'],
+      },
     ],
   },
 ]
 
-export function navFor(role: OrgRole | undefined): NavSection[] {
-  if (!role) return []
-  return NAV.map((s) => ({ ...s, items: s.items.filter((i) => i.roles.includes(role)) })).filter(
-    (s) => s.items.length > 0,
-  )
+export function navFor(can: (permission: Permission) => boolean): NavSection[] {
+  return NAV.map((s) => ({
+    ...s,
+    items: s.items.filter((i) => !i.anyOf || i.anyOf.some((p) => can(p))),
+  })).filter((s) => s.items.length > 0)
 }
