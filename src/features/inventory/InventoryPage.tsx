@@ -15,6 +15,8 @@ import { formatDate } from '@/lib/dates'
 import { formatNumber } from '@/lib/format'
 import { formatTaka, paisa } from '@/domain/money'
 
+import { StockOnHand } from './StockOnHand'
+
 export function InventoryPage() {
   const { t } = useTranslation()
   const lng = currentLanguage()
@@ -34,7 +36,8 @@ export function InventoryPage() {
         title={t('inventory.title')}
         description={t('inventory.subtitle', { branch: branch.name })}
       />
-      <div className="grid gap-6">
+      <div className="grid min-w-0 grid-cols-1 gap-6">
+        <StockOnHand />
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

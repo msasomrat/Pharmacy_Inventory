@@ -77,6 +77,7 @@ export const MEDICINES = [
     stock_quantity: 840,
     sale_price_paisa: 120,
     nearest_expiry: dayOffset(210),
+    rack_location: 'A-3',
   },
   {
     medicine_id: 'm-napa-extra',
@@ -135,11 +136,63 @@ export const MEDICINES = [
 const json = (route: Route, body: unknown, status = 200) =>
   route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
 
+/** PostgREST list response with the Content-Range header that count: 'exact' reads. */
+const list = (route: Route, rows: unknown[]) =>
+  route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    headers: {
+      'content-range': `0-${Math.max(rows.length - 1, 0)}/${rows.length}`,
+      'access-control-expose-headers': 'content-range',
+    },
+    body: JSON.stringify(rows),
+  })
+
+export const CATALOG = [
+  {
+    id: 'm-napa',
+    brand_name: 'Napa',
+    strength: '500 mg',
+    dosage_form: 'tablet',
+    schedule: 'otc',
+    base_unit_label: 'tablet',
+    loyalty_eligible: true,
+    sku: null,
+    notes: null,
+    is_active: true,
+    generics: { name: 'Paracetamol' },
+    manufacturers: { name: 'Beximco' },
+    medicine_barcodes: [{ barcode: '8941100500012', pack_id: null }],
+  },
+  {
+    id: 'm-seclo',
+    brand_name: 'Seclo',
+    strength: '20 mg',
+    dosage_form: 'capsule',
+    schedule: 'rx',
+    base_unit_label: 'capsule',
+    loyalty_eligible: true,
+    sku: null,
+    notes: null,
+    is_active: true,
+    generics: { name: 'Omeprazole' },
+    manufacturers: { name: 'Square' },
+    medicine_barcodes: [],
+  },
+]
+
+/** Every RPC call the UI makes, for assertions on what was sent to the server. */
+export interface RpcCall {
+  fn: string
+  body: Record<string, unknown>
+}
+
 export async function mockBackend(
   page: Page,
   options: { signedIn?: boolean; aal?: 'aal1' | 'aal2' } = {},
-) {
+): Promise<RpcCall[]> {
   const { signedIn = true, aal = 'aal2' } = options
+  const calls: RpcCall[] = []
   if (signedIn) {
     await page.addInitScript((session) => {
       window.localStorage.setItem('sb-127-auth-token', JSON.stringify(session))
@@ -164,10 +217,85 @@ export async function mockBackend(
     ]),
   )
   await page.route(`${SUPABASE_URL}/rest/v1/branch_assignments*`, (route) => json(route, []))
+  await page.route(`${SUPABASE_URL}/rest/v1/medicines*`, (route) => list(route, CATALOG))
+  await page.route(`${SUPABASE_URL}/rest/v1/generics*`, (route) =>
+    json(route, [
+      { id: 'g1', name: 'Paracetamol' },
+      { id: 'g2', name: 'Omeprazole' },
+    ]),
+  )
+  await page.route(`${SUPABASE_URL}/rest/v1/manufacturers*`, (route) =>
+    json(route, [{ name: 'Beximco' }, { name: 'Square' }]),
+  )
+  await page.route(`${SUPABASE_URL}/rest/v1/branch_medicine_settings*`, (route) =>
+    json(route, [{ medicine_id: 'm-napa', rack_location: 'A-3', reorder_level: 50 }]),
+  )
+  await page.route(`${SUPABASE_URL}/rest/v1/suppliers*`, (route) =>
+    route.request().method() === 'POST'
+      ? json(route, { id: 'sup-new' }, 201)
+      : json(route, [{ id: 'sup-1', name: 'Beximco Distribution' }]),
+  )
+  await page.route(`${SUPABASE_URL}/rest/v1/goods_receipts*`, (route) =>
+    json(route, [
+      {
+        id: 'gr-1',
+        receipt_no: 'MPR-G2627-000007',
+        supplier_invoice_no: 'BX-5521',
+        business_date: dayOffset(-2),
+        total_paisa: 950000,
+        paid_paisa: 500000,
+        suppliers: { name: 'Beximco Distribution' },
+      },
+    ]),
+  )
+  await page.route(`${SUPABASE_URL}/rest/v1/goods_receipt_items*`, (route) =>
+    json(route, [
+      {
+        id: 'gri-1',
+        batch_no: 'NP2401',
+        expiry_date: dayOffset(400),
+        quantity: 1000,
+        bonus_quantity: 50,
+        unit_cost_paisa: 95,
+        mrp_paisa: 120,
+        line_total_paisa: 95000,
+        medicines: { brand_name: 'Napa', strength: '500 mg' },
+      },
+    ]),
+  )
+  await page.route(`${SUPABASE_URL}/rest/v1/batches*`, (route) =>
+    json(route, [
+      {
+        medicine_id: 'm-napa',
+        expiry_date: dayOffset(20),
+        quantity_on_hand: 40,
+        sale_price_paisa: 120,
+        received_at: '2026-01-01T00:00:00Z',
+        medicines: { brand_name: 'Napa', strength: '500 mg', base_unit_label: 'tablet' },
+      },
+      {
+        medicine_id: 'm-napa',
+        expiry_date: dayOffset(300),
+        quantity_on_hand: 800,
+        sale_price_paisa: 120,
+        received_at: '2026-02-01T00:00:00Z',
+        medicines: { brand_name: 'Napa', strength: '500 mg', base_unit_label: 'tablet' },
+      },
+      {
+        medicine_id: 'm-seclo',
+        expiry_date: dayOffset(400),
+        quantity_on_hand: 410,
+        sale_price_paisa: 700,
+        received_at: '2026-02-01T00:00:00Z',
+        medicines: { brand_name: 'Seclo', strength: '20 mg', base_unit_label: 'capsule' },
+      },
+    ]),
+  )
 
   await page.route(`${SUPABASE_URL}/rest/v1/rpc/**`, async (route) => {
     const fn = new URL(route.request().url()).pathname.split('/').pop() ?? ''
     const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
+    calls.push({ fn, body })
     switch (fn) {
       case 'report_sales_summary':
         return json(
@@ -319,8 +447,20 @@ export async function mockBackend(
         ])
       case 'my_invitations':
         return json(route, [])
+      case 'save_medicine':
+        return json(route, 'm-new')
+      case 'receive_goods':
+        return json(route, {
+          goods_receipt_id: 'gr-2',
+          receipt_no: 'MPR-G2627-000008',
+          total_paisa: 9500,
+          replayed: false,
+        })
+      case 'add_opening_stock':
+        return json(route, ((body.p_items ?? []) as unknown[]).length)
       default:
         return json(route, { message: `unmocked rpc ${fn}` }, 404)
     }
   })
+  return calls
 }

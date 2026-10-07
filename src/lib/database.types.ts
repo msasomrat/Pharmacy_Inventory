@@ -1184,9 +1184,12 @@ isOneToOne: false
               "branch_id": string,"branch_name": string,"expired_units": number,"sku_count": number,"units": number,"value_cost_paisa": number,"value_mrp_paisa": number
             }[]
                            },
+"save_medicine":
+{ Args: { "p_barcodes"?: (string)[],"p_base_unit_label"?: string,"p_branch_id"?: string,"p_brand_name": string,"p_dosage_form": Database["public"]['Enums']["dosage_form"],"p_generic_name"?: string,"p_is_active"?: boolean,"p_loyalty_eligible"?: boolean,"p_manufacturer_name"?: string,"p_medicine_id"?: string,"p_notes"?: string,"p_organization_id": string,"p_rack_location"?: string,"p_reorder_level"?: number,"p_schedule"?: Database["public"]['Enums']["drug_schedule"],"p_sku"?: string,"p_strength"?: string }; Returns: string
+                           },
 "search_medicines":
 { Args: { "p_branch_id": string,"p_limit"?: number,"p_query": string }; Returns: {
-              "base_unit_label": string,"brand_name": string,"dosage_form": Database["public"]['Enums']["dosage_form"],"generic_name": string,"manufacturer_name": string,"medicine_id": string,"nearest_expiry": string,"sale_price_paisa": number,"schedule": Database["public"]['Enums']["drug_schedule"],"stock_quantity": number,"strength": string
+              "base_unit_label": string,"brand_name": string,"dosage_form": Database["public"]['Enums']["dosage_form"],"generic_name": string,"manufacturer_name": string,"medicine_id": string,"nearest_expiry": string,"rack_location": string,"sale_price_paisa": number,"schedule": Database["public"]['Enums']["drug_schedule"],"stock_quantity": number,"strength": string
             }[]
                            },
 "set_batch_price":

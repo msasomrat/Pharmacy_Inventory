@@ -355,6 +355,11 @@ export function PosPage() {
                       ) : null}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
+                      {r.rack_location ? (
+                        <span className="mr-1.5 rounded bg-surface-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground">
+                          {t('pos.rack', { rack: r.rack_location })}
+                        </span>
+                      ) : null}
                       {[r.generic_name, r.manufacturer_name].filter(Boolean).join(' · ')}
                       {r.nearest_expiry
                         ? ` · ${t('pos.exp', { date: formatDate(r.nearest_expiry, lng) })}`

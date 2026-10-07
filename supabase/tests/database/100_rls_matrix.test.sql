@@ -19,7 +19,7 @@
 -- 3 row-level details, 4 cost columns per role, 5 RPCs (anon, cross-tenant, mixed ids, unassigned branch,
 -- unchanged-data fingerprint), 6 app.* helpers granted to authenticated.
 begin;
-select plan(809);
+select plan(813);
 
 -- =============================================================================
 -- Test helpers (rolled back with the file)
@@ -711,10 +711,12 @@ select is(
         'record_customer_payment(uuid,uuid,bigint,payment_method,uuid,text)',
         'record_supplier_payment(uuid,bigint,payment_method,uuid,uuid,text,text)',
         'replace_loyalty_card(uuid,text,text)', 'report_expiring_stock(uuid,integer)', 'report_low_stock(uuid)',
-        'report_sales_summary(uuid,date,date,uuid)', 'report_stock_value(uuid)', 'search_medicines(uuid,text,integer)',
+        'report_sales_summary(uuid,date,date,uuid)', 'report_stock_value(uuid)',
+        'save_medicine(uuid,text,dosage_form,uuid,text,text,text,text,drug_schedule,boolean,text,text[],text,boolean,uuid,text,integer)',
+        'search_medicines(uuid,text,integer)',
         'set_batch_price(uuid,bigint,bigint)', 'set_customer_credit_limit(uuid,bigint)', 'update_member(uuid,org_role,boolean,uuid[])',
         'void_sale(uuid,text,payment_method)'],
-  'schema public holds exactly the 28 RPC functions covered by this matrix');
+  'schema public holds exactly the 29 RPC functions covered by this matrix');
 select is(
   array(select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
          where n.nspname = 'public'
@@ -879,6 +881,7 @@ insert into tests.rls_calls (who, fn, sql, expect, note) values
   ('cross', 'add_opening_stock', $$ select public.add_opening_stock(tests.rid('a_b1'), jsonb_build_array(jsonb_build_object('medicine_id', tests.rid('a_napa'), 'batch_no', 'X', 'expiry_date', '2099-01-01', 'quantity', 1, 'cost_paisa', 1, 'mrp_paisa', 2, 'sale_price_paisa', 2)), gen_random_uuid())::text $$, 'P0001:forbidden', 'into A branch 1'),
   ('cross', 'adjust_stock', $$ select public.adjust_stock(tests.rid('a_batch_b1'), -1, 'loss', gen_random_uuid())::text $$, 'P0001:forbidden', 'of an A batch'),
   ('cross', 'set_batch_price', $$ select public.set_batch_price(tests.rid('a_batch_b1'), 1)::text $$, 'P0001:forbidden', 'of an A batch'),
+  ('cross', 'save_medicine', $$ select public.save_medicine(tests.rid('a_org'), 'Intruder', 'tablet')::text $$, 'P0001:forbidden', 'in organization A'),
   ('cross', 'search_medicines', $$ select count(*)::text from public.search_medicines(tests.rid('a_b1'), 'Napa') $$, 'P0001:forbidden', 'in A branch 1'),
   ('cross', 'quote_sale', $$ select public.quote_sale(tests.rid('a_b1'), jsonb_build_array(jsonb_build_object('medicine_id', tests.rid('a_napa'), 'quantity', 1)))::text $$, 'P0001:forbidden', 'in A branch 1'),
   ('cross', 'set_customer_credit_limit', $$ select public.set_customer_credit_limit(tests.rid('a_customer'), 1)::text $$, 'P0001:forbidden', 'of an A customer'),
@@ -902,6 +905,7 @@ insert into tests.rls_calls (who, fn, sql, expect, note) values
 
 -- 'mixed': owner B combines its own ids with organization A's.
 insert into tests.rls_calls (who, fn, sql, expect, note) values
+  ('mixed', 'save_medicine', $$ select public.save_medicine(tests.rid('b_org'), 'Napa', 'tablet', p_medicine_id => tests.rid('a_napa'))::text $$, 'P0001:not_found', 'in B cannot rewrite an A medicine'),
   ('mixed', 'add_member', $$ select public.add_member(tests.rid('b_org'), 'new@rls.test', 'salesman', array[tests.rid('a_b1')])::text $$, 'P0001:invalid_branch', 'to B with an A branch assignment'),
   ('mixed', 'update_member', $$ select public.update_member(tests.rid('b_manager_membership'), 'manager', true, array[tests.rid('a_b1')])::text $$, 'P0001:invalid_branch', 'of a B member to an A branch'),
   ('mixed', 'add_opening_stock', $$ select public.add_opening_stock(tests.rid('b_b1'), jsonb_build_array(jsonb_build_object('medicine_id', tests.rid('a_napa'), 'batch_no', 'X', 'expiry_date', '2099-01-01', 'quantity', 1, 'cost_paisa', 1, 'mrp_paisa', 2, 'sale_price_paisa', 2)), gen_random_uuid())::text $$, 'P0001:invalid_medicine', 'in B with an A medicine'),

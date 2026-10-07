@@ -62,3 +62,42 @@ test('mobile dashboard', async ({ page }) => {
   await page.getByText('Maxpro 20').waitFor()
   await page.screenshot({ path: 'docs/screenshots/mobile-dashboard.png', fullPage: true })
 })
+
+test('medicines', async ({ page }) => {
+  await mockBackend(page)
+  await page.goto('/medicines')
+  await page.getByRole('row', { name: /Napa/ }).waitFor()
+  await page.getByRole('button', { name: 'Edit Napa' }).click()
+  await page.getByRole('dialog').getByLabel('Brand name').waitFor()
+  await shot(page, 'medicines')
+})
+
+test('purchases', async ({ page }) => {
+  await mockBackend(page)
+  await page.goto('/purchases')
+  await page.getByLabel('Supplier', { exact: true }).selectOption({ label: 'Beximco Distribution' })
+  await page.getByLabel('Supplier invoice no.').fill('BX-5600')
+  const picker = page.getByRole('combobox', { name: /Add medicine/ })
+  for (const [name, batch, qty, cost] of [
+    ['napa', 'NP2510', '1000', '0.95'],
+    ['seclo', 'SC7731', '300', '5.40'],
+  ] as const) {
+    await picker.fill(name)
+    await picker.press('Enter')
+    const label = name === 'napa' ? 'Napa' : 'Seclo'
+    await page.getByLabel(`Batch ${label}`, { exact: true }).fill(batch)
+    await page.getByLabel(`Expiry ${label}`, { exact: true }).fill('2028-03')
+    await page.getByLabel(`Qty ${label}`, { exact: true }).fill(qty)
+    await page.getByLabel(`Cost ${label}`, { exact: true }).fill(cost)
+  }
+  await page.getByLabel('MRP Seclo', { exact: true }).fill('7')
+  await page.getByLabel('Paid now').fill('2000')
+  await shot(page, 'purchases')
+})
+
+test('inventory', async ({ page }) => {
+  await mockBackend(page)
+  await page.goto('/inventory')
+  await page.getByText('Stock on hand').waitFor()
+  await shot(page, 'inventory')
+})
