@@ -54,12 +54,11 @@
     ],
     "mfaTitle": "Two-factor authentication",
     "mfaVerifyBody": "Enter the 6-digit code from your authenticator app.",
-    "mfaEnrollBody": "Owners and managers must protect their account. Scan this QR code with Google Authenticator or Microsoft Authenticator, then enter the 6-digit code.",
+    "mfaEnrollBody": "Owners protect the pharmacy with an authenticator app. Scan this QR code with Google Authenticator or Microsoft Authenticator, then enter the 6-digit code.",
     "mfaSecret": "Can't scan? Enter this key manually",
     "code": "6-digit code",
     "verify": "Verify",
-    "skip": "Skip for now",
-    "skipHint": "Salespeople may skip. Owner and manager features stay locked until this is set up.",
+    "back": "Back",
     "codeInvalid": "That code didn't work. Check the time on your phone and try again."
   },
   "onboarding": {
@@ -73,7 +72,9 @@
     "invitations": "You have been invited",
     "accept": "Accept",
     "noAccess": "Waiting for access",
-    "noAccessBody": "If you are an owner or manager, finish two-factor setup to see your pharmacy. Otherwise ask the owner to invite you."
+    "noAccessBody": "Staff: ask the owner to add you. Owners: sign out and sign in again with your authenticator code.",
+    "ownerMfa": "The owner account controls staff, prices and money, so it is protected with an authenticator app (Google Authenticator or Microsoft Authenticator). Set it up once; staff only need their password.",
+    "setupMfa": "Set up authenticator and continue"
   },
   "dashboard": {
     "greeting": "Good {{part}}, {{name}}",
@@ -477,7 +478,6 @@
     "accessHint": "Starts from the role. Tick or untick to give or take away individual permissions.",
     "resetToRole": "Reset to role defaults",
     "ownerAll": "Owners always have full access.",
-    "mfaNeeded": "With these extra permissions this person must sign in with two-factor authentication.",
     "saveAccess": "Save access",
     "accessSaved": "Access for {{name}} saved",
     "groups": {

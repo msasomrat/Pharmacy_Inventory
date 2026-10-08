@@ -1,11 +1,10 @@
-import { RotateCcw, ShieldAlert } from 'lucide-react'
+import { RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import type { OrgRole } from '@/features/org/org-context'
 import {
   PERMISSION_GROUPS,
-  needsMfa,
   roleTemplate,
   withDependencies,
   type Permission,
@@ -80,12 +79,6 @@ export function AccessEditor({
           </fieldset>
         ))}
       </div>
-      {role === 'salesman' && needsMfa(role, value) ? (
-        <p className="flex items-start gap-2 rounded-md bg-warning-soft p-3 text-sm text-warning">
-          <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-          {t('settings.mfaNeeded')}
-        </p>
-      ) : null}
     </div>
   )
 }

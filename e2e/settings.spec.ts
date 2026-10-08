@@ -76,7 +76,8 @@ test.describe('owner (aal2): staff and access', () => {
     await expect(dialog.getByLabel('Sell at the counter (POS)')).toBeChecked()
     await dialog.getByLabel('Void a sale').check()
     await dialog.getByLabel('Add and edit customers').uncheck()
-    await expect(dialog.getByText(/must sign in with two-factor authentication/)).toBeVisible()
+    // Two-factor sign-in is for owners only: extra permissions do not change how staff sign in.
+    await expect(dialog.getByText(/two-factor/i)).toHaveCount(0)
 
     // Purchases shows supplier prices, so cost visibility comes with it.
     await dialog.getByLabel('See purchases and supplier prices').check()

@@ -363,8 +363,14 @@ export async function mockBackend(
   }
 
   await page.route(`${SUPABASE_URL}/auth/v1/**`, (route) => json(route, fakeSession(aal).user))
+  // Like app.mfa_satisfied: an owner's organization stays hidden until the session is aal2.
   await page.route(`${SUPABASE_URL}/rest/v1/memberships*`, (route) =>
-    json(route, [{ organization_id: ORG, role, organizations: { name: 'Shefa Pharmacy' } }]),
+    json(
+      route,
+      role === 'owner' && aal === 'aal1'
+        ? []
+        : [{ organization_id: ORG, role, organizations: { name: 'Shefa Pharmacy' } }],
+    ),
   )
   await page.route(`${SUPABASE_URL}/rest/v1/branches*`, (route) =>
     json(route, [

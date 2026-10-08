@@ -8,7 +8,6 @@ import { MfaPage } from '@/features/auth/MfaPage'
 import { useAuth } from '@/features/auth/auth-context'
 import { OnboardingPage } from '@/features/org/OnboardingPage'
 import { useOrg } from '@/features/org/org-context'
-import { prefs } from '@/lib/storage'
 
 function Splash() {
   const { t } = useTranslation()
@@ -23,28 +22,29 @@ function Splash() {
 }
 
 /**
- * Sign-in -> two-factor (verify if enrolled, otherwise offer enrolment) -> organization -> app.
- * The database enforces MFA independently; this only guides the user.
+ * Sign-in -> organization -> app. Two-factor authentication is for owners only: staff sign in with a
+ * password. The database hides an owner's organization until the session is TOTP-verified (aal2), so
+ * someone with an authenticator and no visible organization is asked for their code, and a new owner
+ * sets one up before creating a pharmacy. The database enforces all of this independently.
  */
 export function AuthGate() {
   const { status, aal } = useAuth()
   const org = useOrg()
-  const [skippedEnroll, setSkippedEnroll] = useState(() => prefs.get('mfa-skip') === '1')
+  const [settingUpOwner, setSettingUpOwner] = useState(false)
 
   if (status === 'loading') return <Splash />
   if (status === 'signed_out') return <LoginPage />
-  if (aal.next === 'aal2' && aal.current === 'aal1') return <MfaPage mode="verify" />
   if (org.loading) return <Splash />
 
-  const needsEnroll = aal.next === 'aal1'
-  if (needsEnroll && (!skippedEnroll || org.memberships.length === 0)) {
+  const hasAuthenticator = aal.next === 'aal2'
+  if (org.memberships.length === 0) {
+    if (hasAuthenticator && aal.current === 'aal1') return <MfaPage mode="verify" />
+    if (settingUpOwner && !hasAuthenticator) {
+      return <MfaPage mode="enroll" onBack={() => setSettingUpOwner(false)} />
+    }
     return (
-      <MfaPage
-        mode="enroll"
-        onSkip={() => {
-          prefs.set('mfa-skip', '1')
-          setSkippedEnroll(true)
-        }}
+      <OnboardingPage
+        {...(hasAuthenticator ? {} : { onNeedsAuthenticator: () => setSettingUpOwner(true) })}
       />
     )
   }

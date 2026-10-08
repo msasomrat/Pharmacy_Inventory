@@ -41,11 +41,11 @@ select throws_ok(
   $$ select public.create_branch((select organization_id from public.branches limit 1), 'XYZ', 'Rogue') $$,
   'P0001', 'Permission denied: branches.manage', 'salesman cannot create branches');
 
--- MFA enforcement for owner/manager permissions
+-- MFA is enforced for owners only; staff sign in with a password
 select tests.authenticate_as(:'manager_a', 'aal1');
-select ok(not app.has_permission(:'org_a', 'stock.adjust'), 'manager without MFA has no manager permissions');
-select tests.authenticate_as(:'manager_a', 'aal2');
-select ok(app.has_permission(:'org_a', 'stock.adjust'), 'manager with MFA has manager permissions');
+select ok(app.has_permission(:'org_a', 'stock.adjust'), 'manager without MFA has manager permissions');
+select tests.authenticate_as(:'owner_a', 'aal1');
+select ok(not app.has_permission(:'org_a', 'stock.adjust'), 'owner without MFA has no permissions');
 select ok(not app.has_permission(:'org_a', 'users.manage'), 'manager cannot manage users');
 
 -- Last owner protection

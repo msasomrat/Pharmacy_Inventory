@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Building2, MailOpen } from 'lucide-react'
+import { Building2, MailOpen, ShieldCheck } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -28,7 +28,11 @@ const schema = z.object({
 })
 type FormValues = z.infer<typeof schema>
 
-export function OnboardingPage() {
+/**
+ * Accept an invitation (staff) or create a pharmacy (owner). A new owner sets up an authenticator
+ * first: the owner account is protected by two-factor sign-in (onNeedsAuthenticator).
+ */
+export function OnboardingPage({ onNeedsAuthenticator }: { onNeedsAuthenticator?: () => void }) {
   const { t } = useTranslation()
   const { signOut } = useAuth()
   const { refetch } = useOrg()
@@ -107,42 +111,54 @@ export function OnboardingPage() {
             <CardDescription>{t('onboarding.body')}</CardDescription>
           </CardHeader>
           <CardContent>
-            <form
-              className="grid gap-4 sm:grid-cols-2"
-              onSubmit={(e) => void form.handleSubmit((v) => create.mutate(v))(e)}
-              noValidate
-            >
-              <div className="sm:col-span-2">
-                <Field id="org-name" label={t('onboarding.pharmacyName')}>
-                  <Input id="org-name" placeholder="Shefa Pharmacy" {...form.register('name')} />
-                </Field>
-              </div>
-              <Field id="branch-name" label={t('onboarding.branchName')}>
-                <Input
-                  id="branch-name"
-                  placeholder="Mohammadpur"
-                  {...form.register('branchName')}
-                />
-              </Field>
-              <Field
-                id="branch-code"
-                label={t('onboarding.branchCode')}
-                hint={t('onboarding.branchCodeHint')}
-              >
-                <Input
-                  id="branch-code"
-                  placeholder="MPR"
-                  className="uppercase"
-                  maxLength={6}
-                  {...form.register('branchCode')}
-                />
-              </Field>
-              <div className="sm:col-span-2">
-                <Button type="submit" size="lg" className="w-full" loading={create.isPending}>
-                  {t('onboarding.create')}
+            {onNeedsAuthenticator ? (
+              <div className="grid gap-4">
+                <p className="flex items-start gap-2 rounded-md bg-primary-soft p-3 text-sm text-primary-soft-foreground">
+                  <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
+                  {t('onboarding.ownerMfa')}
+                </p>
+                <Button size="lg" className="w-full" onClick={onNeedsAuthenticator}>
+                  {t('onboarding.setupMfa')}
                 </Button>
               </div>
-            </form>
+            ) : (
+              <form
+                className="grid gap-4 sm:grid-cols-2"
+                onSubmit={(e) => void form.handleSubmit((v) => create.mutate(v))(e)}
+                noValidate
+              >
+                <div className="sm:col-span-2">
+                  <Field id="org-name" label={t('onboarding.pharmacyName')}>
+                    <Input id="org-name" placeholder="Shefa Pharmacy" {...form.register('name')} />
+                  </Field>
+                </div>
+                <Field id="branch-name" label={t('onboarding.branchName')}>
+                  <Input
+                    id="branch-name"
+                    placeholder="Mohammadpur"
+                    {...form.register('branchName')}
+                  />
+                </Field>
+                <Field
+                  id="branch-code"
+                  label={t('onboarding.branchCode')}
+                  hint={t('onboarding.branchCodeHint')}
+                >
+                  <Input
+                    id="branch-code"
+                    placeholder="MPR"
+                    className="uppercase"
+                    maxLength={6}
+                    {...form.register('branchCode')}
+                  />
+                </Field>
+                <div className="sm:col-span-2">
+                  <Button type="submit" size="lg" className="w-full" loading={create.isPending}>
+                    {t('onboarding.create')}
+                  </Button>
+                </div>
+              </form>
+            )}
           </CardContent>
         </Card>
 

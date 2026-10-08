@@ -78,10 +78,10 @@ select tests.authenticate_as(:'sales', 'aal1');
 select throws_ok(format($$ select public.add_opening_stock(%L, %L::jsonb, gen_random_uuid()) $$, :'branch', :'ob_items'),
   'P0001', 'Permission denied: stock.adjust', 'add_opening_stock: a salesman cannot load opening stock');
 
-select tests.authenticate_as(:'manager', 'aal1');
+select tests.authenticate_as(:'owner', 'aal1');
 select throws_ok(format($$ select public.add_opening_stock(%L, %L::jsonb, gen_random_uuid()) $$, :'branch', :'ob_items'),
   'P0001', 'Two-factor authentication is required',
-  'add_opening_stock: a manager without a TOTP-verified (aal2) session is refused while the org enforces MFA');
+  'add_opening_stock: an owner without a TOTP-verified (aal2) session is refused while the org enforces MFA');
 
 select tests.authenticate_as(:'manager');
 select is(public.add_opening_stock(:'branch', :'ob_items'::jsonb, :'ob_req'), 2,
@@ -196,9 +196,9 @@ select throws_ok(format($$ select public.adjust_stock(%L, -1, 'damage', %L) $$, 
 select throws_ok($$ select public.adjust_stock(gen_random_uuid(), -1, 'damage', gen_random_uuid()) $$,
   'P0001', 'Batch not found', 'adjust_stock: an unknown batch is reported');
 
-select tests.authenticate_as(:'manager', 'aal1');
+select tests.authenticate_as(:'owner', 'aal1');
 select throws_ok(format($$ select public.adjust_stock(%L, -1, 'damage', gen_random_uuid()) $$, :'ob_napa'),
-  'P0001', 'Two-factor authentication is required', 'adjust_stock: a manager needs an aal2 session');
+  'P0001', 'Two-factor authentication is required', 'adjust_stock: an owner needs an aal2 session');
 select tests.authenticate_as(:'sales', 'aal1');
 select throws_ok(format($$ select public.adjust_stock(%L, -1, 'damage', gen_random_uuid()) $$, :'ob_napa'),
   'P0001', 'Permission denied: stock.adjust', 'adjust_stock: a salesman cannot adjust stock');

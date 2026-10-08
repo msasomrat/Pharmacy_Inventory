@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  needsMfa,
-  overridesFor,
-  roleTemplate,
-  withDependencies,
-  type Permission,
-} from './permissions'
+import { overridesFor, roleTemplate, withDependencies, type Permission } from './permissions'
 
 describe('access editor rules', () => {
   it('sends only differences from the role template', () => {
@@ -30,14 +24,5 @@ describe('access editor rules', () => {
     expect(on.has('reports.view_cost')).toBe(true)
     const off = withDependencies(roleTemplate('manager'), 'reports.view_cost', false)
     expect(off.has('purchases.view')).toBe(false)
-  })
-
-  it('flags when a salesman will need two-factor sign-in', () => {
-    expect(needsMfa('salesman', roleTemplate('salesman'))).toBe(false)
-    expect(needsMfa('salesman', new Set([...roleTemplate('salesman'), 'sales.void']))).toBe(true)
-    const reduced = roleTemplate('salesman')
-    reduced.delete('sales.credit')
-    expect(needsMfa('salesman', reduced)).toBe(false)
-    expect(needsMfa('accountant', roleTemplate('accountant'))).toBe(true)
   })
 })

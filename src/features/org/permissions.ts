@@ -105,10 +105,3 @@ export function overridesFor(role: OrgRole, effective: Set<Permission>): Record<
   }
   return out
 }
-
-/** A salesman with anything beyond the salesman template must use two-factor sign-in (app.mfa_satisfied). */
-export function needsMfa(role: OrgRole, effective: Set<Permission>): boolean {
-  if (role !== 'salesman') return true
-  const template = roleTemplate('salesman')
-  return [...effective].some((p) => !template.has(p))
-}

@@ -43,13 +43,12 @@ select is((select count(*)::int from public.member_permissions where membership_
 select results_eq($$ select email, (overrides ->> 'sales.void')::boolean from public.list_members('$$ || :'org' || $$') where role = 'salesman' $$,
   $$ values ('sales@access.test'::text, true) $$, 'list_members shows email and overrides');
 
--- A granted salesman needs two-factor authentication
+-- A granted salesman still signs in with a password only (two-factor is for owners)
 select tests.authenticate_as(:'salesman', 'aal1');
-select is(public.my_permissions(:'org'), '{}'::text[], 'granted salesman without MFA holds nothing');
-select is((select count(*)::int from public.branches where organization_id = :'org'), 0, 'and reads nothing');
-select tests.authenticate_as(:'salesman', 'aal2');
-select ok('sales.void' = any (public.my_permissions(:'org')), 'with MFA: granted permission applies');
-select ok(not ('customers.manage' = any (public.my_permissions(:'org'))), 'with MFA: revoked permission is gone');
+select ok('sales.void' = any (public.my_permissions(:'org')), 'granted permission applies without MFA');
+select is((select count(*)::int from public.branches where organization_id = :'org'), 1, 'and reads their branch');
+select ok(not ('customers.manage' = any (public.my_permissions(:'org'))), 'revoked permission is gone');
+select ok(not ('users.manage' = any (public.my_permissions(:'org'))), 'owner-only permissions are never held');
 select is(tests.error_code(format($$ insert into public.customers (organization_id, name) values (%L, 'X') $$, :'org')),
   '42501', 'RLS enforces the revocation (customers insert refused)');
 

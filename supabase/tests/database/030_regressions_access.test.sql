@@ -4,7 +4,7 @@
 --   C. sale-return-items-cost-leak            G. app-helpers-cross-tenant-lookup
 --   D. manager-reads-purchase-cost (policy: Branch Managers hold reports.view_cost, P-45)
 begin;
-select plan(62);
+select plan(60);
 
 -- Runs SQL and returns 'ok' or 'SQLSTATE: message' (rolled back with the test).
 create function tests.try_sql(p_sql text) returns text language plpgsql as $$
@@ -65,23 +65,20 @@ select is((select count(*)::int from public.inventory_movements), 0, 'A: aal1 ow
 select is((select count(*)::int from public.profiles where id <> :'owner'), 0, 'A: aal1 owner reads no staff profiles');
 select is((select count(*)::int from public.profiles where id = :'owner'), 1, 'A: aal1 owner still reads their own profile');
 
-select tests.authenticate_as(:'manager', 'aal1');
-select ok(not app.has_permission(:'org', 'sales.create'), 'A: precondition: aal1 manager holds no permissions');
-select is((select count(*)::int from public.sales), 0, 'A: aal1 manager reads no sales');
-select is((select count(*)::int from public.customers), 0, 'A: aal1 manager reads no customers');
-select is((select count(*)::int from public.prescriptions), 0, 'A: aal1 manager reads no prescriptions');
-select is((select count(*)::int from public.batches), 0, 'A: aal1 manager reads no stock');
-select is((select count(*)::int from public.medicines), 0, 'A: aal1 manager reads no catalog');
 select throws_ok(
   format($$ select public.create_sale(%L, '[{"medicine_id": "%s", "quantity": 1}]'::jsonb,
     '[{"method": "cash", "amount_paisa": 300}]'::jsonb, gen_random_uuid()) $$, :'branch', :'sedil'),
-  'P0001', 'Two-factor authentication is required', 'A: an aal1 manager is told to complete two-factor sign-in');
+  'P0001', 'Two-factor authentication is required', 'A: an aal1 owner is told to complete two-factor sign-in');
 
+-- Owner decision (20261010120000_owner_only_mfa): staff sign in with a password only.
+select tests.authenticate_as(:'manager', 'aal1');
+select ok(app.has_permission(:'org', 'sales.create'), 'A: aal1 manager holds the manager permissions');
+select is((select count(*)::int from public.sales), 1, 'A: aal1 manager reads sales');
+select is((select count(*)::int from public.medicines), 1, 'A: aal1 manager reads the catalog');
+select is((select count(*)::int from public.profiles where id = :'owner'), 1, 'A: aal1 manager reads colleague profiles');
+select ok(not app.has_permission(:'org', 'users.manage'), 'A: aal1 manager still cannot manage staff');
 select tests.authenticate_as(:'acct', 'aal1');
-select is((select count(*)::int from public.customers), 0, 'A: aal1 accountant reads no customers (FR-IAM-005)');
-select tests.authenticate_as(:'acct', 'aal2');
-select is((select count(*)::int from public.customers), 1, 'A: control: aal2 accountant reads customers');
-
+select is((select count(*)::int from public.customers), 1, 'A: aal1 accountant reads customers');
 select tests.authenticate_as(:'sales', 'aal1');
 select is((select count(*)::int from public.customers), 1, 'A: salesmen are not MFA-gated');
 

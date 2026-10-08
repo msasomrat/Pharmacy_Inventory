@@ -19,9 +19,9 @@ interface Enrollment {
 
 /**
  * Verifies an existing TOTP factor (mode="verify") or enrols a new one (mode="enroll").
- * Salespeople may skip enrolment; owner/manager data stays locked by the database until aal2.
+ * Only owners use two-factor sign-in; their data stays locked by the database until aal2.
  */
-export function MfaPage({ mode, onSkip }: { mode: 'verify' | 'enroll'; onSkip?: () => void }) {
+export function MfaPage({ mode, onBack }: { mode: 'verify' | 'enroll'; onBack?: () => void }) {
   const { t } = useTranslation()
   const { refreshAal, signOut } = useAuth()
   const [factorId, setFactorId] = useState<string | null>(null)
@@ -127,17 +127,15 @@ export function MfaPage({ mode, onSkip }: { mode: 'verify' | 'enroll'; onSkip?: 
               {t('auth.verify')}
             </Button>
           </form>
-          {mode === 'enroll' && onSkip ? (
-            <div className="grid gap-1 text-center">
-              <Button variant="link" onClick={onSkip}>
-                {t('auth.skip')}
-              </Button>
-              <p className="text-xs text-muted-foreground">{t('auth.skipHint')}</p>
-            </div>
-          ) : null}
-          <Button variant="ghost" size="sm" onClick={() => void signOut()}>
-            {t('nav.signOut')}
-          </Button>
+          {onBack ? (
+            <Button variant="ghost" size="sm" onClick={onBack}>
+              {t('auth.back')}
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+              {t('nav.signOut')}
+            </Button>
+          )}
         </CardContent>
       </Card>
     </main>
