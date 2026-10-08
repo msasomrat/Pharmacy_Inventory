@@ -13,7 +13,7 @@ function base64url(value: object): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url')
 }
 
-export function fakeSession(aal: 'aal1' | 'aal2' = 'aal2') {
+export function fakeSession(aal: 'aal1' | 'aal2' = 'aal2', email = 'rahima@shefa.example') {
   const exp = Math.floor(Date.now() / 1000) + 3600 * 24
   const token = `${base64url({ alg: 'HS256', typ: 'JWT' })}.${base64url({
     sub: USER,
@@ -24,7 +24,7 @@ export function fakeSession(aal: 'aal1' | 'aal2' = 'aal2') {
       ...(aal === 'aal2' ? [{ method: 'totp', timestamp: exp - 5 }] : []),
     ],
     exp,
-    email: 'rahima@shefa.example',
+    email,
   })}.c2lnbmF0dXJl`
   return {
     access_token: token,
@@ -36,7 +36,7 @@ export function fakeSession(aal: 'aal1' | 'aal2' = 'aal2') {
       id: USER,
       aud: 'authenticated',
       role: 'authenticated',
-      email: 'rahima@shefa.example',
+      email,
       app_metadata: {},
       user_metadata: { full_name: 'Rahima' },
       created_at: '2026-01-01T00:00:00Z',
@@ -307,7 +307,7 @@ const MEMBERS = [
   {
     membership_id: 'mb-sales',
     user_id: '55555555-5555-4555-8555-555555555555',
-    email: 'sumi@shefa.example',
+    email: 'sumi@staff.invalid',
     full_name: 'Sumi Akter',
     role: 'salesman',
     is_active: true,
@@ -319,7 +319,7 @@ const MEMBERS = [
   {
     membership_id: 'mb-manager',
     user_id: '66666666-6666-4666-8666-666666666666',
-    email: 'rafiq@shefa.example',
+    email: 'rafiq@staff.invalid',
     full_name: 'Rafiq Hasan',
     role: 'manager',
     is_active: true,
@@ -344,8 +344,13 @@ export async function mockBackend(
     role?: 'owner' | 'manager' | 'salesman' | 'accountant' | 'auditor'
     /** Effective permissions returned by my_permissions (default: everything, as for an owner). */
     permissions?: string[]
-    /** false = the admin-users Edge Function is not deployed (404). */
-    adminFunction?: boolean
+    /** false = the admin-users Edge Function is not deployed (404); 'exists' = username taken. */
+    adminFunction?: boolean | 'exists'
+    /** Sign-in address of the signed-in user (staff usernames are <name>@staff.invalid). */
+    email?: string
+    /** Pending invitations for the signed-in user; with joined: false they are not a member yet. */
+    myInvitations?: { invitation_id: string; organization_name: string; role: string }[]
+    joined?: boolean
   } = {},
 ): Promise<RpcCall[]> {
   const {
@@ -354,20 +359,35 @@ export async function mockBackend(
     role = 'owner',
     permissions = ALL_PERMISSIONS,
     adminFunction = true,
+    email = 'rahima@shefa.example',
+    myInvitations = [],
   } = options
+  let joined = options.joined ?? true
   const calls: RpcCall[] = []
   if (signedIn) {
-    await page.addInitScript((session) => {
-      window.localStorage.setItem('sb-127-auth-token', JSON.stringify(session))
-    }, fakeSession(aal))
+    await page.addInitScript(
+      (session) => {
+        window.localStorage.setItem('sb-127-auth-token', JSON.stringify(session))
+      },
+      fakeSession(aal, email),
+    )
   }
 
-  await page.route(`${SUPABASE_URL}/auth/v1/**`, (route) => json(route, fakeSession(aal).user))
+  await page.route(`${SUPABASE_URL}/auth/v1/**`, (route) => {
+    if (route.request().method() !== 'GET') {
+      const path = new URL(route.request().url()).pathname.replace('/auth/v1/', '')
+      calls.push({
+        fn: `${route.request().method()} auth/${path}`,
+        body: (route.request().postDataJSON() ?? {}) as Record<string, unknown>,
+      })
+    }
+    return json(route, fakeSession(aal, email).user)
+  })
   // Like app.mfa_satisfied: an owner's organization stays hidden until the session is aal2.
   await page.route(`${SUPABASE_URL}/rest/v1/memberships*`, (route) =>
     json(
       route,
-      role === 'owner' && aal === 'aal1'
+      !joined || (role === 'owner' && aal === 'aal1')
         ? []
         : [{ organization_id: ORG, role, organizations: { name: 'Shefa Pharmacy' } }],
     ),
@@ -408,9 +428,12 @@ export async function mockBackend(
       fn: 'admin-users',
       body: (route.request().postDataJSON() ?? {}) as Record<string, unknown>,
     })
-    return adminFunction
-      ? json(route, { status: 'created' }, 201)
-      : json(route, { code: 'not_found' }, 404)
+    const body = (route.request().postDataJSON() ?? {}) as { action?: string }
+    if (!adminFunction) return json(route, { code: 'not_found' }, 404)
+    if (body.action === 'reset_password') return json(route, { status: 'reset' })
+    return adminFunction === 'exists'
+      ? json(route, { status: 'exists' })
+      : json(route, { status: 'created' }, 201)
   })
   // Managers and salesmen work in assigned branches (owners see all branches anyway).
   await page.route(`${SUPABASE_URL}/rest/v1/branch_assignments*`, (route) =>
@@ -533,7 +556,7 @@ export async function mockBackend(
   await writable('invitations', () => [
     {
       id: 'inv-1',
-      email: 'late@shefa.example',
+      email: 'late@staff.invalid',
       role: 'salesman',
       branch_ids: [BRANCH],
       expires_at: `${dayOffset(2)}T10:00:00Z`,
@@ -694,7 +717,19 @@ export async function mockBackend(
           },
         ])
       case 'my_invitations':
-        return json(route, [])
+        return json(
+          route,
+          joined
+            ? []
+            : myInvitations.map((i) => ({
+                ...i,
+                organization_id: ORG,
+                expires_at: `${dayOffset(2)}T10:00:00Z`,
+              })),
+        )
+      case 'accept_invitation':
+        joined = true
+        return json(route, 'mb-new')
       case 'my_permissions':
         return json(route, permissions)
       case 'list_members':

@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Building2, MailOpen, ShieldCheck } from 'lucide-react'
+import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -12,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { isStaffLogin } from '@/domain/staff-login'
 import { rpc } from '@/lib/api'
 import { errorMessage } from '@/lib/errors'
 import { useAuth } from '@/features/auth/auth-context'
@@ -31,11 +33,13 @@ type FormValues = z.infer<typeof schema>
 /**
  * Accept an invitation (staff) or create a pharmacy (owner). A new owner sets up an authenticator
  * first: the owner account is protected by two-factor sign-in (onNeedsAuthenticator).
+ * Staff username sign-ins join the pharmacy that created them automatically and cannot create one.
  */
 export function OnboardingPage({ onNeedsAuthenticator }: { onNeedsAuthenticator?: () => void }) {
   const { t } = useTranslation()
-  const { signOut } = useAuth()
+  const { session, signOut } = useAuth()
   const { refetch } = useOrg()
+  const staff = isStaffLogin(session?.user.email)
   const invitations = useQuery({
     queryKey: ['my-invitations'],
     queryFn: () => rpc('my_invitations', {}),
@@ -56,10 +60,23 @@ export function OnboardingPage({ onNeedsAuthenticator }: { onNeedsAuthenticator?
     onError: (e) => toast.error(errorMessage(e)),
   })
   const accept = useMutation({
-    mutationFn: (id: string) => rpc('accept_invitation', { p_invitation_id: id }),
-    onSuccess: () => void refetch(),
+    mutationFn: async (invitation: { invitation_id: string; role: string }) => {
+      await rpc('accept_invitation', { p_invitation_id: invitation.invitation_id })
+      return invitation.role
+    },
+    onSuccess: (role) => {
+      // A co-owner's pharmacy stays hidden until two-factor sign-in: set up the authenticator.
+      if (role === 'owner') onNeedsAuthenticator?.()
+      void refetch()
+    },
     onError: (e) => toast.error(errorMessage(e)),
   })
+
+  const firstInvitation = invitations.data?.[0]
+  const { isIdle: acceptIdle, mutate: acceptInvitation } = accept
+  useEffect(() => {
+    if (staff && firstInvitation && acceptIdle) acceptInvitation(firstInvitation)
+  }, [staff, firstInvitation, acceptIdle, acceptInvitation])
 
   return (
     <main className="min-h-dvh bg-background px-6 py-10">
@@ -89,11 +106,7 @@ export function OnboardingPage({ onNeedsAuthenticator }: { onNeedsAuthenticator?
                     <span className="font-medium">{inv.organization_name}</span>
                     <Badge tone="primary">{inv.role}</Badge>
                   </div>
-                  <Button
-                    size="sm"
-                    loading={accept.isPending}
-                    onClick={() => accept.mutate(inv.invitation_id)}
-                  >
+                  <Button size="sm" loading={accept.isPending} onClick={() => accept.mutate(inv)}>
                     {t('onboarding.accept')}
                   </Button>
                 </div>
@@ -102,65 +115,71 @@ export function OnboardingPage({ onNeedsAuthenticator }: { onNeedsAuthenticator?
           </Card>
         ) : null}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <Building2 className="size-5 text-primary" aria-hidden />
-              {t('onboarding.title')}
-            </CardTitle>
-            <CardDescription>{t('onboarding.body')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {onNeedsAuthenticator ? (
-              <div className="grid gap-4">
-                <p className="flex items-start gap-2 rounded-md bg-primary-soft p-3 text-sm text-primary-soft-foreground">
-                  <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
-                  {t('onboarding.ownerMfa')}
-                </p>
-                <Button size="lg" className="w-full" onClick={onNeedsAuthenticator}>
-                  {t('onboarding.setupMfa')}
-                </Button>
-              </div>
-            ) : (
-              <form
-                className="grid gap-4 sm:grid-cols-2"
-                onSubmit={(e) => void form.handleSubmit((v) => create.mutate(v))(e)}
-                noValidate
-              >
-                <div className="sm:col-span-2">
-                  <Field id="org-name" label={t('onboarding.pharmacyName')}>
-                    <Input id="org-name" placeholder="Shefa Pharmacy" {...form.register('name')} />
-                  </Field>
-                </div>
-                <Field id="branch-name" label={t('onboarding.branchName')}>
-                  <Input
-                    id="branch-name"
-                    placeholder="Mohammadpur"
-                    {...form.register('branchName')}
-                  />
-                </Field>
-                <Field
-                  id="branch-code"
-                  label={t('onboarding.branchCode')}
-                  hint={t('onboarding.branchCodeHint')}
-                >
-                  <Input
-                    id="branch-code"
-                    placeholder="MPR"
-                    className="uppercase"
-                    maxLength={6}
-                    {...form.register('branchCode')}
-                  />
-                </Field>
-                <div className="sm:col-span-2">
-                  <Button type="submit" size="lg" className="w-full" loading={create.isPending}>
-                    {t('onboarding.create')}
+        {staff ? null : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <Building2 className="size-5 text-primary" aria-hidden />
+                {t('onboarding.title')}
+              </CardTitle>
+              <CardDescription>{t('onboarding.body')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {onNeedsAuthenticator ? (
+                <div className="grid gap-4">
+                  <p className="flex items-start gap-2 rounded-md bg-primary-soft p-3 text-sm text-primary-soft-foreground">
+                    <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
+                    {t('onboarding.ownerMfa')}
+                  </p>
+                  <Button size="lg" className="w-full" onClick={onNeedsAuthenticator}>
+                    {t('onboarding.setupMfa')}
                   </Button>
                 </div>
-              </form>
-            )}
-          </CardContent>
-        </Card>
+              ) : (
+                <form
+                  className="grid gap-4 sm:grid-cols-2"
+                  onSubmit={(e) => void form.handleSubmit((v) => create.mutate(v))(e)}
+                  noValidate
+                >
+                  <div className="sm:col-span-2">
+                    <Field id="org-name" label={t('onboarding.pharmacyName')}>
+                      <Input
+                        id="org-name"
+                        placeholder="Shefa Pharmacy"
+                        {...form.register('name')}
+                      />
+                    </Field>
+                  </div>
+                  <Field id="branch-name" label={t('onboarding.branchName')}>
+                    <Input
+                      id="branch-name"
+                      placeholder="Mohammadpur"
+                      {...form.register('branchName')}
+                    />
+                  </Field>
+                  <Field
+                    id="branch-code"
+                    label={t('onboarding.branchCode')}
+                    hint={t('onboarding.branchCodeHint')}
+                  >
+                    <Input
+                      id="branch-code"
+                      placeholder="MPR"
+                      className="uppercase"
+                      maxLength={6}
+                      {...form.register('branchCode')}
+                    />
+                  </Field>
+                  <div className="sm:col-span-2">
+                    <Button type="submit" size="lg" className="w-full" loading={create.isPending}>
+                      {t('onboarding.create')}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <p className="text-center text-sm text-muted-foreground">
           <strong>{t('onboarding.noAccess')}.</strong> {t('onboarding.noAccessBody')}

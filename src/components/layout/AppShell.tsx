@@ -1,5 +1,14 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { Building2, Check, ChevronDown, LogOut, Menu, Search, ShieldCheck } from 'lucide-react'
+import {
+  Building2,
+  Check,
+  ChevronDown,
+  KeyRound,
+  LogOut,
+  Menu,
+  Search,
+  ShieldCheck,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet } from 'react-router'
@@ -16,6 +25,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Kbd } from '@/components/ui/kbd'
+import { displayLogin } from '@/domain/staff-login'
+import { ChangePasswordDialog } from '@/features/auth/ChangePasswordDialog'
 import { useAuth } from '@/features/auth/auth-context'
 import { useOrg } from '@/features/org/org-context'
 import { prefs } from '@/lib/storage'
@@ -85,34 +96,44 @@ function UserMenu() {
   const { t } = useTranslation()
   const { session, aal, signOut } = useAuth()
   const { current } = useOrg()
-  const email = session?.user.email ?? ''
+  const [changingPassword, setChangingPassword] = useState(false)
+  const login = displayLogin(session?.user.email ?? '')
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="grid size-9 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground ring-offset-2 hover:ring-2 hover:ring-primary/30"
-          aria-label={t('nav.account')}
-        >
-          {initials(email)}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuLabel>
-          <span className="block truncate text-sm font-medium text-foreground">{email}</span>
-          <span className="capitalize">{current?.role}</span>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem disabled>
-          <ShieldCheck aria-hidden />
-          {t('nav.security')}: {aal.current === 'aal2' ? '✓' : '—'}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => void signOut()}>
-          <LogOut aria-hidden />
-          {t('nav.signOut')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="grid size-9 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground ring-offset-2 hover:ring-2 hover:ring-primary/30"
+            aria-label={t('nav.account')}
+          >
+            {initials(login)}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuLabel>
+            <span className="block truncate text-sm font-medium text-foreground">{login}</span>
+            <span className="capitalize">{current?.role}</span>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled>
+            <ShieldCheck aria-hidden />
+            {t('nav.security')}: {aal.current === 'aal2' ? '✓' : '—'}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setChangingPassword(true)}>
+            <KeyRound aria-hidden />
+            {t('nav.changePassword')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void signOut()}>
+            <LogOut aria-hidden />
+            {t('nav.signOut')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {changingPassword ? (
+        <ChangePasswordDialog open={changingPassword} onOpenChange={setChangingPassword} />
+      ) : null}
+    </>
   )
 }
 

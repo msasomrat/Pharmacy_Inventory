@@ -1,18 +1,31 @@
 /**
- * admin-users: creates the sign-in account for a person the owner has already invited.
+ * admin-users: sign-in accounts for staff, managed by the owner.
+ *
+ * Actions:
+ * - create (default): creates the sign-in for a person the owner has already invited. Staff sign in
+ *   with a username, stored in Auth as the internal address <username>@staff.invalid.
+ * - reset_password: sets a new temporary password for a staff sign-in of the caller's pharmacy. Staff
+ *   have no email address, so the owner resets forgotten passwords.
  *
  * Security model (least privilege):
- * - The caller's own JWT is used to look up a pending invitation for the email. Invitations are only
- *   visible to members holding users.manage (RLS, owner + MFA by default), so the database decides who
- *   may create accounts. No invitation -> no account.
- * - Only then is the service-role Admin API used, and only to create that one confirmed user. The
- *   person still joins the pharmacy by accepting the invitation with their own session.
- * - The temporary password must meet the project's password policy.
+ * - The caller's own JWT asks the database first: a pending invitation for the address (create) or
+ *   the member in list_members (reset). Both are visible only with users.manage (owner, two-factor),
+ *   so the database decides who may act. Nothing visible -> nothing done.
+ * - Only then is the service-role Admin API used, for that one account. New accounts are stamped with
+ *   app_metadata.staff_org = the organization: the database lets such an account join only that
+ *   organization, and a password is reset only for an account stamped with the caller's organization,
+ *   never for an owner.
+ * - The person still joins the pharmacy by accepting the invitation with their own session.
+ * - Passwords must meet the project's password policy.
  *
  * Pure request handling lives here so it can be unit-tested without Deno; index.ts wires real clients.
  */
 
 export interface Invitation {
+  role: string
+}
+
+export interface Member {
   role: string
 }
 
@@ -23,8 +36,18 @@ export interface Deps {
     organizationId: string,
     email: string,
   ) => Promise<Invitation | null>
-  /** Creates a confirmed user; 'exists' when the email already has an account. */
-  createUser: (email: string, password: string, fullName: string) => Promise<'created' | 'exists'>
+  /** Creates a confirmed user stamped with the organization; 'exists' when the address is taken. */
+  createUser: (
+    email: string,
+    password: string,
+    fullName: string,
+    organizationId: string,
+  ) => Promise<'created' | 'exists'>
+  /** The member as listed to the caller by list_members (users.manage), or null. */
+  findMember: (callerJwt: string, organizationId: string, userId: string) => Promise<Member | null>
+  /** app_metadata.staff_org of the account, or null. */
+  staffOrgOf: (userId: string) => Promise<string | null>
+  setPassword: (userId: string, password: string) => Promise<void>
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -77,12 +100,34 @@ export async function handle(
     return reply(400, { code: 'invalid_request' })
   }
   const input = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>
+  const action = input.action ?? 'create'
   const organizationId = typeof input.organization_id === 'string' ? input.organization_id : ''
-  const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : ''
   const password = typeof input.password === 'string' ? input.password : ''
-  const fullName = typeof input.full_name === 'string' ? input.full_name.trim().slice(0, 120) : ''
 
   if (!UUID.test(organizationId)) return reply(400, { code: 'invalid_request' })
+
+  if (action === 'reset_password') {
+    const userId = typeof input.user_id === 'string' ? input.user_id : ''
+    if (!UUID.test(userId)) return reply(400, { code: 'invalid_request' })
+    const weak = passwordProblem(password)
+    if (weak) return reply(400, { code: weak })
+    try {
+      const member = await deps.findMember(jwt, organizationId, userId)
+      if (!member) return reply(403, { code: 'not_allowed' })
+      if (member.role === 'owner') return reply(403, { code: 'owner_password' })
+      if ((await deps.staffOrgOf(userId)) !== organizationId)
+        return reply(403, { code: 'not_staff_login' })
+      await deps.setPassword(userId, password)
+      return reply(200, { status: 'reset' })
+    } catch (e) {
+      console.error('admin-users reset failed', e instanceof Error ? e.message : e)
+      return reply(500, { code: 'unknown' })
+    }
+  }
+  if (action !== 'create') return reply(400, { code: 'invalid_request' })
+
+  const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : ''
+  const fullName = typeof input.full_name === 'string' ? input.full_name.trim().slice(0, 120) : ''
   if (!EMAIL.test(email) || email.length > 320) return reply(400, { code: 'invalid_email' })
   const weak = passwordProblem(password)
   if (weak) return reply(400, { code: weak })
@@ -90,7 +135,7 @@ export async function handle(
   try {
     const invitation = await deps.findInvitation(jwt, organizationId, email)
     if (!invitation) return reply(403, { code: 'no_invitation' })
-    const result = await deps.createUser(email, password, fullName)
+    const result = await deps.createUser(email, password, fullName, organizationId)
     return reply(result === 'created' ? 201 : 200, { status: result })
   } catch (e) {
     console.error('admin-users failed', e instanceof Error ? e.message : e)

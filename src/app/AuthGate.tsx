@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Outlet } from 'react-router'
 
 import { Logo } from '@/components/brand/logo'
+import { isStaffLogin } from '@/domain/staff-login'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { MfaPage } from '@/features/auth/MfaPage'
 import { useAuth } from '@/features/auth/auth-context'
@@ -25,10 +26,11 @@ function Splash() {
  * Sign-in -> organization -> app. Two-factor authentication is for owners only: staff sign in with a
  * password. The database hides an owner's organization until the session is TOTP-verified (aal2), so
  * someone with an authenticator and no visible organization is asked for their code, and a new owner
- * sets one up before creating a pharmacy. The database enforces all of this independently.
+ * sets one up before creating a pharmacy. Staff username sign-ins join their pharmacy without a code
+ * (unless the invitation makes them a co-owner). The database enforces all of this independently.
  */
 export function AuthGate() {
-  const { status, aal } = useAuth()
+  const { status, session, aal } = useAuth()
   const org = useOrg()
   const [settingUpOwner, setSettingUpOwner] = useState(false)
 
@@ -38,13 +40,15 @@ export function AuthGate() {
 
   const hasAuthenticator = aal.next === 'aal2'
   if (org.memberships.length === 0) {
-    if (hasAuthenticator && aal.current === 'aal1') return <MfaPage mode="verify" />
+    const ownerSignIn = !isStaffLogin(session?.user.email) || settingUpOwner
+    if (ownerSignIn && hasAuthenticator && aal.current === 'aal1') return <MfaPage mode="verify" />
     if (settingUpOwner && !hasAuthenticator) {
       return <MfaPage mode="enroll" onBack={() => setSettingUpOwner(false)} />
     }
+    const needsSetup = !hasAuthenticator || isStaffLogin(session?.user.email)
     return (
       <OnboardingPage
-        {...(hasAuthenticator ? {} : { onNeedsAuthenticator: () => setSettingUpOwner(true) })}
+        {...(needsSetup ? { onNeedsAuthenticator: () => setSettingUpOwner(true) } : {})}
       />
     )
   }

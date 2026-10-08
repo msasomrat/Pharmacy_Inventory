@@ -895,7 +895,7 @@ resolves a permission as _override if present, else role template_, and `app.per
 | Owners always hold every permission and carry no overrides                 | `set_member_permissions` refuses (`owner_has_all`); trigger `member_permissions_guard` blocks privileged writes too |
 | `users.manage`, `branches.manage`, `org.settings.manage` cannot be granted | `app.permissions.grantable = false` (`not_grantable`)                                                               |
 | Seeing purchases implies seeing cost (P-45)                                | `permission_dependency` when `purchases.view` is effective without `reports.view_cost`                              |
-| A salesman with any granted permission needs a TOTP session                | `app.mfa_satisfied` treats such a salesman like a Manager                                                           |
+| Only the Owner needs a TOTP session (owner decision, 6.2 rule 5)           | `app.mfa_satisfied` (migration `20261010120000_owner_only_mfa`)                                                     |
 | A role change starts from the new template                                 | trigger `memberships_reset_overrides` clears overrides                                                              |
 | The app shows screens from the server's answer                             | `my_permissions(org)`; the UI never decides access on its own                                                       |
 
@@ -905,6 +905,22 @@ Admin API to create that one confirmed user with a policy-compliant temporary pa
 still joins by accepting the invitation with their own session (FR-IAM-003). Tests: pgTAP
 `150_member_access`, RLS matrix (`member_permissions`, cross-tenant and anon cases for the four RPCs),
 and unit tests of the function handler.
+
+**Staff usernames (owner decision, migration `20261011120000_staff_usernames`).** Staff have no email
+address in the app. A username is stored in Auth as `<username>@staff.invalid`; the `.invalid`
+top-level domain is reserved (RFC 2606), so these addresses can never receive mail and no reset email
+can be sent. Owners keep a real email and two-factor sign-in.
+
+| Rule                                                                               | Enforcement                                                                                                                                                              |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A staff sign-in belongs to the pharmacy that created it                            | `admin-users` stamps `app_metadata.staff_org` (writable only by the service role); `my_invitations` and `accept_invitation` ignore invitations of any other organization |
+| Only the Owner resets a staff password, only for its own staff, never for an Owner | `admin-users` action `reset_password`: member visible to the caller through `list_members` (`users.manage`), role not owner, `staff_org` equal to the organization       |
+| A taken username is not reused                                                     | Auth refuses the duplicate address; the app withdraws the invitation and asks for another username (reveals only that the username exists)                               |
+| Staff join without an extra step                                                   | At first sign-in the app accepts the (single, bound) invitation; staff sign-ins cannot create a pharmacy in the app                                                      |
+| Staff replace the temporary password                                               | Account menu → Change password (`auth.updateUser`, same password policy)                                                                                                 |
+
+Tests: pgTAP `160_staff_usernames`, handler unit tests (`reset_password` refusals), e2e `auth.spec`
+and `settings.spec`.
 
 ### 6.8 Alignment with the M1 implementation
 

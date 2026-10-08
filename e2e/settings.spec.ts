@@ -11,7 +11,7 @@ const SALESMAN_PERMISSIONS = [
 ]
 
 test.describe('owner (aal2): staff and access', () => {
-  test('add staff creates the invitation and the sign-in, then shows the temporary password', async ({
+  test('add staff by username creates the invitation and the sign-in, then shows the password', async ({
     page,
   }) => {
     const calls = await mockBackend(page)
@@ -19,25 +19,41 @@ test.describe('owner (aal2): staff and access', () => {
     await page.getByRole('button', { name: 'Add staff' }).first().click()
     const dialog = page.getByRole('dialog')
     await dialog.getByLabel('Full name').fill('Nila Das')
-    await dialog.getByLabel('Email').fill('Nila@Shefa.example ')
+    await dialog.getByLabel('Username').fill(' Nila.MPR ')
     await dialog.getByLabel('Role').selectOption('salesman')
     const password = await dialog.getByLabel('Temporary password').inputValue()
     expect(password).toMatch(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{12}$/)
     await dialog.getByRole('button', { name: 'Add staff' }).click()
 
-    await expect(dialog.getByText('A sign-in was created for nila@shefa.example.')).toBeVisible()
+    await expect(dialog.getByText('A sign-in was created. Username: nila.mpr.')).toBeVisible()
+    await expect(dialog.getByTestId('new-username')).toHaveText('nila.mpr')
     await expect(dialog.getByTestId('temp-password')).toHaveText(password)
     expect(calls.find((c) => c.fn === 'add_member')?.body).toEqual({
       p_organization_id: '11111111-1111-4111-8111-111111111111',
-      p_email: 'nila@shefa.example',
+      p_email: 'nila.mpr@staff.invalid',
       p_role: 'salesman',
       p_branch_ids: ['22222222-2222-4222-8222-222222222222'],
     })
     expect(calls.find((c) => c.fn === 'admin-users')?.body).toEqual({
       organization_id: '11111111-1111-4111-8111-111111111111',
-      email: 'nila@shefa.example',
+      email: 'nila.mpr@staff.invalid',
       password,
       full_name: 'Nila Das',
+    })
+  })
+
+  test('a username that is already used is refused and its invitation withdrawn', async ({
+    page,
+  }) => {
+    const calls = await mockBackend(page, { adminFunction: 'exists' })
+    await page.goto('/settings')
+    await page.getByRole('button', { name: 'Add staff' }).first().click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByLabel('Username').fill('rafiq')
+    await dialog.getByRole('button', { name: 'Add staff' }).click()
+    await expect(dialog.getByText(/The username rafiq is already used.*rafiq\.mpr/)).toBeVisible()
+    expect(calls.find((c) => c.fn === 'revoke_invitation')?.body).toEqual({
+      p_invitation_id: 'inv-new',
     })
   })
 
@@ -48,23 +64,45 @@ test.describe('owner (aal2): staff and access', () => {
     await page.goto('/settings')
     await page.getByRole('button', { name: 'Add staff' }).first().click()
     const dialog = page.getByRole('dialog')
-    await dialog.getByLabel('Email').fill('acc@shefa.example')
+    await dialog.getByLabel('Username').fill('acc')
     await dialog.getByLabel('Role').selectOption('accountant')
     await expect(dialog.getByText('This role works in every branch.')).toBeVisible()
     await dialog.getByRole('button', { name: 'Add staff' }).click()
-    await expect(dialog.getByText(/Supabase → Authentication → Add user/)).toBeVisible()
+    await expect(
+      dialog.getByText(/Supabase → Authentication → Add user.*acc@staff\.invalid/),
+    ).toBeVisible()
   })
 
-  test('rejects a weak temporary password', async ({ page }) => {
+  test('rejects a bad username or a weak temporary password', async ({ page }) => {
     const calls = await mockBackend(page)
     await page.goto('/settings')
     await page.getByRole('button', { name: 'Add staff' }).first().click()
     const dialog = page.getByRole('dialog')
-    await dialog.getByLabel('Email').fill('x@shefa.example')
+    await dialog.getByLabel('Username').fill('ab')
     await dialog.getByLabel('Temporary password').fill('password')
     await dialog.getByRole('button', { name: 'Add staff' }).click()
+    await expect(dialog.getByText(/Use 3–30 small letters/)).toBeVisible()
     await expect(dialog.getByText(/Use 10\+ characters/)).toBeVisible()
     expect(calls.some((c) => c.fn === 'add_member')).toBe(false)
+  })
+
+  test('the owner resets a staff password', async ({ page }) => {
+    const calls = await mockBackend(page)
+    await page.goto('/settings')
+    await expect(
+      page.getByRole('row', { name: /Sumi Akter/ }).getByText('sumi', { exact: true }),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'Manage Sumi Akter' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('button', { name: 'Reset password' }).click()
+    const shown = dialog.getByTestId('reset-password')
+    await expect(shown).toHaveText(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{12}$/)
+    expect(calls.find((c) => c.fn === 'admin-users')?.body).toEqual({
+      action: 'reset_password',
+      organization_id: '11111111-1111-4111-8111-111111111111',
+      user_id: '55555555-5555-4555-8555-555555555555',
+      password: await shown.textContent(),
+    })
   })
 
   test('per-person access: grant and revoke individual permissions', async ({ page }) => {
@@ -124,10 +162,7 @@ test.describe('owner (aal2): staff and access', () => {
     const calls = await mockBackend(page)
     await page.goto('/settings')
     await expect(page.getByRole('button', { name: 'Manage Rahima' })).toBeDisabled()
-    await page
-      .getByRole('row', { name: /late@shefa.example/ })
-      .getByRole('button', { name: 'Revoke' })
-      .click()
+    await page.getByRole('row', { name: /late/ }).getByRole('button', { name: 'Revoke' }).click()
     await expect.poll(() => calls.some((c) => c.fn === 'revoke_invitation')).toBe(true)
   })
 })

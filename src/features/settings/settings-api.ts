@@ -103,9 +103,26 @@ export function generatePassword(length = 12): string {
 
 export type LoginResult = 'created' | 'exists' | 'unavailable'
 
+/** Turns an admin-users error response into an AppError with its code; 404 means not deployed. */
+async function functionError(error: unknown): Promise<'unavailable'> {
+  if (error instanceof FunctionsHttpError) {
+    const response = error.context as Response
+    if (response.status === 404) return 'unavailable'
+    let code = 'unknown'
+    try {
+      code = ((await response.json()) as { code?: string }).code ?? 'unknown'
+    } catch {
+      // Body was not JSON; keep 'unknown'.
+    }
+    throw toAppError({ message: code, details: code })
+  }
+  return 'unavailable'
+}
+
 /**
- * Asks the admin-users Edge Function to create the sign-in account for an invited email.
- * 'unavailable' means the function is not deployed or unreachable; the invitation still stands.
+ * Asks the admin-users Edge Function to create the sign-in account for an invited address (a staff
+ * username's internal address). 'unavailable' means the function is not deployed or unreachable; the
+ * invitation still stands.
  */
 export async function createLogin(params: {
   organizationId: string
@@ -123,16 +140,24 @@ export async function createLogin(params: {
   })
   const error: unknown = result.error
   if (!error) return result.data?.status ?? 'created'
-  if (error instanceof FunctionsHttpError) {
-    const response = error.context as Response
-    if (response.status === 404) return 'unavailable'
-    let code = 'unknown'
-    try {
-      code = ((await response.json()) as { code?: string }).code ?? 'unknown'
-    } catch {
-      // Body was not JSON; keep 'unknown'.
-    }
-    throw toAppError({ message: code, details: code })
-  }
-  return 'unavailable'
+  return functionError(error)
+}
+
+/** Owner sets a new temporary password for a staff username sign-in of this pharmacy. */
+export async function resetStaffPassword(params: {
+  organizationId: string
+  userId: string
+  password: string
+}): Promise<'reset' | 'unavailable'> {
+  const result = await supabase.functions.invoke<{ status: 'reset' }>('admin-users', {
+    body: {
+      action: 'reset_password',
+      organization_id: params.organizationId,
+      user_id: params.userId,
+      password: params.password,
+    },
+  })
+  const error: unknown = result.error
+  if (!error) return 'reset'
+  return functionError(error)
 }

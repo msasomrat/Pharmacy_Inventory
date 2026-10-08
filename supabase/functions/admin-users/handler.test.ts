@@ -22,6 +22,9 @@ function deps(overrides: Partial<Deps> = {}): Deps {
   return {
     findInvitation: vi.fn().mockResolvedValue({ role: 'salesman' }),
     createUser: vi.fn().mockResolvedValue('created'),
+    findMember: vi.fn().mockResolvedValue({ role: 'salesman' }),
+    staffOrgOf: vi.fn().mockResolvedValue(ORG),
+    setPassword: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   }
 }
@@ -49,7 +52,7 @@ describe('admin-users handler', () => {
     expect(res.status).toBe(201)
     expect(await res.json()).toEqual({ status: 'created' })
     expect(d.findInvitation).toHaveBeenCalledWith('caller-jwt', ORG, 'sumi@example.com')
-    expect(d.createUser).toHaveBeenCalledWith('sumi@example.com', 'Strong-Pass1', 'Sumi')
+    expect(d.createUser).toHaveBeenCalledWith('sumi@example.com', 'Strong-Pass1', 'Sumi', ORG)
   })
 
   it('refuses without an invitation visible to the caller (not owner, or not invited)', async () => {
@@ -91,6 +94,45 @@ describe('admin-users handler', () => {
       expect(await res.json()).toEqual({ code })
     }
     expect(d.findInvitation).not.toHaveBeenCalled()
+  })
+
+  it("resets a staff password only for a member of the caller's pharmacy", async () => {
+    const USER = '33333333-3333-4333-8333-333333333333'
+    const reset = {
+      action: 'reset_password',
+      organization_id: ORG,
+      user_id: USER,
+      password: 'New-Pass123',
+    }
+
+    const d = deps()
+    const ok = await handle(request(reset), d, ['*'])
+    expect(ok.status).toBe(200)
+    expect(await ok.json()).toEqual({ status: 'reset' })
+    expect(d.findMember).toHaveBeenCalledWith('caller-jwt', ORG, USER)
+    expect(d.setPassword).toHaveBeenCalledWith(USER, 'New-Pass123')
+
+    const refusals: [Partial<Deps>, string][] = [
+      [{ findMember: vi.fn().mockResolvedValue(null) }, 'not_allowed'],
+      [{ findMember: vi.fn().mockResolvedValue({ role: 'owner' }) }, 'owner_password'],
+      [{ staffOrgOf: vi.fn().mockResolvedValue(null) }, 'not_staff_login'],
+      [
+        { staffOrgOf: vi.fn().mockResolvedValue('44444444-4444-4444-8444-444444444444') },
+        'not_staff_login',
+      ],
+    ]
+    for (const [override, code] of refusals) {
+      const dd = deps(override)
+      const res = await handle(request(reset), dd, ['*'])
+      expect(res.status).toBe(403)
+      expect(await res.json()).toEqual({ code })
+      expect(dd.setPassword).not.toHaveBeenCalled()
+    }
+
+    const weak = await handle(request({ ...reset, password: 'weak' }), d, ['*'])
+    expect(weak.status).toBe(400)
+    const unknown = await handle(request({ ...reset, action: 'delete_user' }), d, ['*'])
+    expect(unknown.status).toBe(400)
   })
 
   it('answers CORS preflight and rejects other methods', async () => {

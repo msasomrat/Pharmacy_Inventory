@@ -10,10 +10,12 @@ import { LanguageToggle, ThemeToggle } from '@/components/layout/preferences'
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { loginToEmail } from '@/domain/staff-login'
 import { supabase } from '@/lib/supabase'
 
+// Staff type their username, owners their email (staff usernames map to internal addresses).
 const schema = z.object({
-  email: z.email(),
+  login: z.string().trim().min(1).max(320),
   password: z.string().min(1),
 })
 type FormValues = z.infer<typeof schema>
@@ -23,13 +25,16 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { login: '', password: '' },
   })
   const points = t('auth.heroPoints', { returnObjects: true }) as string[]
 
   const onSubmit = form.handleSubmit(async (values) => {
     setError(null)
-    const { error: signInError } = await supabase.auth.signInWithPassword(values)
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: loginToEmail(values.login),
+      password: values.password,
+    })
     if (signInError) setError(t('auth.invalid'))
   })
 
@@ -80,18 +85,20 @@ export function LoginPage() {
           </div>
           <form className="grid gap-4" onSubmit={(e) => void onSubmit(e)} noValidate>
             <Field
-              id="email"
-              label={t('auth.email')}
-              error={form.formState.errors.email ? t('auth.invalid') : undefined}
+              id="login"
+              label={t('auth.loginId')}
+              error={form.formState.errors.login ? t('auth.invalid') : undefined}
             >
               <Input
-                id="email"
-                type="email"
+                id="login"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 // eslint-disable-next-line jsx-a11y/no-autofocus -- sign-in is the only task on this page
                 autoFocus
-                aria-invalid={Boolean(form.formState.errors.email)}
-                {...form.register('email')}
+                aria-invalid={Boolean(form.formState.errors.login)}
+                {...form.register('login')}
               />
             </Field>
             <Field id="password" label={t('auth.password')}>

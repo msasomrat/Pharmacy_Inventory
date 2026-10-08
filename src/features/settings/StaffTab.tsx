@@ -20,6 +20,13 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
+import {
+  displayLogin,
+  isStaffLogin,
+  isValidUsername,
+  normalizeUsername,
+  usernameToEmail,
+} from '@/domain/staff-login'
 import { useAuth } from '@/features/auth/auth-context'
 import type { OrgRole } from '@/features/org/org-context'
 import { useWorkspace } from '@/features/org/org-context'
@@ -37,12 +44,12 @@ import {
   generatePassword,
   listInvitations,
   listMembers,
+  resetStaffPassword,
   roleUsesBranches,
   type LoginResult,
   type Member,
 } from './settings-api'
 
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const STRONG = (p: string) => p.length >= 10 && /[a-z]/.test(p) && /[A-Z]/.test(p) && /\d/.test(p)
 
 function BranchPicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
@@ -107,40 +114,50 @@ function AddStaffDialog({
   const { org, branch } = useWorkspace()
   const queryClient = useQueryClient()
   const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [role, setRole] = useState<OrgRole>('salesman')
   const [branchIds, setBranchIds] = useState<string[]>([branch.id])
   const [password, setPassword] = useState(() => generatePassword())
   const [showErrors, setShowErrors] = useState(false)
-  const [done, setDone] = useState<{ email: string; password: string; login: LoginResult } | null>(
-    null,
-  )
+  const [taken, setTaken] = useState<string | null>(null)
+  const [done, setDone] = useState<{
+    username: string
+    email: string
+    password: string
+    login: Exclude<LoginResult, 'exists'>
+  } | null>(null)
 
+  const cleanUsername = normalizeUsername(username)
   const errors = {
-    email: !EMAIL.test(email.trim()),
+    username: !isValidUsername(cleanUsername),
     password: !STRONG(password),
     branches: roleUsesBranches(role) && branchIds.length === 0,
   }
 
   const add = useMutation({
     mutationFn: async () => {
-      const cleanEmail = email.trim().toLowerCase()
-      await rpc('add_member', {
+      const email = usernameToEmail(cleanUsername)
+      const invitationId = await rpc('add_member', {
         p_organization_id: org.organizationId,
-        p_email: cleanEmail,
+        p_email: email,
         p_role: role,
         p_branch_ids: roleUsesBranches(role) ? branchIds : [],
       })
       const login = await createLogin({
         organizationId: org.organizationId,
-        email: cleanEmail,
+        email,
         password,
         fullName: fullName.trim(),
       })
-      return { email: cleanEmail, password, login }
+      if (login === 'exists') {
+        // Someone (possibly another pharmacy) already uses this username: withdraw the invitation.
+        await rpc('revoke_invitation', { p_invitation_id: invitationId })
+      }
+      return { username: cleanUsername, email, password, login }
     },
     onSuccess: async (r) => {
-      setDone(r)
+      if (r.login === 'exists') setTaken(r.username)
+      else setDone({ ...r, login: r.login })
       await queryClient.invalidateQueries({ queryKey: ['invitations'] })
     },
     onError: (e) => toast.error(errorMessage(e)),
@@ -148,7 +165,8 @@ function AddStaffDialog({
 
   function submit() {
     setShowErrors(true)
-    if (errors.email || errors.password || errors.branches) return
+    setTaken(null)
+    if (errors.username || errors.password || errors.branches) return
     add.mutate()
   }
 
@@ -161,20 +179,21 @@ function AddStaffDialog({
               <DialogTitle>{t('settings.staffAdded')}</DialogTitle>
               <DialogDescription>
                 {t(
-                  done.login === 'created'
-                    ? 'settings.loginCreated'
-                    : done.login === 'exists'
-                      ? 'settings.loginExists'
-                      : 'settings.loginUnavailable',
-                  { email: done.email },
+                  done.login === 'created' ? 'settings.loginCreated' : 'settings.loginUnavailable',
+                  {
+                    username: done.username,
+                    email: done.email,
+                  },
                 )}
               </DialogDescription>
             </DialogHeader>
             {done.login === 'created' ? (
               <div className="grid gap-2 rounded-lg border bg-surface-muted/60 p-4 text-sm">
                 <p>
-                  <span className="text-muted-foreground">{t('settings.email')}:</span>{' '}
-                  <span className="font-medium">{done.email}</span>
+                  <span className="text-muted-foreground">{t('settings.username')}:</span>{' '}
+                  <span className="font-mono font-medium" data-testid="new-username">
+                    {done.username}
+                  </span>
                 </p>
                 <p className="flex items-center gap-2">
                   <span className="text-muted-foreground">{t('settings.tempPassword')}:</span>{' '}
@@ -186,7 +205,7 @@ function AddStaffDialog({
                     size="icon"
                     aria-label={t('settings.copy')}
                     onClick={() =>
-                      void navigator.clipboard.writeText(`${done.email}\n${done.password}`)
+                      void navigator.clipboard.writeText(`${done.username}\n${done.password}`)
                     }
                   >
                     <Copy aria-hidden />
@@ -217,17 +236,32 @@ function AddStaffDialog({
                 />
               </Field>
               <Field
-                id="st-email"
-                label={t('settings.email')}
-                error={showErrors && errors.email ? t('errors.invalid_email') : undefined}
+                id="st-username"
+                label={t('settings.username')}
+                hint={t('settings.usernameHint')}
+                error={
+                  taken
+                    ? t('settings.loginExists', {
+                        username: taken,
+                        branch: branch.code.toLowerCase(),
+                      })
+                    : showErrors && errors.username
+                      ? t('settings.usernameInvalid')
+                      : undefined
+                }
               >
                 <Input
-                  id="st-email"
-                  type="email"
+                  id="st-username"
                   autoComplete="off"
-                  value={email}
-                  aria-invalid={showErrors && errors.email ? true : undefined}
-                  onChange={(e) => setEmail(e.target.value)}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  value={username}
+                  aria-invalid={taken || (showErrors && errors.username) ? true : undefined}
+                  onChange={(e) => {
+                    setUsername(e.target.value)
+                    setTaken(null)
+                  }}
                 />
               </Field>
               <RoleSelect id="st-role" value={role} onChange={setRole} />
@@ -286,6 +320,64 @@ function AddStaffDialog({
   )
 }
 
+/** Owner gives a staff member a new temporary password (staff have no email to reset it). */
+function ResetPassword({ member }: { member: Member }) {
+  const { t } = useTranslation()
+  const { org } = useWorkspace()
+  const [password, setPassword] = useState<string | null>(null)
+  const name = member.fullName ?? displayLogin(member.email)
+
+  const reset = useMutation({
+    mutationFn: async () => {
+      const next = generatePassword()
+      const result = await resetStaffPassword({
+        organizationId: org.organizationId,
+        userId: member.userId,
+        password: next,
+      })
+      if (result === 'unavailable') throw new Error(t('settings.loginUnavailableShort'))
+      return next
+    },
+    onSuccess: setPassword,
+    onError: (e) => toast.error(errorMessage(e)),
+  })
+
+  return (
+    <div className="grid gap-2 rounded-lg border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">{t('settings.resetPasswordBody')}</p>
+        <Button
+          variant="secondary"
+          size="sm"
+          loading={reset.isPending}
+          onClick={() => reset.mutate()}
+        >
+          <KeyRound aria-hidden />
+          {t('settings.resetPassword')}
+        </Button>
+      </div>
+      {password ? (
+        <p className="flex flex-wrap items-center gap-2 rounded-md bg-surface-muted/60 p-2 text-sm">
+          <span className="text-muted-foreground">{t('settings.newPasswordFor', { name })}:</span>
+          <span className="font-mono font-medium" data-testid="reset-password">
+            {password}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('settings.copy')}
+            onClick={() =>
+              void navigator.clipboard.writeText(`${displayLogin(member.email)}\n${password}`)
+            }
+          >
+            <Copy aria-hidden />
+          </Button>
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 function MemberDialog({ member, onClose }: { member: Member; onClose: () => void }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -325,7 +417,9 @@ function MemberDialog({ member, onClose }: { member: Member; onClose: () => void
       }
     },
     onSuccess: async () => {
-      toast.success(t('settings.accessSaved', { name: member.fullName ?? member.email }))
+      toast.success(
+        t('settings.accessSaved', { name: member.fullName ?? displayLogin(member.email) }),
+      )
       await queryClient.invalidateQueries({ queryKey: ['members'] })
       await queryClient.invalidateQueries({ queryKey: ['my-permissions'] })
       onClose()
@@ -336,8 +430,8 @@ function MemberDialog({ member, onClose }: { member: Member; onClose: () => void
   return (
     <div className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>{member.fullName ?? member.email}</DialogTitle>
-        <DialogDescription>{member.email}</DialogDescription>
+        <DialogTitle>{member.fullName ?? displayLogin(member.email)}</DialogTitle>
+        <DialogDescription>{displayLogin(member.email)}</DialogDescription>
       </DialogHeader>
       <div className="grid gap-4 sm:grid-cols-2">
         <RoleSelect id="mb-role" value={role} onChange={changeRole} />
@@ -357,6 +451,9 @@ function MemberDialog({ member, onClose }: { member: Member; onClose: () => void
         <p className="text-sm text-muted-foreground">{t('settings.allBranches')}</p>
       )}
       <AccessEditor role={role} value={access} onChange={setAccess} />
+      {member.role !== 'owner' && isStaffLogin(member.email) ? (
+        <ResetPassword member={member} />
+      ) : null}
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onClose}>
           {t('common.cancel')}
@@ -429,8 +526,8 @@ export function StaffTab() {
                   return (
                     <TR key={m.membershipId} className={m.isActive ? undefined : 'opacity-60'}>
                       <TD>
-                        <p className="font-medium">{m.fullName ?? m.email}</p>
-                        <p className="text-xs text-muted-foreground">{m.email}</p>
+                        <p className="font-medium">{m.fullName ?? displayLogin(m.email)}</p>
+                        <p className="text-xs text-muted-foreground">{displayLogin(m.email)}</p>
                       </TD>
                       <TD>
                         <span className="flex flex-wrap gap-1.5">
@@ -459,7 +556,9 @@ export function StaffTab() {
                           size="sm"
                           disabled={self}
                           title={self ? t('settings.notSelf') : undefined}
-                          aria-label={t('settings.manageNamed', { name: m.fullName ?? m.email })}
+                          aria-label={t('settings.manageNamed', {
+                            name: m.fullName ?? displayLogin(m.email),
+                          })}
                           onClick={() => setEditing(m)}
                         >
                           {t('settings.manage')}
@@ -487,7 +586,7 @@ export function StaffTab() {
                 {(invitations.data ?? []).map((i) => (
                   <TR key={i.id}>
                     <TD>
-                      <p className="font-medium">{i.email}</p>
+                      <p className="font-medium">{displayLogin(i.email)}</p>
                       <p className="text-xs text-muted-foreground">
                         {t('settings.expires', { date: formatDate(i.expiresAt.slice(0, 10), lng) })}
                       </p>
