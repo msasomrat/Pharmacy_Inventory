@@ -132,6 +132,38 @@ test.describe('owner (aal2): staff and access', () => {
     expect(calls.some((c) => c.fn === 'update_member')).toBe(false)
   })
 
+  test('remove a staff member (with confirmation) and restore a removed one', async ({ page }) => {
+    const calls = await mockBackend(page)
+    await page.goto('/settings')
+    // Removed staff are listed separately (with Restore), not among the active staff.
+    await expect(page.getByText('Removed staff')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Manage Kamal Uddin' })).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Manage Sumi Akter' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('button', { name: 'Remove from pharmacy' }).click()
+    await expect(
+      dialog.getByText('Remove Sumi Akter? They can no longer sign in to this pharmacy.'),
+    ).toBeVisible()
+    await dialog.getByRole('button', { name: 'Yes, remove' }).click()
+    await expect(page.getByText('Sumi Akter removed')).toBeVisible()
+    expect(calls.find((c) => c.fn === 'update_member')?.body).toEqual({
+      p_membership_id: 'mb-sales',
+      p_role: 'salesman',
+      p_is_active: false,
+      p_branch_ids: ['22222222-2222-4222-8222-222222222222'],
+    })
+
+    await page.getByRole('button', { name: 'Restore Kamal Uddin' }).click()
+    await expect(page.getByText('Kamal Uddin restored')).toBeVisible()
+    expect(calls.filter((c) => c.fn === 'update_member').at(-1)?.body).toEqual({
+      p_membership_id: 'mb-left',
+      p_role: 'salesman',
+      p_is_active: true,
+      p_branch_ids: ['22222222-2222-4222-8222-222222222222'],
+    })
+  })
+
   test('changing the role starts from the new role template and updates the member', async ({
     page,
   }) => {

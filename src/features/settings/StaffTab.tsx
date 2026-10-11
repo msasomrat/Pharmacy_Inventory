@@ -1,5 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, KeyRound, MailX, ShieldCheck, UserPlus, Users } from 'lucide-react'
+import {
+  Copy,
+  KeyRound,
+  MailX,
+  RotateCcw,
+  ShieldCheck,
+  UserMinus,
+  UserPlus,
+  Users,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -378,11 +387,68 @@ function ResetPassword({ member }: { member: Member }) {
   )
 }
 
+/** Removing keeps the person's history (sales, receipts) but they can no longer sign in here. */
+function useSetActive() {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ member, active }: { member: Member; active: boolean }) => {
+      await rpc('update_member', {
+        p_membership_id: member.membershipId,
+        p_role: member.role,
+        p_is_active: active,
+        p_branch_ids: roleUsesBranches(member.role) ? member.branchIds : [],
+      })
+    },
+    onSuccess: async (_, { member, active }) => {
+      const name = member.fullName ?? displayLogin(member.email)
+      toast.success(t(active ? 'settings.restored' : 'settings.removed', { name }))
+      await queryClient.invalidateQueries({ queryKey: ['members'] })
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  })
+}
+
+function RemoveMember({ member, onRemoved }: { member: Member; onRemoved: () => void }) {
+  const { t } = useTranslation()
+  const [confirming, setConfirming] = useState(false)
+  const setActive = useSetActive()
+  const name = member.fullName ?? displayLogin(member.email)
+  return (
+    <div className="grid gap-2 rounded-lg border border-danger/30 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">
+          {confirming ? t('settings.removeConfirm', { name }) : t('settings.removeBody')}
+        </p>
+        {confirming ? (
+          <span className="flex gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setConfirming(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              loading={setActive.isPending}
+              onClick={() => setActive.mutate({ member, active: false }, { onSuccess: onRemoved })}
+            >
+              {t('settings.removeYes')}
+            </Button>
+          </span>
+        ) : (
+          <Button variant="secondary" size="sm" onClick={() => setConfirming(true)}>
+            <UserMinus aria-hidden />
+            {t('settings.remove')}
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function MemberDialog({ member, onClose }: { member: Member; onClose: () => void }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [role, setRole] = useState<OrgRole>(member.role)
-  const [isActive, setIsActive] = useState(member.isActive)
   const [branchIds, setBranchIds] = useState<string[]>(member.branchIds)
   const [access, setAccess] = useState<Set<Permission>>(() =>
     effectiveOf(member, roleTemplate(member.role)),
@@ -399,13 +465,12 @@ function MemberDialog({ member, onClose }: { member: Member; onClose: () => void
       const branches = roleUsesBranches(role) ? branchIds : []
       const changedBasics =
         role !== member.role ||
-        isActive !== member.isActive ||
         branches.slice().sort().join() !== member.branchIds.slice().sort().join()
       if (changedBasics) {
         await rpc('update_member', {
           p_membership_id: member.membershipId,
           p_role: role,
-          p_is_active: isActive,
+          p_is_active: member.isActive,
           p_branch_ids: branches,
         })
       }
@@ -435,15 +500,6 @@ function MemberDialog({ member, onClose }: { member: Member; onClose: () => void
       </DialogHeader>
       <div className="grid gap-4 sm:grid-cols-2">
         <RoleSelect id="mb-role" value={role} onChange={changeRole} />
-        <label className="flex items-center gap-2 self-center text-sm">
-          <input
-            type="checkbox"
-            className="size-4 accent-primary"
-            checked={isActive}
-            onChange={(e) => setIsActive(e.target.checked)}
-          />
-          {t('settings.canSignIn')}
-        </label>
       </div>
       {roleUsesBranches(role) ? (
         <BranchPicker value={branchIds} onChange={setBranchIds} />
@@ -454,6 +510,7 @@ function MemberDialog({ member, onClose }: { member: Member; onClose: () => void
       {member.role !== 'owner' && isStaffLogin(member.email) ? (
         <ResetPassword member={member} />
       ) : null}
+      <RemoveMember member={member} onRemoved={onClose} />
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onClose}>
           {t('common.cancel')}
@@ -475,6 +532,7 @@ export function StaffTab() {
   const queryClient = useQueryClient()
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Member | null>(null)
+  const setActive = useSetActive()
 
   const members = useQuery({
     queryKey: ['members', org.organizationId],
@@ -485,6 +543,8 @@ export function StaffTab() {
     queryFn: () => listInvitations(org.organizationId),
   })
   const branchName = (id: string) => org.branches.find((b) => b.id === id)?.name ?? '—'
+  const active = (members.data ?? []).filter((m) => m.isActive)
+  const removed = (members.data ?? []).filter((m) => !m.isActive)
 
   const revoke = useMutation({
     mutationFn: (id: string) => rpc('revoke_invitation', { p_invitation_id: id }),
@@ -520,11 +580,11 @@ export function StaffTab() {
                 </TR>
               </THead>
               <TBody>
-                {(members.data ?? []).map((m) => {
+                {active.map((m) => {
                   const custom = Object.keys(m.overrides).length > 0
                   const self = m.userId === session?.user.id
                   return (
-                    <TR key={m.membershipId} className={m.isActive ? undefined : 'opacity-60'}>
+                    <TR key={m.membershipId}>
                       <TD>
                         <p className="font-medium">{m.fullName ?? displayLogin(m.email)}</p>
                         <p className="text-xs text-muted-foreground">{displayLogin(m.email)}</p>
@@ -535,9 +595,6 @@ export function StaffTab() {
                             {t(`settings.roles.${m.role}`)}
                           </Badge>
                           {custom ? <Badge tone="warning">{t('settings.custom')}</Badge> : null}
-                          {m.isActive ? null : (
-                            <Badge tone="danger">{t('settings.disabled')}</Badge>
-                          )}
                         </span>
                       </TD>
                       <TD className="hidden text-sm md:table-cell">
@@ -572,6 +629,47 @@ export function StaffTab() {
           )}
         </CardContent>
       </Card>
+
+      {removed.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('settings.removedStaff')}</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TBody>
+                {removed.map((m) => (
+                  <TR key={m.membershipId}>
+                    <TD>
+                      <p className="font-medium text-muted-foreground">
+                        {m.fullName ?? displayLogin(m.email)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{displayLogin(m.email)}</p>
+                    </TD>
+                    <TD>
+                      <Badge>{t(`settings.roles.${m.role}`)}</Badge>
+                    </TD>
+                    <TD className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        loading={setActive.isPending && setActive.variables.member === m}
+                        aria-label={t('settings.restoreNamed', {
+                          name: m.fullName ?? displayLogin(m.email),
+                        })}
+                        onClick={() => setActive.mutate({ member: m, active: true })}
+                      >
+                        <RotateCcw aria-hidden />
+                        {t('settings.restore')}
+                      </Button>
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

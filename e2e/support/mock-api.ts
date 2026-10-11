@@ -328,6 +328,18 @@ const MEMBERS = [
     last_sign_in_at: '2026-10-06T08:00:00Z',
     created_at: '2026-02-01T00:00:00Z',
   },
+  {
+    membership_id: 'mb-left',
+    user_id: '77777777-7777-4777-8777-777777777777',
+    email: 'kamal@staff.invalid',
+    full_name: 'Kamal Uddin',
+    role: 'salesman',
+    is_active: false,
+    branch_ids: [BRANCH],
+    overrides: {},
+    last_sign_in_at: '2026-08-01T08:00:00Z',
+    created_at: '2026-03-01T00:00:00Z',
+  },
 ]
 
 /** Every RPC call the UI makes, for assertions on what was sent to the server. */

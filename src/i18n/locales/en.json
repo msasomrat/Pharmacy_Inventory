@@ -471,7 +471,6 @@
     "never": "Never",
     "all": "All branches",
     "custom": "Custom",
-    "disabled": "Disabled",
     "manage": "Manage",
     "manageNamed": "Manage {{name}}",
     "notSelf": "You cannot change your own access here.",
@@ -483,7 +482,6 @@
     "resetPasswordBody": "Sets a new temporary password. The old password stops working at once.",
     "newPasswordFor": "New password for {{name}}",
     "resetOnlyStaff": "Only staff with a username can have their password reset here.",
-    "canSignIn": "Can sign in (active)",
     "accessHint": "Starts from the role. Tick or untick to give or take away individual permissions.",
     "resetToRole": "Reset to role defaults",
     "ownerAll": "Owners always have full access.",
@@ -570,7 +568,16 @@
     "saveSettings": "Save settings",
     "saved": "Settings saved",
     "outOfRange": "Out of range",
-    "loginUnavailableShort": "The admin-users function is not deployed."
+    "loginUnavailableShort": "The admin-users function is not deployed.",
+    "remove": "Remove from pharmacy",
+    "removeBody": "Removes this person's access. Their past sales and records stay. You can restore them later.",
+    "removeConfirm": "Remove {{name}}? They can no longer sign in to this pharmacy.",
+    "removeYes": "Yes, remove",
+    "removed": "{{name}} removed",
+    "restored": "{{name}} restored",
+    "removedStaff": "Removed staff",
+    "restore": "Restore",
+    "restoreNamed": "Restore {{name}}"
   },
   "reports": {
     "subtitle": "Sales, profit, stock value and expiry",
