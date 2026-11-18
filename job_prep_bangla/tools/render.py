@@ -14,7 +14,7 @@ HTML_DIR.mkdir(exist_ok=True); OUT.mkdir(parents=True, exist_ok=True)
 BD = str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯")
 def bn(n): return str(n).translate(BD)
 LBL = ["ক", "খ", "গ", "ঘ"]
-TOPIC_BN = {"grammar": "ব্যাকরণ", "vocab": "শব্দভান্ডার", "literature": "সাহিত্য"}
+TOPIC_BN = {"grammar": "ব্যাকরণ", "vocab": "শব্দভান্ডার", "literature": "সাহিত্য", "aviation": "এভিয়েশন ও বিমান", "gk": "সাধারণ জ্ঞান", "bangla": "বাংলা", "english": "English", "math": "গণিত", "ict": "ICT"}
 e = lambda s: html.escape(str(s or ""))
 
 weeks = [json.load(open(p)) for p in sorted(WEEKS_DIR.glob("week*.json"))]
@@ -130,10 +130,11 @@ def notes_html(w):
     return "".join(out)
 
 def exam_html(w):
+    lab = w.get("label", f"{MONTH} · সপ্তাহ {bn(w['week'])}"); kind = w.get("kind", "সাপ্তাহিক পরীক্ষা"); mins = w.get("minutes", 15)
     n = len(w["exam"])
-    out = [f"<div class='page-break'></div>", runhead(f"সপ্তাহ {bn(w['week'])} · সাপ্তাহিক পরীক্ষা"),
-           f"<div class='exambox'><div><div class='sans' style='font-size:9.5pt;color:var(--muted)'>{e(MONTH)} · সপ্তাহ {bn(w['week'])}</div><h2>সাপ্তাহিক পরীক্ষা: {e(w['title'].split(':',1)[-1].strip())}</h2></div>"
-           f"<div class='meta'>সময়: <b>{bn(15)} মিনিট</b><br>পূর্ণমান: <b>{bn(n)}</b><br>প্রতিটি ভুলের জন্য <b>০.৫০</b> কাটা যাবে</div></div>",
+    out = [f"<div class='page-break'></div>", runhead(f"{lab} · {kind}"),
+           f"<div class='exambox'><div><div class='sans' style='font-size:9.5pt;color:var(--muted)'>{e(lab)}</div><h2>{e(kind)}: {e(w['title'].split(':',1)[-1].strip())}</h2></div>"
+           f"<div class='meta'>সময়: <b>{bn(mins)} মিনিট</b><br>পূর্ণমান: <b>{bn(n)}</b><br>প্রতিটি ভুলের জন্য <b>০.৫০</b> কাটা যাবে</div></div>",
            "<div class='namerow'><span>নাম:</span><span>তারিখ:</span><span>প্রাপ্ত নম্বর:</span></div>", "<div class='qs'>"]
     last = None
     for i, q in enumerate(w["exam"], 1):
@@ -148,8 +149,9 @@ def exam_html(w):
 
 def answers_html(w, with_runhead=True):
     out = []
-    if with_runhead: out.append(runhead(f"সপ্তাহ {bn(w['week'])} · উত্তর ও ব্যাখ্যা"))
-    out.append(f"<h2 class='part'>সপ্তাহ {bn(w['week'])}: উত্তরমালা ও ব্যাখ্যা</h2><div class='subtle'>{e(w['title'])}</div>")
+    lab = w.get("label", f"সপ্তাহ {bn(w['week'])}")
+    if with_runhead: out.append(runhead(f"{lab} · উত্তর ও ব্যাখ্যা"))
+    out.append(f"<h2 class='part'>{e(lab)}: উত্তরমালা ও ব্যাখ্যা</h2><div class='subtle'>{e(w['title'])}</div>")
     cells = "".join(f"<div>{bn(i)}. <b>{LBL[q['ans']]}</b></div>" for i, q in enumerate(w["exam"], 1))
     out.append(f"<div class='keygrid'>{cells}</div><div class='exps'>")
     for i, q in enumerate(w["exam"], 1):
