@@ -41,24 +41,15 @@ cover = f"""<div style="width:1640px;height:624px;background:linear-gradient(120
 <div style="margin-top:22px;font-size:26px;color:#f3d29b;font-weight:600">দিনের প্রশ্ন · বিগত প্রশ্নের ব্যাখ্যা · সাপ্তাহিক পরীক্ষা · মাসিক PDF</div></div></div></div>"""
 page("facebook_cover_1640x624", cover, 1640, 624)
 
-# pinned welcome post (1080x1350)
-s3 = 520 / vw
+# pinned welcome post (1080x1350): casual, no routine list
+s3 = 560 / vw
 svg_w, _, _ = L.logo_html(NAVY, GOLD, scale=s3)
-rows = [("প্রতিদিন সকাল", "দিনের প্রশ্ন: বিগত পরীক্ষার প্রশ্ন, কমেন্টে ব্যাখ্যা"),
-        ("শনিবার রাত", "গুলিয়ে ফেলবেন না: ভুল হওয়া তথ্য পাশাপাশি"),
-        ("রবিবার রাত", "১ মিনিটে ১০টা: রিভিশন রিল"),
-        ("সোমবার রাত", "ফাঁদ প্রশ্ন: যেখানে সবাই ভুল করে"),
-        ("মঙ্গলবার রাত", "চিনে নিন: সাহিত্য, লেখক ও চরিত্র"),
-        ("বুধবার রাত", "প্রাইমারি ও ব্যাংকে আসা ৫ প্রশ্ন"),
-        ("বৃহস্পতিবার রাত", "বারবার আসা প্রশ্ন"),
-        ("শুক্রবার", "সাপ্তাহিক পরীক্ষা + ব্যাখ্যাসহ PDF")]
-tbl = "".join(f"<div style='display:flex;gap:18px;padding:9px 0;border-bottom:2px dashed #d8d2c4'><b style='flex:none;width:250px;color:{NAVY}'>{a}</b><span>{b}</span></div>" for a, b in rows)
-welcome = f"""<div style="width:1080px;height:1350px;background:#f6f3ec;color:#17213a;display:flex;flex-direction:column;align-items:center;padding:60px 70px 0">
+welcome = f"""<div style="width:1080px;height:1350px;background:#f6f3ec;color:#17213a;display:flex;flex-direction:column;align-items:center;padding:0 70px;text-align:center">
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center">
 <div>{svg_w}</div>
-<div style="font-size:62px;font-weight:700;color:{NAVY};margin-top:4px">স্বাগতম!</div>
-<div style="font-size:30px;font-weight:600;color:#5b6475;margin-bottom:22px">বিসিএস ও সকল সরকারি চাকরির প্রস্তুতি · প্রতি সপ্তাহের রুটিন</div>
-<div style="width:100%;font-size:30px;line-height:1.35">{tbl}</div>
-<div style="margin-top:auto;width:1080px;height:110px;background:{NAVY};color:#fff;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:600">ফলো করুন · পোস্ট সেভ করুন · কমেন্টে উত্তর দিন</div></div>"""
+<div style="font-size:96px;font-weight:700;color:{NAVY};margin-top:10px;line-height:1.1">স্বাগতম 👋</div>
+<div style="font-size:44px;font-weight:600;line-height:1.45;margin-top:26px">পড়ার শেষ নেই, অথচ কমন পড়ে না?<br><span style="color:{NAVY}">চলেন, একসাথে একটু স্মার্টলি পড়ি।</span></div></div>
+<div style="width:1080px;height:120px;background:{NAVY};color:#fff;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:600">বিসিএস ও সকল সরকারি চাকরির প্রস্তুতি</div></div>"""
 page("welcome_post_1080x1350", welcome, 1080, 1350, css="body{background:#f6f3ec}")
 (OUT / "jobs.json").write_text(json.dumps(jobs))
 subprocess.run(["node", str(T / "logo_render.cjs"), str(OUT / "jobs.json")], check=True)
