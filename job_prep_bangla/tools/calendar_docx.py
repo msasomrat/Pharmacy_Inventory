@@ -57,7 +57,9 @@ def mcq_text(m):
     opts = "   ".join(f"{LBL[i]}) {o}" for i, o in enumerate(m["opts"]))
     return f"{m['q'].split(' / ')[0]}{src}\n{opts}"
 
-heading(f"{BRAND}: কনটেন্ট ক্যালেন্ডার ({'মাস ১'})", 0)
+from docx.shared import Mm
+doc.add_picture(str((SP.parent / "branding" / "logo_navy_tight.png").resolve()), width=Mm(45))
+heading("কনটেন্ট ক্যালেন্ডার (মাস ১)", 0)
 para("প্রতিটি পোস্টের ছবি/স্লাইডের লেখা, ক্যাপশন, হ্যাশট্যাগ আর উত্তরের কমেন্ট নিচে দেওয়া আছে। কপি করে সরাসরি পোস্ট করা যাবে।", 12)
 para("সময়: সকাল ৭–৯টায় 'দিনের প্রশ্ন', রাত ৮–১১টায় মূল পোস্ট। উত্তরের কমেন্ট দিন ২–৩ ঘণ্টা পর। শুক্রবার সাপ্তাহিক পরীক্ষার PDF/Google Form।", 12)
 

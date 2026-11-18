@@ -7,7 +7,7 @@ T = Path(__file__).parent
 OUT = Path(sys.argv[1]).resolve(); OUT.mkdir(parents=True, exist_ok=True)
 FONTS = (T / "fonts" / "local.css").read_text().replace("url(", "url(file://" + str(T / "fonts") + "/")
 NAVY, GOLD, CREAM, RED = "#0f4c81", "#e8a33d", "#f6f3ec", "#c0392b"
-BRAND = "নিয়োগ দরবার"
+LOGO_W = "file://" + str((T.parent / "branding" / "logo_white_tight.png").resolve())
 
 CSS = FONTS + f"""*{{margin:0;padding:0;box-sizing:border-box}}
 html,body{{width:1080px;height:1350px;overflow:hidden}}
@@ -17,22 +17,22 @@ body{{font-family:'Hind Siliguri',sans-serif;background:{CREAM};color:#17213a;di
 .cnt{{font-size:30px;color:#5b6475;font-weight:600}}
 .main{{flex:1;padding:24px 64px 0;display:flex;flex-direction:column}}
 h1{{font-size:70px;line-height:1.2;color:{NAVY}}}
-.sub{{font-size:32px;color:#5b6475;font-weight:600;margin:8px 0 26px}}
+.sub{{font-size:32px;color:#2f3a52;font-weight:600;margin:8px 0 26px}}
 .card{{background:#fff;border-radius:22px;border-left:16px solid {NAVY};padding:22px 30px;margin-bottom:22px}}
 .card .d{{font-size:58px;font-weight:700;color:{NAVY};line-height:1.15}}
 .card .t{{font-size:34px;font-weight:600}}
 .card .p{{font-size:32px;margin-top:6px}}
-.card .n{{font-size:28px;color:#5b6475;margin-top:4px}}
+.card .n{{font-size:29px;color:#2f3a52;font-weight:500;margin-top:4px}}
 .note{{background:#fff4e0;border-radius:18px;padding:18px 26px;font-size:30px;font-weight:600;line-height:1.45}}
-.foot{{height:110px;background:{NAVY};color:#fff;display:flex;justify-content:space-between;align-items:center;padding:0 64px;font-size:30px;font-weight:600}}
+.foot{{height:132px;background:{NAVY};color:#fff;display:flex;justify-content:space-between;align-items:center;padding:0 64px;font-size:30px;font-weight:600}}
 .foot .s{{color:#f3d29b}}
 table{{width:100%;border-collapse:collapse;font-size:26px}}
-td{{padding:4px 10px;border-bottom:2px dashed #d8d2c4;line-height:1.35}} td.c{{color:#5b6475;width:90px}} td.r{{text-align:right;color:{NAVY};font-weight:700;width:150px}}
+td{{font-weight:500;padding:4px 10px;border-bottom:2px dashed #d8d2c4;line-height:1.35}} td.c{{color:#2f3a52;width:90px}} td.r{{text-align:right;color:{NAVY};font-weight:700;width:150px}}
 """
 def doc(body, n):
     return (f"<!doctype html><html lang='bn'><head><meta charset='utf-8'><style>{CSS}</style></head><body>"
             f"<div class='top'><span class='badge'>পরীক্ষার তারিখ</span><span class='cnt'>{n}</span></div>{body}"
-            f"<div class='foot'><span>{BRAND}</span><span class='s'>সূত্র: caab.gov.bd · ১৬ নভেম্বর ২০২৬</span></div></body></html>")
+            f"<div class='foot'><img src='{LOGO_W}' style='height:108px;display:block'><span class='s'>সূত্র: caab.gov.bd · ১৬ নভেম্বর ২০২৬</span></div></body></html>")
 
 s1 = doc("""<div class='main'><h1>CAAB নিয়োগ:<br>MCQ পরীক্ষার তারিখ প্রকাশ</h1>
 <div class='sub'>বেসামরিক বিমান চলাচল কর্তৃপক্ষ (বেবিচক)</div>

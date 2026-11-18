@@ -20,16 +20,18 @@ e = lambda s: html.escape(str(s or ""))
 weeks = [json.load(open(p)) for p in sorted(WEEKS_DIR.glob("week*.json"))]
 weeks.sort(key=lambda w: w["week"])
 
+LOGO_W = "file://" + str((SP.parent / "branding" / "logo_white_tight.png").resolve())
+LOGO_N = "file://" + str((SP.parent / "branding" / "logo_navy_tight.png").resolve())
 FONT_CSS = (SP / "fonts" / "local.css").read_text().replace("url(", "url(file://" + str(SP / "fonts") + "/")
 CSS = FONT_CSS + """
 @page { size: A4; margin: 13mm 13mm 14mm 13mm; }
-:root { --ink:#1d2433; --muted:#5b6475; --line:#d9dee8; --brand:#0f4c81; --accent:#e8a33d; --soft:#eef4fa; --ok:#16794c; }
+:root { --ink:#1d2433; --muted:#3d4760; --line:#d9dee8; --brand:#0f4c81; --accent:#e8a33d; --soft:#eef4fa; --ok:#16794c; }
 * { box-sizing: border-box; }
 html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-body { font-family: 'Noto Serif Bengali', serif; color: var(--ink); font-size: 10.6pt; line-height: 1.55; margin: 0; }
+body { font-family: 'Hind Siliguri', sans-serif; font-weight: 500; color: #0e1628; font-size: 10.8pt; line-height: 1.55; margin: 0; }
 h1,h2,h3,.sans { font-family: 'Hind Siliguri', sans-serif; }
 .page-break { break-before: page; }
-.runhead { font-family:'Hind Siliguri'; font-size:8.5pt; color:var(--muted); border-bottom:1px solid var(--line); padding-bottom:3px; margin-bottom:10px; display:flex; justify-content:space-between; }
+.runhead { font-family:'Hind Siliguri'; font-size:9pt; font-weight:600; color:#2f3a52; border-bottom:1px solid var(--line); padding-bottom:4px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:flex-end; }
 
 /* cover */
 .cover { height: 265mm; display:flex; flex-direction:column; justify-content:space-between; }
@@ -75,7 +77,7 @@ table.t th, table.t td { border: 1px solid var(--line); padding: 3px 7px; vertic
 .q { break-inside: avoid; margin-bottom: 9px; }
 .q .qt { font-weight: 600; }
 .q .qn { font-family:'Hind Siliguri'; font-weight:700; color:var(--brand); margin-right:3px; }
-.src { font-family:'Hind Siliguri'; font-size: 7.8pt; color: var(--muted); font-weight:400; white-space: normal; }
+.src { font-family:'Hind Siliguri'; font-size: 8.4pt; color: #3d4760; font-weight:400; white-space: normal; }
 .opts { display:grid; grid-template-columns: 1fr 1fr; gap: 1px 10px; margin-top:2px; padding-left: 16px; font-size:10.2pt; }
 .lbl { display:inline-block; width:15px; height:15px; line-height:14px; border:1px solid #777; border-radius:50%; text-align:center; font-family:'Hind Siliguri'; font-size:8pt; margin-right:4px; }
 .sec { column-span: all; font-family:'Hind Siliguri'; font-weight:700; font-size:10pt; color:#fff; background:var(--brand); border-radius:3px; padding:1px 8px; margin: 2px 0 7px; display:inline-block; }
@@ -101,7 +103,7 @@ def head(title):
     return f"<!doctype html><html lang='bn'><head><meta charset='utf-8'><title>{e(title)}</title><style>{CSS}</style></head><body>"
 
 def runhead(left):
-    return f"<div class='runhead'><span>{e(BRAND)}</span><span>{e(left)}</span></div>"
+    return f"<div class='runhead'><img src='{LOGO_N}' style='height:11mm;display:block'><span>{e(left)}</span></div>"
 
 def week_header(w):
     t = w["topics"]
@@ -163,7 +165,7 @@ def answers_html(w, with_runhead=True):
 def cover_html():
     cards = "".join(f"<div class='weekcard'><div class='n'>সপ্তাহ {bn(w['week'])}</div><div>{e(w['title'].split(':',1)[-1].strip())}</div></div>" for w in weeks)
     total_q = sum(len(w["exam"]) for w in weeks)
-    return (f"<div class='cover'><div class='band'><div class='kicker'>বিসিএস ও সকল সরকারি চাকরির প্রস্তুতি</div><h1>{e(BRAND)}</h1><div class='sub' style='font-size:18pt;font-weight:700'>মাসিক প্রস্তুতি সিরিজ</div>"
+    return (f"<div class='cover'><div class='band'><div class='kicker'>বিসিএস ও সকল সরকারি চাকরির প্রস্তুতি</div><img src='{LOGO_W}' style='height:62mm;display:block;margin:10px 0 8px'><div class='sub' style='font-size:18pt;font-weight:700'>মাসিক প্রস্তুতি সিরিজ</div>"
             f"<div class='sub'>{e(MONTH)} · বাংলা ভাষা ও সাহিত্য · বিসিএস, ব্যাংক, প্রাইমারি ও অন্যান্য নিয়োগ পরীক্ষা</div><div class='accent'></div></div>"
             f"<div class='weeklist'>{cards}</div>"
             f"<div class='howto'><h3>এই PDF যেভাবে ব্যবহার করবেন</h3><ol>"

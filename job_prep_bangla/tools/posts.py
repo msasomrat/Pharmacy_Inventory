@@ -12,6 +12,7 @@ BD = str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯")
 bn = lambda n: str(n).translate(BD)
 LBL = ["ক", "খ", "গ", "ঘ"]
 e = lambda s: html.escape(str(s or ""))
+LOGO_W = "file://" + str((SP.parent / "branding" / "logo_white_tight.png").resolve())
 FONTS = (SP / "fonts" / "local.css").read_text().replace("url(", "url(file://" + str(SP / "fonts") + "/")
 DAY_EN = {"শনিবার": "Sat", "রবিবার": "Sun", "সোমবার": "Mon", "মঙ্গলবার": "Tue", "বুধবার": "Wed", "বৃহস্পতিবার": "Thu", "শুক্রবার": "Fri"}
 DAYS = list(DAY_EN)
@@ -25,9 +26,9 @@ body { font-family: 'Hind Siliguri', sans-serif; color: #17213a; background: #f6
 .top { display:flex; justify-content:space-between; align-items:center; }
 .badge { background:#0f4c81; color:#fff; font-weight:700; font-size:34px; padding: 6px 26px 8px; border-radius: 40px; }
 .badge.warn { background:#c0392b; } .badge.gold { background:#e8a33d; color:#17213a; }
-.count { font-size: 30px; color:#5b6475; font-weight:600; }
+.count { font-size: 32px; color:#2f3a52; font-weight:700; }
 .fit { flex:1; display:flex; flex-direction:column; justify-content:center; overflow:hidden; padding: 20px 0; }
-.content { font-size: 52px; line-height: 1.45; }
+.content { font-size: 52px; line-height: 1.45; font-weight: 500; color: #0e1628; }
 .h { font-weight: 700; color:#0f4c81; font-size: 1.25em; line-height: 1.25; margin-bottom: .45em; }
 .cover .h { font-size: 1.7em; color:#17213a; }
 .cover .sub { color:#0f4c81; font-weight:600; }
@@ -37,18 +38,18 @@ body { font-family: 'Hind Siliguri', sans-serif; color: #17213a; background: #f6
 .row .l { font-weight:700; flex: 0 1 auto; }
 .row .ar { color:#e8a33d; font-weight:700; }
 .row .r { color:#0f4c81; font-weight:600; }
-.line { padding: .12em 0; }
+.line { padding: .12em 0; font-weight: 500; }
 .ok { color:#16794c; font-weight:700; } .no { color:#c0392b; font-weight:700; }
 .q { font-weight:700; line-height:1.35; margin-bottom:.6em; }
 .src { display:inline-block; font-size:.58em; font-weight:600; color:#fff; background:#5b6475; border-radius: 8px; padding: .05em .5em .12em; margin-top:.4em; }
 .opts { display:grid; grid-template-columns: 1fr 1fr; gap: .45em .6em; }
 .opts.one { grid-template-columns: 1fr; }
-.opt { background:#fff; border: 3px solid #d9dee8; border-radius: 18px; padding: .25em .55em; display:flex; align-items:center; gap:.4em; }
+.opt { font-weight:600; background:#fff; border: 3px solid #d9dee8; border-radius: 18px; padding: .25em .55em; display:flex; align-items:center; gap:.4em; }
 .opt b { flex:none; display:inline-flex; width:1.35em; height:1.35em; border-radius:50%; background:#0f4c81; color:#fff; align-items:center; justify-content:center; font-size:.8em; }
-.cta { margin-top:.7em; font-size:.72em; color:#5b6475; font-weight:600; }
+.cta { margin-top:.7em; font-size:.74em; color:#2f3a52; font-weight:600; }
 .exams { margin-top:.5em; }
 .exams div { background:#fff; border-left: 10px solid #e8a33d; border-radius: 10px; padding: .15em .55em; margin: .22em 0; font-size: .82em; font-weight:600; }
-.foot { height: 110px; display:flex; justify-content:space-between; align-items:center; border-top: 3px solid #0f4c81; margin: 0 -70px; padding: 0 70px; background:#0f4c81; color:#fff; font-size: 30px; font-weight:600; }
+.foot { height: 132px; display:flex; justify-content:space-between; align-items:center; border-top: 3px solid #0f4c81; margin: 0 -70px; padding: 0 70px; background:#0f4c81; color:#fff; font-size: 30px; font-weight:600; }
 .foot .s { color:#f3d29b; }
 .big { font-size: 1.5em; font-weight:700; color:#0f4c81; text-align:center; line-height:1.3; }
 .center { text-align:center; }
@@ -72,7 +73,7 @@ def page(path, inner, badge, badge_cls="", count="", foot_right="", w=1080, h=13
     doc = (f"<!doctype html><html lang='bn'><head><meta charset='utf-8'><style>:root{{--w:{w}px;--h:{h}px}}{CSS}</style></head>"
            f"<body data-max='{mx}'><div class='frame'><div class='top'><span class='badge {badge_cls}'>{e(badge)}</span><span class='count'>{e(count)}</span></div>"
            f"<div class='fit'><div class='content {cls}'>{inner}</div></div>"
-           f"<div class='foot'><span>{e(BRAND)}</span><span class='s'>{e(foot_right)}</span></div></div>{FIT_JS}</body></html>")
+           f"<div class='foot'><img src='{LOGO_W}' style='height:108px;display:block'><span class='s'>{e(foot_right)}</span></div></div>{FIT_JS}</body></html>")
     hp = JOBS / (f"j{len(jobs):04d}.html"); hp.write_text(doc)
     jobs.append({"html": str(hp), "png": str(path), "w": w, "h": h})
 
