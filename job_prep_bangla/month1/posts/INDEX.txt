@@ -1,0 +1,55 @@
+পোস্টের সূচি: প্রতিটি ফোল্ডারে ছবি (post.png / slideNN.png / frameNN.png) আর caption.txt আছে।
+সময়: সকালের পোস্ট ৭–৯টা, রাতের পোস্ট ৮–১১টা। উত্তরের কমেন্ট ২–৩ ঘণ্টা পরে।
+
+সপ্তাহ ১ | শনিবার      | সকাল | দিনের প্রশ্ন     | week1/D1_Sat_1_Morning_DinerProshno
+সপ্তাহ ১ | শনিবার      | রাত | ক্যারোসেল        | week1/D1_Sat_2_Night_Carousel
+সপ্তাহ ১ | রবিবার      | সকাল | দিনের প্রশ্ন     | week1/D2_Sun_1_Morning_DinerProshno
+সপ্তাহ ১ | রবিবার      | রাত | রিল              | week1/D2_Sun_2_Night_Reel
+সপ্তাহ ১ | সোমবার      | সকাল | দিনের প্রশ্ন     | week1/D3_Mon_1_Morning_DinerProshno
+সপ্তাহ ১ | সোমবার      | রাত | ফাঁদ প্রশ্ন      | week1/D3_Mon_2_Night_TrapQuestion
+সপ্তাহ ১ | মঙ্গলবার    | সকাল | দিনের প্রশ্ন     | week1/D4_Tue_1_Morning_DinerProshno
+সপ্তাহ ১ | মঙ্গলবার    | রাত | ক্যারোসেল        | week1/D4_Tue_2_Night_Carousel
+সপ্তাহ ১ | বুধবার      | সকাল | দিনের প্রশ্ন     | week1/D5_Wed_1_Morning_DinerProshno
+সপ্তাহ ১ | বুধবার      | রাত | ৫ প্রশ্ন         | week1/D5_Wed_2_Night_FiveMCQ
+সপ্তাহ ১ | বৃহস্পতিবার | সকাল | দিনের প্রশ্ন     | week1/D6_Thu_1_Morning_DinerProshno
+সপ্তাহ ১ | বৃহস্পতিবার | রাত | বারবার আসা প্রশ্ন | week1/D6_Thu_2_Night_RepeatedQuestion
+সপ্তাহ ১ | শুক্রবার    | রাত | সাপ্তাহিক পরীক্ষা | week1/D7_Fri_2_Night_WeeklyExam
+সপ্তাহ ২ | শনিবার      | সকাল | দিনের প্রশ্ন     | week2/D1_Sat_1_Morning_DinerProshno
+সপ্তাহ ২ | শনিবার      | রাত | ক্যারোসেল        | week2/D1_Sat_2_Night_Carousel
+সপ্তাহ ২ | রবিবার      | সকাল | দিনের প্রশ্ন     | week2/D2_Sun_1_Morning_DinerProshno
+সপ্তাহ ২ | রবিবার      | রাত | রিল              | week2/D2_Sun_2_Night_Reel
+সপ্তাহ ২ | সোমবার      | সকাল | দিনের প্রশ্ন     | week2/D3_Mon_1_Morning_DinerProshno
+সপ্তাহ ২ | সোমবার      | রাত | ফাঁদ প্রশ্ন      | week2/D3_Mon_2_Night_TrapQuestion
+সপ্তাহ ২ | মঙ্গলবার    | সকাল | দিনের প্রশ্ন     | week2/D4_Tue_1_Morning_DinerProshno
+সপ্তাহ ২ | মঙ্গলবার    | রাত | ক্যারোসেল        | week2/D4_Tue_2_Night_Carousel
+সপ্তাহ ২ | বুধবার      | সকাল | দিনের প্রশ্ন     | week2/D5_Wed_1_Morning_DinerProshno
+সপ্তাহ ২ | বুধবার      | রাত | ৫ প্রশ্ন         | week2/D5_Wed_2_Night_FiveMCQ
+সপ্তাহ ২ | বৃহস্পতিবার | সকাল | দিনের প্রশ্ন     | week2/D6_Thu_1_Morning_DinerProshno
+সপ্তাহ ২ | বৃহস্পতিবার | রাত | বারবার আসা প্রশ্ন | week2/D6_Thu_2_Night_RepeatedQuestion
+সপ্তাহ ২ | শুক্রবার    | রাত | সাপ্তাহিক পরীক্ষা | week2/D7_Fri_2_Night_WeeklyExam
+সপ্তাহ ৩ | শনিবার      | সকাল | দিনের প্রশ্ন     | week3/D1_Sat_1_Morning_DinerProshno
+সপ্তাহ ৩ | শনিবার      | রাত | ক্যারোসেল        | week3/D1_Sat_2_Night_Carousel
+সপ্তাহ ৩ | রবিবার      | সকাল | দিনের প্রশ্ন     | week3/D2_Sun_1_Morning_DinerProshno
+সপ্তাহ ৩ | রবিবার      | রাত | রিল              | week3/D2_Sun_2_Night_Reel
+সপ্তাহ ৩ | সোমবার      | সকাল | দিনের প্রশ্ন     | week3/D3_Mon_1_Morning_DinerProshno
+সপ্তাহ ৩ | সোমবার      | রাত | ফাঁদ প্রশ্ন      | week3/D3_Mon_2_Night_TrapQuestion
+সপ্তাহ ৩ | মঙ্গলবার    | সকাল | দিনের প্রশ্ন     | week3/D4_Tue_1_Morning_DinerProshno
+সপ্তাহ ৩ | মঙ্গলবার    | রাত | ক্যারোসেল        | week3/D4_Tue_2_Night_Carousel
+সপ্তাহ ৩ | বুধবার      | সকাল | দিনের প্রশ্ন     | week3/D5_Wed_1_Morning_DinerProshno
+সপ্তাহ ৩ | বুধবার      | রাত | ৫ প্রশ্ন         | week3/D5_Wed_2_Night_FiveMCQ
+সপ্তাহ ৩ | বৃহস্পতিবার | সকাল | দিনের প্রশ্ন     | week3/D6_Thu_1_Morning_DinerProshno
+সপ্তাহ ৩ | বৃহস্পতিবার | রাত | বারবার আসা প্রশ্ন | week3/D6_Thu_2_Night_RepeatedQuestion
+সপ্তাহ ৩ | শুক্রবার    | রাত | সাপ্তাহিক পরীক্ষা | week3/D7_Fri_2_Night_WeeklyExam
+সপ্তাহ ৪ | শনিবার      | সকাল | দিনের প্রশ্ন     | week4/D1_Sat_1_Morning_DinerProshno
+সপ্তাহ ৪ | শনিবার      | রাত | ক্যারোসেল        | week4/D1_Sat_2_Night_Carousel
+সপ্তাহ ৪ | রবিবার      | সকাল | দিনের প্রশ্ন     | week4/D2_Sun_1_Morning_DinerProshno
+সপ্তাহ ৪ | রবিবার      | রাত | রিল              | week4/D2_Sun_2_Night_Reel
+সপ্তাহ ৪ | সোমবার      | সকাল | দিনের প্রশ্ন     | week4/D3_Mon_1_Morning_DinerProshno
+সপ্তাহ ৪ | সোমবার      | রাত | ফাঁদ প্রশ্ন      | week4/D3_Mon_2_Night_TrapQuestion
+সপ্তাহ ৪ | মঙ্গলবার    | সকাল | দিনের প্রশ্ন     | week4/D4_Tue_1_Morning_DinerProshno
+সপ্তাহ ৪ | মঙ্গলবার    | রাত | ক্যারোসেল        | week4/D4_Tue_2_Night_Carousel
+সপ্তাহ ৪ | বুধবার      | সকাল | দিনের প্রশ্ন     | week4/D5_Wed_1_Morning_DinerProshno
+সপ্তাহ ৪ | বুধবার      | রাত | ৫ প্রশ্ন         | week4/D5_Wed_2_Night_FiveMCQ
+সপ্তাহ ৪ | বৃহস্পতিবার | সকাল | দিনের প্রশ্ন     | week4/D6_Thu_1_Morning_DinerProshno
+সপ্তাহ ৪ | বৃহস্পতিবার | রাত | বারবার আসা প্রশ্ন | week4/D6_Thu_2_Night_RepeatedQuestion
+সপ্তাহ ৪ | শুক্রবার    | রাত | সাপ্তাহিক পরীক্ষা | week4/D7_Fri_2_Night_WeeklyExam
