@@ -7,7 +7,7 @@ SP = Path(__file__).parent
 WEEKS_DIR = Path(os.environ.get("WEEKS_DIR", SP / "weeks"))
 HTML_DIR = Path(os.environ.get("HTML_DIR", SP / "html"))
 OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else SP / "out"
-BRAND = os.environ.get("BRAND", "চাকরির বাংলা প্রস্তুতি")
+BRAND = os.environ.get("BRAND", "নিয়োগ দরবার")
 MONTH = "মাস ১"
 HTML_DIR.mkdir(exist_ok=True); OUT.mkdir(parents=True, exist_ok=True)
 
@@ -163,7 +163,7 @@ def answers_html(w, with_runhead=True):
 def cover_html():
     cards = "".join(f"<div class='weekcard'><div class='n'>সপ্তাহ {bn(w['week'])}</div><div>{e(w['title'].split(':',1)[-1].strip())}</div></div>" for w in weeks)
     total_q = sum(len(w["exam"]) for w in weeks)
-    return (f"<div class='cover'><div class='band'><div class='kicker'>{e(BRAND)}</div><h1>মাসিক প্রস্তুতি সিরিজ</h1>"
+    return (f"<div class='cover'><div class='band'><div class='kicker'>বিসিএস ও সকল সরকারি চাকরির প্রস্তুতি</div><h1>{e(BRAND)}</h1><div class='sub' style='font-size:18pt;font-weight:700'>মাসিক প্রস্তুতি সিরিজ</div>"
             f"<div class='sub'>{e(MONTH)} · বাংলা ভাষা ও সাহিত্য · বিসিএস, ব্যাংক, প্রাইমারি ও অন্যান্য নিয়োগ পরীক্ষা</div><div class='accent'></div></div>"
             f"<div class='weeklist'>{cards}</div>"
             f"<div class='howto'><h3>এই PDF যেভাবে ব্যবহার করবেন</h3><ol>"

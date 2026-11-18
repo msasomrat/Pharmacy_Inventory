@@ -7,7 +7,7 @@ from pathlib import Path
 SP = Path(__file__).parent
 OUT = Path(sys.argv[1])
 JOBS = SP / "postjobs"; shutil.rmtree(JOBS, ignore_errors=True); JOBS.mkdir()
-BRAND = os.environ.get("BRAND", "চাকরির বাংলা প্রস্তুতি")
+BRAND = os.environ.get("BRAND", "নিয়োগ দরবার")
 BD = str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯")
 bn = lambda n: str(n).translate(BD)
 LBL = ["ক", "খ", "গ", "ঘ"]

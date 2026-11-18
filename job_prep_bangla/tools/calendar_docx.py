@@ -12,7 +12,7 @@ FONT = "Kalpurush"
 BD = str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯")
 bn = lambda n: str(n).translate(BD)
 LBL = ["ক", "খ", "গ", "ঘ"]
-BRAND = os.environ.get("BRAND", "চাকরির বাংলা প্রস্তুতি")
+BRAND = os.environ.get("BRAND", "নিয়োগ দরবার")
 
 weeks = sorted((json.load(open(p)) for p in WEEKS_DIR.glob("week*.json")), key=lambda w: w["week"])
 doc = Document()
