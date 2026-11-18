@@ -28,21 +28,21 @@ CSS = FONT_CSS + """
 :root { --ink:#1d2433; --muted:#3d4760; --line:#d9dee8; --brand:#0f4c81; --accent:#e8a33d; --soft:#eef4fa; --ok:#16794c; }
 * { box-sizing: border-box; }
 html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-body { font-family: 'Hind Siliguri', sans-serif; font-weight: 500; color: #0e1628; font-size: 10.8pt; line-height: 1.55; margin: 0; }
-h1,h2,h3,.sans { font-family: 'Hind Siliguri', sans-serif; }
+body { font-family: 'Noto Sans Bengali', sans-serif; font-weight: 500; color: #0b1222; font-size: 10.6pt; line-height: 1.55; margin: 0; }
+h1,h2,h3,.sans { font-family: 'Noto Sans Bengali', sans-serif; }
 .page-break { break-before: page; }
-.runhead { font-family:'Hind Siliguri'; font-size:9pt; font-weight:600; color:#2f3a52; border-bottom:1px solid var(--line); padding-bottom:4px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:flex-end; }
+.runhead { font-family:'Noto Sans Bengali'; font-size:9pt; font-weight:600; color:#2f3a52; border-bottom:1px solid var(--line); padding-bottom:4px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:flex-end; }
 
 /* cover */
 .cover { height: 265mm; display:flex; flex-direction:column; justify-content:space-between; }
 .cover .band { background: var(--brand); color:#fff; border-radius: 6px; padding: 26px 28px; }
-.cover .band .kicker { font-family:'Hind Siliguri'; letter-spacing:.5px; opacity:.85; font-size:12pt; }
+.cover .band .kicker { font-family:'Noto Sans Bengali'; letter-spacing:.5px; opacity:.85; font-size:12pt; }
 .cover .band h1 { font-size: 34pt; margin: 6px 0 4px; line-height:1.2; }
-.cover .band .sub { font-size: 14pt; font-family:'Hind Siliguri'; }
+.cover .band .sub { font-size: 14pt; font-family:'Noto Sans Bengali'; }
 .cover .accent { height:6px; width:90px; background:var(--accent); border-radius:3px; margin:14px 0 0; }
 .weeklist { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .weekcard { border:1px solid var(--line); border-left:5px solid var(--brand); border-radius:5px; padding:10px 12px; }
-.weekcard .n { font-family:'Hind Siliguri'; font-weight:700; color:var(--brand); }
+.weekcard .n { font-family:'Noto Sans Bengali'; font-weight:700; color:var(--brand); }
 .weekcard div { font-size:9.8pt; }
 .howto { background: var(--soft); border-radius:6px; padding: 12px 16px; }
 .howto h3 { margin:0 0 6px; color:var(--brand); }
@@ -50,10 +50,10 @@ h1,h2,h3,.sans { font-family: 'Hind Siliguri', sans-serif; }
 
 /* week header */
 .weekhead { background: var(--brand); color:#fff; border-radius:6px; padding:12px 16px; margin-bottom:12px; }
-.weekhead .k { font-family:'Hind Siliguri'; font-size:10pt; opacity:.85; }
+.weekhead .k { font-family:'Noto Sans Bengali'; font-size:10pt; opacity:.85; }
 .weekhead h2 { margin:2px 0 0; font-size:19pt; }
 .topics { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
-.chip { font-family:'Hind Siliguri'; font-size:9pt; background:rgba(255,255,255,.16); border-radius:20px; padding:1px 10px; }
+.chip { font-family:'Noto Sans Bengali'; font-size:9pt; background:rgba(255,255,255,.16); border-radius:20px; padding:1px 10px; }
 
 /* notes */
 .note { margin-bottom: 10px; break-inside: auto; }
@@ -63,40 +63,40 @@ h1,h2,h3,.sans { font-family: 'Hind Siliguri', sans-serif; }
 .tables { display:flex; gap:12px; align-items:flex-start; }
 .tables table { flex:1; }
 table.t { border-collapse: collapse; width:100%; font-size: 9.8pt; margin: 4px 0 8px; }
-table.t th { background: var(--soft); font-family:'Hind Siliguri'; text-align:left; }
+table.t th { background: var(--soft); font-family:'Noto Sans Bengali'; text-align:left; }
 table.t th, table.t td { border: 1px solid var(--line); padding: 3px 7px; vertical-align: top; }
 
 /* exam */
 .exambox { border:1.5px solid var(--brand); border-radius:6px; padding:8px 14px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
 .exambox h2 { margin:0; font-size:16pt; color:var(--brand); }
-.exambox .meta { font-family:'Hind Siliguri'; font-size:9.5pt; text-align:right; color:var(--muted); }
+.exambox .meta { font-family:'Noto Sans Bengali'; font-size:9.5pt; text-align:right; color:var(--muted); }
 .meta b { color: var(--ink); }
-.namerow { font-family:'Hind Siliguri'; font-size:9.5pt; display:flex; gap:20px; margin-bottom:10px; }
+.namerow { font-family:'Noto Sans Bengali'; font-size:9.5pt; display:flex; gap:20px; margin-bottom:10px; }
 .namerow span { flex:1; border-bottom:1px dotted #999; padding-bottom:2px; }
 .qs { columns: 2; column-gap: 20px; column-rule: 1px solid var(--line); }
 .q { break-inside: avoid; margin-bottom: 9px; }
 .q .qt { font-weight: 600; }
-.q .qn { font-family:'Hind Siliguri'; font-weight:700; color:var(--brand); margin-right:3px; }
-.src { font-family:'Hind Siliguri'; font-size: 8.4pt; color: #3d4760; font-weight:400; white-space: normal; }
+.q .qn { font-family:'Noto Sans Bengali'; font-weight:700; color:var(--brand); margin-right:3px; }
+.src { font-family:'Noto Sans Bengali'; font-size: 8.4pt; color: #3d4760; font-weight:400; white-space: normal; }
 .opts { display:grid; grid-template-columns: 1fr 1fr; gap: 1px 10px; margin-top:2px; padding-left: 16px; font-size:10.2pt; }
-.lbl { display:inline-block; width:15px; height:15px; line-height:14px; border:1px solid #777; border-radius:50%; text-align:center; font-family:'Hind Siliguri'; font-size:8pt; margin-right:4px; }
-.sec { column-span: all; font-family:'Hind Siliguri'; font-weight:700; font-size:10pt; color:#fff; background:var(--brand); border-radius:3px; padding:1px 8px; margin: 2px 0 7px; display:inline-block; }
-.score { margin-top:10px; font-family:'Hind Siliguri'; font-size:9.5pt; border:1px dashed var(--muted); border-radius:5px; padding:6px 12px; display:flex; gap:24px; }
+.lbl { display:inline-block; width:15px; height:15px; line-height:14px; border:1px solid #777; border-radius:50%; text-align:center; font-family:'Noto Sans Bengali'; font-size:8pt; margin-right:4px; }
+.sec { column-span: all; font-family:'Noto Sans Bengali'; font-weight:700; font-size:10pt; color:#fff; background:var(--brand); border-radius:3px; padding:1px 8px; margin: 2px 0 7px; display:inline-block; }
+.score { margin-top:10px; font-family:'Noto Sans Bengali'; font-size:9.5pt; border:1px dashed var(--muted); border-radius:5px; padding:6px 12px; display:flex; gap:24px; }
 
 /* answers */
-.keygrid { display:grid; grid-template-columns: repeat(13, 1fr); border:1px solid var(--line); border-radius:4px; overflow:hidden; margin: 4px 0 12px; font-family:'Hind Siliguri'; font-size:9.5pt; }
+.keygrid { display:grid; grid-template-columns: repeat(13, 1fr); border:1px solid var(--line); border-radius:4px; overflow:hidden; margin: 4px 0 12px; font-family:'Noto Sans Bengali'; font-size:9.5pt; }
 .keygrid div { text-align:center; padding:2px 0; border-right:1px solid var(--line); border-bottom:1px solid var(--line); }
 .keygrid div b { color: var(--ok); }
 .exps { columns: 2; column-gap: 20px; column-rule: 1px solid var(--line); }
 .x { break-inside: avoid; margin-bottom: 8px; font-size: 9.9pt; }
 .x .xq { font-weight:600; }
-.x .xa { font-family:'Hind Siliguri'; color: var(--ok); font-weight:700; }
+.x .xa { font-family:'Noto Sans Bengali'; color: var(--ok); font-weight:700; }
 .x .why { margin: 1px 0; }
 .x ul { margin: 1px 0 0; padding-left: 16px; }
 .x li { margin: 0; }
 .x li::marker { content: "➕ "; color: var(--accent); font-size: 8pt; }
 h2.part { font-size: 17pt; color: var(--brand); margin: 0 0 4px; }
-.subtle { color: var(--muted); font-size: 9.5pt; font-family:'Hind Siliguri'; margin-bottom: 10px; }
+.subtle { color: var(--muted); font-size: 9.5pt; font-family:'Noto Sans Bengali'; margin-bottom: 10px; }
 """
 
 def head(title):

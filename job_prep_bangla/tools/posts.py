@@ -21,15 +21,15 @@ DEFAULT_TAGS = "#বিসিএস_প্রস্তুতি #চাকরি
 CSS = FONTS + """
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { width: var(--w); height: var(--h); }
-body { font-family: 'Hind Siliguri', sans-serif; color: #17213a; background: #f6f3ec; position: relative; overflow: hidden; }
+body { font-family: 'Noto Sans Bengali', sans-serif; color: #17213a; background: #f6f3ec; position: relative; overflow: hidden; }
 .frame { position:absolute; inset: 0; display:flex; flex-direction:column; padding: 64px 70px 0; }
 .top { display:flex; justify-content:space-between; align-items:center; }
 .badge { background:#0f4c81; color:#fff; font-weight:700; font-size:34px; padding: 6px 26px 8px; border-radius: 40px; }
 .badge.warn { background:#c0392b; } .badge.gold { background:#e8a33d; color:#17213a; }
 .count { font-size: 32px; color:#2f3a52; font-weight:700; }
 .fit { flex:1; display:flex; flex-direction:column; justify-content:center; overflow:hidden; padding: 20px 0; }
-.content { font-size: 52px; line-height: 1.45; font-weight: 500; color: #0e1628; }
-.h { font-weight: 700; color:#0f4c81; font-size: 1.25em; line-height: 1.25; margin-bottom: .45em; }
+.content { font-size: 52px; line-height: 1.5; font-weight: 600; color: #0b1222; }
+.h { font-weight: 800; color:#0f4c81; font-size: 1.25em; line-height: 1.25; margin-bottom: .45em; }
 .cover .h { font-size: 1.7em; color:#17213a; }
 .cover .sub { color:#0f4c81; font-weight:600; }
 .bar { width: 120px; height: 12px; background:#e8a33d; border-radius: 6px; margin: .35em 0 .55em; }
@@ -38,9 +38,9 @@ body { font-family: 'Hind Siliguri', sans-serif; color: #17213a; background: #f6
 .row .l { font-weight:700; flex: 0 1 auto; }
 .row .ar { color:#e8a33d; font-weight:700; }
 .row .r { color:#0f4c81; font-weight:600; }
-.line { padding: .12em 0; font-weight: 500; }
+.line { padding: .12em 0; font-weight: 600; }
 .ok { color:#16794c; font-weight:700; } .no { color:#c0392b; font-weight:700; }
-.q { font-weight:700; line-height:1.35; margin-bottom:.6em; }
+.q { font-weight:800; line-height:1.35; margin-bottom:.6em; }
 .src { display:inline-block; font-size:.58em; font-weight:600; color:#fff; background:#5b6475; border-radius: 8px; padding: .05em .5em .12em; margin-top:.4em; }
 .opts { display:grid; grid-template-columns: 1fr 1fr; gap: .45em .6em; }
 .opts.one { grid-template-columns: 1fr; }

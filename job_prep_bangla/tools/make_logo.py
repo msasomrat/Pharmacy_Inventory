@@ -13,7 +13,7 @@ jobs = []
 def page(name, body, w, h, transparent=False, css=""):
     html = (f"<!doctype html><html><head><meta charset='utf-8'><style>{FONTS}*{{margin:0;padding:0;box-sizing:border-box}}"
             f"html,body{{width:{w}px;height:{h}px;overflow:hidden;background:{'transparent' if transparent else NAVY}}}"
-            f"body{{font-family:'Hind Siliguri',sans-serif}}{css}</style></head><body>{body}</body></html>")
+            f"body{{font-family:'Noto Sans Bengali',sans-serif}}{css}</style></head><body>{body}</body></html>")
     hp = OUT / f"{name}.html"; hp.write_text(html)
     jobs.append({"html": str(hp), "png": str(OUT / f"{name}.png"), "w": w, "h": h, "transparent": transparent})
 
