@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """নিয়োগ দরবার logo built from the রসায়ন দরবার logo's own letterforms.
 
-ন, য়, া and the whole word দরবার are cut straight from the রসায়ন দরবার logo (white PNG);
+The whole word দরবার is cut straight from the রসায়ন দরবার logo (white PNG);
 ি, ে and গ, which that logo does not contain, are drawn to its measured metrics:
 matra 45 px thick, stems 53 px, x-height 262 px, 22 px letter gaps.
 usage: logo.py SOURCE_LOGO_WHITE.png OUT_DIR   ->  writes OUT_DIR/logo_parts + logo html
@@ -32,6 +32,11 @@ def put(kind, w):
     row.append((kind, x)); x += w + GAP
 put("i", STEM); put("na", wpx("na")); put("e", 105); put("ya", wpx("ya")); x += 5; put("aa", wpx("aa")); x += 4; put("ga", 166)
 row_w = x - GAP
+# the hand-drawn ি/ে/গ were hard to read, so the upper word is set in a real font instead
+import shutil
+NY = json.loads((Path(__file__).parent / "niyog_anek.json").read_text())
+shutil.copy(Path(__file__).parent / "niyog_anek.png", P / "niyog.png")
+row_w = NY["w"]
 
 def glyph_svg(kind):
     W = "#fff"
@@ -53,11 +58,8 @@ def logo_html(color="#fff", frame="#fff", bg="transparent", word2=None, scale=1.
     r2y = T0 + 295
     W, H = int((L0 + row_w + 210) ), int(r2y + 250 + 200)
     parts = []
-    for kind, gx in row:
-        if kind in crops:
-            parts.append(f"<image href='logo_parts/{kind}.png' x='{L0+gx}' y='{T0}' width='{wpx(kind)}' height='295'/>")
-        else:
-            parts.append(f"<g transform='translate({L0+gx},{T0})'>{glyph_svg(kind)}</g>")
+    # নিয়োগ: Anek Bangla ExtraBold 75% width, rendered at the source x-height (262 px)
+    parts.append(f"<image href='logo_parts/niyog.png' x='{L0}' y='{T0 - NY['matra_top']}' width='{NY['w']}' height='{NY['h']}'/>")
     parts.append(f"<image href='logo_parts/dorbar.png' x='{r2x}' y='{r2y}' width='{wpx('dorbar')}' height='250'/>")
     # hexagon corner frame, same geometry as the source (double line on the diagonals)
     Lx, Ty = L0 - 84, T0 - 250
